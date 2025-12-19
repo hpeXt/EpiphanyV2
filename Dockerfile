@@ -1,25 +1,27 @@
 FROM node:20-alpine AS base
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Install pnpm (match version in package.json)
+RUN corepack enable && corepack prepare pnpm@10.12.4 --activate
 
 # Install dependencies only when needed
 FROM base AS deps
 WORKDIR /app
 
-# Copy root workspace files
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# Copy all workspace config files
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps/web/package.json ./apps/web/
+COPY apps/api/package.json ./apps/api/
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile --filter=web...
+# Install ALL dependencies (needed for turbo and workspace resolution)
+RUN pnpm install --frozen-lockfile
 
 # Rebuild the source code only when needed
 FROM base AS builder
 WORKDIR /app
 
+# Copy all node_modules from deps stage
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
+COPY --from=deps /app/apps ./apps
 COPY . .
 
 # Build the application
