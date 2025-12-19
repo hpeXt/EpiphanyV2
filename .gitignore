@@ -1,0 +1,104 @@
+# Dependencies
+node_modules
+.pnpm-store
+.pnpm-debug.log
+
+# Build outputs
+dist
+.next
+out
+build
+*.tsbuildinfo
+
+# Turborepo
+.turbo
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+*.sublime-*
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+*.lnk
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Testing
+coverage
+.nyc_output
+*.lcov
+
+# Cache
+.cache
+.parcel-cache
+.eslintcache
+.stylelintcache
+*.cache
+
+# Temporary files
+tmp
+temp
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+
+# Secrets & credentials
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+credentials.json
+secrets.json
+serviceAccountKey.json
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# NestJS specific
+/apps/api/dist
+
+# Next.js specific
+/apps/web/.next
+/apps/web/out
+
+# Vercel
+.vercel
+
+# Debug
+.debug
+
+# Local development
+.local
+*.local
+
+# Package manager locks (keep only pnpm)
+package-lock.json
+yarn.lock
+
+# Sentry
+.sentryclirc
+
+# Docker
+docker-compose.override.yml
