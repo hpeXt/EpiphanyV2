@@ -29,6 +29,8 @@ function parseArgs(argv) {
   let baseUrl = process.env.API_BASE_URL ?? "";
   let keyFile = "tmp/coolify-test-ed25519.jwk.json";
   let newKey = false;
+  let signWithMount = false;
+  let signPathOverride = null;
   let nonce = null;
   let timestamp = null;
 
@@ -44,6 +46,14 @@ function parseArgs(argv) {
     }
     if (arg === "--new-key") {
       newKey = true;
+      continue;
+    }
+    if (arg === "--sign-with-mount") {
+      signWithMount = true;
+      continue;
+    }
+    if (arg === "--sign-path") {
+      signPathOverride = args[++i] ?? "";
       continue;
     }
     if (arg === "--nonce") {
@@ -63,7 +73,17 @@ function parseArgs(argv) {
     positional.push(arg);
   }
 
-  return { positional, baseUrl, keyFile, newKey, nonce, timestamp, extraHeaders };
+  return {
+    positional,
+    baseUrl,
+    keyFile,
+    newKey,
+    signWithMount,
+    signPathOverride,
+    nonce,
+    timestamp,
+    extraHeaders,
+  };
 }
 
 function ensureDir(filePath) {
@@ -98,17 +118,23 @@ function usage() {
   console.log(
     [
       "Usage:",
-      "  node scripts/coolify/signed-request.mjs <METHOD> <PATH> [BODY_JSON_STRING] [--base-url <url>] [--key-file <path>] [--new-key] [--extra-header \"K: V\"]",
+      "  node scripts/coolify/signed-request.mjs <METHOD> <PATH> [BODY_JSON_STRING] [--base-url <url>] [--key-file <path>] [--new-key] [--sign-with-mount] [--sign-path <path>] [--extra-header \"K: V\"]",
       "",
       "Notes:",
       "  - PATH must NOT include query string (canonical message uses PATH only).",
       "  - If BODY_JSON_STRING is omitted, BODY_HASH is \"\" and canonical message ends with '|'.",
       "  - Default base URL comes from API_BASE_URL env var.",
+      "  - If API_BASE_URL includes a mount path (e.g. https://host/api), the request URL becomes <mount><PATH>.",
+      "    By default, signing still uses PATH (without mount). Use --sign-with-mount if the server verifies with mount included.",
+      "  - You can override the signing PATH with --sign-path.",
       "",
       "Examples:",
       "  export API_BASE_URL=\"https://api.example.com\"",
       "  node scripts/coolify/signed-request.mjs GET /v1/topics/xxx/ledger/me",
       "  node scripts/coolify/signed-request.mjs POST /v1/topics/xxx/commands '{\"type\":\"CLAIM_OWNER\",\"payload\":{}}' --extra-header \"X-Claim-Token: ...\"",
+      "  export API_BASE_URL=\"https://example.com/api\"",
+      "  node scripts/coolify/signed-request.mjs GET /v1/topics/xxx/ledger/me   # requests /api/v1/... and signs /v1/...",
+      "  node scripts/coolify/signed-request.mjs GET /v1/topics/xxx/ledger/me --sign-with-mount   # signs /api/v1/...",
     ].join("\n"),
   );
 }
@@ -118,9 +144,33 @@ function buildCanonicalMessage({ method, path, timestamp, nonce, bodyString }) {
   return ["v1", method, path, String(timestamp), nonce, bodyHash].join("|");
 }
 
+function normalizePathname(value) {
+  const withoutQuery = value.includes("?") ? value.split("?")[0] : value;
+  if (!withoutQuery.startsWith("/")) return `/${withoutQuery}`;
+  return withoutQuery;
+}
+
+function joinMountAndPath(mountPath, rawPath) {
+  const mount = mountPath === "/" ? "" : mountPath.replace(/\/$/, "");
+  const p = normalizePathname(rawPath);
+  if (!mount) return p;
+  if (p === "/") return mount || "/";
+  if (p.startsWith(`${mount}/`)) return p; // already mounted
+  return `${mount}${p}`;
+}
+
 async function main() {
-  const { positional, baseUrl, keyFile, newKey, nonce, timestamp, extraHeaders } =
-    parseArgs(process.argv);
+  const {
+    positional,
+    baseUrl,
+    keyFile,
+    newKey,
+    signWithMount,
+    signPathOverride,
+    nonce,
+    timestamp,
+    extraHeaders,
+  } = parseArgs(process.argv);
 
   const [methodRaw, pathRaw, bodyString] = positional;
   if (!methodRaw || !pathRaw) {
@@ -133,14 +183,24 @@ async function main() {
     throw new Error("Missing base URL. Provide --base-url or set API_BASE_URL.");
   }
 
+  const base = new URL(baseUrl);
   const method = methodRaw.toUpperCase();
-  const requestPath = pathRaw.includes("?") ? pathRaw.split("?")[0] : pathRaw;
-  if (requestPath !== pathRaw) {
+  if (pathRaw.includes("?")) {
     throw new Error("PATH must not include query string for signing. Provide only '/v1/...'.");
   }
-  if (!requestPath.startsWith("/")) {
+  if (!pathRaw.startsWith("/")) {
     throw new Error("PATH must start with '/'.");
   }
+  const inputPath = normalizePathname(pathRaw);
+
+  const mountedRequestPath = joinMountAndPath(base.pathname, inputPath);
+  const signPathCandidate = signWithMount
+    ? mountedRequestPath
+    : mountedRequestPath.startsWith(`${base.pathname.replace(/\/$/, "")}/`)
+      ? mountedRequestPath.slice(base.pathname.replace(/\/$/, "").length) || "/"
+      : inputPath;
+
+  const signPath = signPathOverride ? normalizePathname(signPathOverride) : signPathCandidate;
 
   const { publicKey, privateKey, persisted } = loadOrCreateKeypair(keyFile, newKey);
   const publicJwk = publicKey.export({ format: "jwk" });
@@ -156,7 +216,7 @@ async function main() {
 
   const canonical = buildCanonicalMessage({
     method,
-    path: requestPath,
+    path: signPath,
     timestamp: ts,
     nonce: requestNonce,
     bodyString,
@@ -181,7 +241,7 @@ async function main() {
     headers.set(key, value);
   }
 
-  const url = new URL(requestPath, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
+  const url = new URL(mountedRequestPath, base.origin);
 
   // eslint-disable-next-line no-console
   console.log(
@@ -192,9 +252,11 @@ async function main() {
         method,
         keyFile,
         keyPersisted: persisted,
+        mountPath: base.pathname,
         pubkey: pubkeyHex,
         timestamp: ts,
         nonce: requestNonce,
+        signPath,
         canonical,
       },
       null,
@@ -227,4 +289,3 @@ main().catch((error) => {
   console.error(String(error?.stack ?? error));
   process.exitCode = 1;
 });
-

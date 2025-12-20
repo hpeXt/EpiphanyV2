@@ -17,6 +17,7 @@
 - 每个 step 的 “验收” 以 **服务器环境可重复跑通 + 自动化测试通过 + 对照契约可验收** 为准（本地仅作为快速反馈）。
 - 全量测试规划（Server Acceptance First）见：`docs/test-plan.md`。
 - Coolify 服务器验收运行手册见：`docs/coolify-acceptance.md`。
+- 默认验收环境（context / uuid / URL）见：`docs/coolify-target.md`（建议先 export 那些环境变量再跑命令）。
 
 ## 目录与模块边界（建议）
 

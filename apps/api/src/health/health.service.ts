@@ -38,17 +38,27 @@ async function probeRedisPing(opts: {
 
     socket.once('error', () => done(false));
 
+    function respArray(args: string[]): Buffer {
+      const chunks: Buffer[] = [];
+      chunks.push(Buffer.from(`*${args.length}\r\n`, 'utf8'));
+      for (const arg of args) {
+        const argBytes = Buffer.from(arg, 'utf8');
+        chunks.push(Buffer.from(`$${argBytes.length}\r\n`, 'utf8'));
+        chunks.push(argBytes);
+        chunks.push(Buffer.from('\r\n', 'utf8'));
+      }
+      return Buffer.concat(chunks);
+    }
+
     socket.once('connect', () => {
-      const commands: string[] = [];
       if (opts.password) {
         if (opts.username) {
-          commands.push(`AUTH ${opts.username} ${opts.password}`);
+          socket.write(respArray(['AUTH', opts.username, opts.password]));
         } else {
-          commands.push(`AUTH ${opts.password}`);
+          socket.write(respArray(['AUTH', opts.password]));
         }
       }
-      commands.push('PING');
-      socket.write(`${commands.join('\r\n')}\r\n`);
+      socket.write(respArray(['PING']));
     });
 
     let buffer = '';

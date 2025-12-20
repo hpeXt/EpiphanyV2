@@ -7,6 +7,7 @@
 - 本机已安装 `coolify` CLI（本仓库默认假设可用：`coolify --help`）
 - 你有一个可用的 Coolify 环境（staging/验收机）并已创建本项目的资源（API/Web/Worker/DB/Redis 等）
 - 你有 Coolify API Token（不要写进仓库；用 context 或环境变量传入）
+- 本仓库默认目标环境见：`docs/coolify-target.md`
 
 ## 1. 配置 Coolify Context（一次性）
 
@@ -90,6 +91,8 @@ coolify service restart <service_uuid>
 
 > 对外行为以 `docs/api-contract.md` 为准。建议把 `API_BASE_URL` 设为环境变量。
 
+若你的 API 挂载在路径前缀（例如 `https://example.com/api`），则 `API_BASE_URL` 就应包含该前缀。脚本会自动将该 mount path 拼到请求 URL 上。
+
 ### 4.1 Health / Smoke
 
 ```bash
@@ -114,10 +117,21 @@ node scripts/coolify/signed-request.mjs \
   --extra-header "X-Claim-Token: <claimToken>"
 ```
 
+如果验签失败（`INVALID_SIGNATURE`），通常是“canonical PATH 是否包含 mount path”不一致导致：
+
+- 默认：请求 `/api/v1/...`，但签名仍按 `/v1/...`（符合契约文档）
+- 若服务器验签用的是 `/api/v1/...`：加 `--sign-with-mount`
+
 `POST /v1/user/batch-balance` 属于 **item 级签名**（签名放在 body 里），推荐用：
 
 ```bash
 node scripts/coolify/batch-balance.mjs <topicId1> <topicId2>
+```
+
+同样，如果验签失败可加 `--sign-with-mount`：
+
+```bash
+node scripts/coolify/batch-balance.mjs <topicId1> <topicId2> --sign-with-mount
 ```
 
 ## 5. SSE 验收（只推 invalidation）

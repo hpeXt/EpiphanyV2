@@ -54,6 +54,8 @@
 
 运行手册见：`docs/coolify-acceptance.md`（含 context 配置、资源定位、部署/日志/重启、SSE 验收）。
 
+默认目标环境见：`docs/coolify-target.md`（仅包含资源 uuid/name 与对外 URL，不含 token）。
+
 签名接口建议使用脚本生成 headers：`scripts/coolify/signed-request.mjs`（默认把临时 key 缓存到 `tmp/`，避免手工算签名出错）。
 
 ## 2. 测试类型与覆盖面（分层）
