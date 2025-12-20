@@ -1,0 +1,19 @@
+[phases.setup]
+nixPkgs = ["nodejs_20", "openssl"]
+
+[phases.install]
+cmds = [
+  "npm i -g pnpm@10.12.4",
+  "pnpm config set enable-pre-post-scripts true",
+  "pnpm install --frozen-lockfile"
+]
+
+[phases.build]
+cmds = [
+  "pnpm --filter @epiphany/shared-contracts build",
+  "pnpm --filter @epiphany/database build",
+  "pnpm --filter api build"
+]
+
+[start]
+cmd = "node dist/main.js"

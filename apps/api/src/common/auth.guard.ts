@@ -18,13 +18,6 @@ import { AuthService } from './auth.service.js';
 export const SIGNATURE_REQUIRED = 'signatureRequired';
 export const RequireSignature = () => SetMetadata(SIGNATURE_REQUIRED, true);
 
-// Extend Express Request to include rawBody
-declare module 'express' {
-  interface Request {
-    rawBody?: string;
-  }
-}
-
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(
@@ -63,7 +56,7 @@ export class AuthGuard implements CanActivate {
       path: request.originalUrl,
       timestamp,
       nonce,
-      rawBody: request.rawBody || '',
+      rawBody: request.rawBody?.toString() || '',
       pubkey,
       signature,
     });
