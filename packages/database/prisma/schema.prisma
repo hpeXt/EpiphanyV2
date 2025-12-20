@@ -1,0 +1,165 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum topic_status {
+  active
+  frozen
+  archived
+}
+
+enum argument_analysis_status {
+  pending_analysis
+  ready
+  failed
+}
+
+enum report_status {
+  generating
+  ready
+  failed
+}
+
+model Topic {
+  id                       String    @id @db.Uuid
+  rootArgumentId           String?   @map("root_argument_id") @db.Uuid
+  title                    String    @db.Text
+  ownerPubkey              Bytes?    @map("owner_pubkey") @db.ByteA
+  status                   topic_status @default(active)
+  createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  lastClusteredAt          DateTime? @map("last_clustered_at") @db.Timestamptz(6)
+  lastClusterArgumentCount Int       @default(0) @map("last_cluster_argument_count")
+  lastClusterTotalVotes    Int       @default(0) @map("last_cluster_total_votes")
+
+  arguments        Argument[] @relation("TopicArguments")
+  ledgers          Ledger[]
+  stakes           Stake[] @relation("TopicStakes")
+  camps            Camp[]
+  clusterData      ClusterData[]
+  consensusReports ConsensusReport[]
+
+  rootArgument Argument? @relation("TopicRootArgument", fields: [id, rootArgumentId], references: [topicId, id])
+
+  @@unique([id, rootArgumentId])
+  @@map("topics")
+}
+
+model Argument {
+  id            String  @id @db.Uuid
+  topicId       String  @map("topic_id") @db.Uuid
+  parentId      String? @map("parent_id") @db.Uuid
+  title         String? @db.Text
+  body          String  @db.Text
+  authorPubkey  Bytes   @map("author_pubkey") @db.ByteA
+  analysisStatus argument_analysis_status @default(pending_analysis) @map("analysis_status")
+  stanceScore   Float?  @map("stance_score") @db.DoublePrecision
+  embedding     Unsupported("vector(4096)")? @map("embedding")
+  embeddingModel String? @map("embedding_model") @db.Text
+  metadata      Json?   @db.JsonB
+  totalVotes    Int     @default(0) @map("total_votes")
+  totalCost     Int     @default(0) @map("total_cost")
+  prunedAt      DateTime? @map("pruned_at") @db.Timestamptz(6)
+  pruneReason   String? @map("prune_reason") @db.Text
+  prunedByPubkey Bytes? @map("pruned_by_pubkey") @db.ByteA
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  topic Topic @relation("TopicArguments", fields: [topicId], references: [id])
+
+  parent   Argument?  @relation("ArgumentParent", fields: [topicId, parentId], references: [topicId, id])
+  children Argument[] @relation("ArgumentParent")
+
+  stakes      Stake[]
+  clusterData ClusterData?
+
+  rootForTopic Topic? @relation("TopicRootArgument")
+
+  @@unique([topicId, id])
+  @@map("arguments")
+}
+
+model Ledger {
+  topicId          String   @map("topic_id") @db.Uuid
+  pubkey           Bytes    @db.ByteA
+  balance          Int      @default(100)
+  totalVotesStaked Int      @default(0) @map("total_votes_staked")
+  totalCostStaked  Int      @default(0) @map("total_cost_staked")
+  lastInteractionAt DateTime? @map("last_interaction_at") @db.Timestamptz(6)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  topic Topic @relation(fields: [topicId], references: [id])
+  stakes Stake[] @relation("LedgerStakes")
+
+  @@id([topicId, pubkey])
+  @@map("ledgers")
+}
+
+model Stake {
+  topicId      String @map("topic_id") @db.Uuid
+  argumentId   String @map("argument_id") @db.Uuid
+  voterPubkey  Bytes  @map("voter_pubkey") @db.ByteA
+  votes        Int
+  cost         Int
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  topic    Topic    @relation("TopicStakes", fields: [topicId], references: [id])
+  argument Argument @relation(fields: [topicId, argumentId], references: [topicId, id])
+  ledger   Ledger   @relation("LedgerStakes", fields: [topicId, voterPubkey], references: [topicId, pubkey])
+
+  @@id([topicId, argumentId, voterPubkey])
+  @@map("stakes")
+}
+
+model Camp {
+  topicId    String  @map("topic_id") @db.Uuid
+  clusterId  Int     @map("cluster_id")
+  label      String? @db.Text
+  summary    String? @db.Text
+  params     Json?   @db.JsonB
+  computedAt DateTime @default(now()) @map("computed_at") @db.Timestamptz(6)
+
+  topic       Topic        @relation(fields: [topicId], references: [id])
+  clusterData ClusterData[]
+
+  @@id([topicId, clusterId])
+  @@map("camps")
+}
+
+model ClusterData {
+  topicId    String  @map("topic_id") @db.Uuid
+  argumentId String  @map("argument_id") @db.Uuid
+  clusterId  Int?    @map("cluster_id")
+  umapX      Float   @map("umap_x") @db.DoublePrecision
+  umapY      Float   @map("umap_y") @db.DoublePrecision
+  computedAt DateTime @default(now()) @map("computed_at") @db.Timestamptz(6)
+
+  topic    Topic    @relation(fields: [topicId], references: [id])
+  argument Argument @relation(fields: [topicId, argumentId], references: [topicId, id])
+  camp     Camp?    @relation(fields: [topicId, clusterId], references: [topicId, clusterId])
+
+  @@id([topicId, argumentId])
+  @@map("cluster_data")
+}
+
+model ConsensusReport {
+  id            String       @id @db.Uuid
+  topicId       String       @map("topic_id") @db.Uuid
+  status        report_status @default(generating)
+  contentMd     String?      @map("content_md") @db.Text
+  model         String?      @db.Text
+  promptVersion String?      @map("prompt_version") @db.Text
+  computedAt    DateTime?    @map("computed_at") @db.Timestamptz(6)
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  topic Topic @relation(fields: [topicId], references: [id])
+
+  @@map("consensus_reports")
+}
