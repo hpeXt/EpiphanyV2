@@ -23,13 +23,31 @@
 ### 测试向量（必须有）
 
 - [ ] BIP39：对照公开 test vector（12 words + passphrase）得到固定 masterSeed（64 bytes）
+  - mnemonic：`abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about`
+  - passphrase：`TREZOR`
+  - 期望 seed（hex，64 bytes）：
+    - `c55257c360c07c72029aebc1b53c05ed0362ada38ead3e3e9efa3708e53495531f09a6987599d18264c1e1c92f2cf141630c7a3c4ab7c81b2f001698e7463b04`
+- [ ] BIP39（默认 passphrase=""）：同 mnemonic + 空 passphrase 的 seed 必须稳定（把期望值固化为 fixture）
 - [ ] 派生：固定 `topicId` 下派生出的 `pubkey` 必须稳定（可把期望值写成 fixture）
 - [ ] canonical message：
   - body 为空时 `BODY_HASH=""` 且 message 以 `|` 结尾
   - body 非空时 hash 来自 **raw body string**
+- [ ] canonical message（细节）：
+  - `METHOD` 必须全大写
+  - `PATH` 不含 query string（`/v1/...`），且必须与实际请求路径逐字一致
+  - 同一对象不同 stringify（空格/换行/字段顺序）必须产生不同 `BODY_HASH`
 - [ ] sign/verify：同一 message 能通过验签；篡改任一字段验签失败
+- [ ] 编码：`pubkey` 64 hex chars、`signature` 128 hex chars，且统一小写
 
 建议落点：`packages/crypto/src/__tests__/*.test.ts`
+
+### Coolify CLI 服务器验收（黑盒）
+
+> 目的：保证签名实现与验收机的 API 验签口径一致（运行手册：`docs/coolify-acceptance.md`）。
+
+- [ ] 部署 API：`coolify deploy name <api_app_name>`（crypto 变更不应导致构建/启动失败）
+- [ ] （回归，需 Step 07 已完成）用脚本对 `CLAIM_OWNER` 发起签名请求并通过验签：
+  - `node scripts/coolify/signed-request.mjs POST /v1/topics/<topicId>/commands '{"type":"CLAIM_OWNER","payload":{}}' --extra-header "X-Claim-Token: <claimToken>"`
 
 ## 2) Green：最小实现（让测试通过）
 
@@ -50,8 +68,8 @@
 ## 4) 验收
 
 - 命令
-  - `pnpm -C packages/crypto test`
+  - 服务器验收（推荐）：`coolify deploy name <api_app_name>`
+  - 本地快速反馈（可选）：`pnpm -C packages/crypto test`
 - 验收点
   - [ ] 测试向量稳定
   - [ ] canonical message 与契约完全一致
-

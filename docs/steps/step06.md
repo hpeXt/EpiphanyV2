@@ -32,6 +32,26 @@
 - [ ] nonce 重放 → `409` + `NONCE_REPLAY`
 - [ ] bodyHash 使用 raw body：同一 JSON 对象不同空格/字段顺序会产生不同 hash（验签应严格基于 raw body）
 - [ ] 错误响应结构固定为 `{ error: { code, message, details? } }`
+- [ ] canonical message 的 `PATH` 不含 query string：
+  - 同一路径不同 query（`/v1/x?a=1` vs `/v1/x?a=2`）验签结果必须一致（都基于 `/v1/x`）
+- [ ] header 基本校验（建议）：
+  - `X-Pubkey/X-Signature` 非法 hex（长度不对/非 hex）→ `401 INVALID_SIGNATURE` 或 `400 BAD_REQUEST`（二选一并在测试里锁死）
+  - `X-Nonce` 包含 `|` → `400 BAD_REQUEST`（契约禁止 `|`）
+
+### 服务器验收（安全回归，黑盒）
+
+- [ ] 用“正确签名”调用受保护接口必须 200
+- [ ] 篡改 `METHOD/PATH/TIMESTAMP/NONCE/BODY` 任一字段后必须 401（防重放/防篡改）
+
+### Coolify CLI 服务器验收（黑盒）
+
+> 本 step 的成果体现在“线上验签/防重放”正确工作；建议直接用后续真实接口做黑盒验收（运行手册：`docs/coolify-acceptance.md`）。
+
+- [ ] 部署 API：`coolify deploy name <api_app_name>`
+- [ ] （回归，需 Step 07 已完成）对 `CLAIM_OWNER` 发起：
+  - 正确签名 → 200
+  - timestamp 超窗 → `401 TIMESTAMP_OUT_OF_RANGE`
+  - nonce 重放 → `409 NONCE_REPLAY`
 
 建议先在 API 加一个“受保护的 dummy endpoint”（例如 `GET /v1/auth/ping`）用于专测鉴权层。
 （推荐做法：只在 e2e TestingModule 里挂载测试用 controller，避免把非契约路由带到生产构建。）
@@ -55,7 +75,9 @@
 ## 4) 验收
 
 - 命令
-  - `docker compose up -d postgres redis`
-  - `pnpm -C apps/api test`（或 `test:e2e` 覆盖鉴权用例）
+  - 服务器验收（推荐）：`coolify deploy name <api_app_name>`（然后按 Step 07/10 的黑盒用例验证验签/防重放）
+  - 本地快速反馈（可选）：
+    - `docker compose up -d postgres redis`
+    - `pnpm -C apps/api test`（或 `test:e2e` 覆盖鉴权用例）
 - 验收点
   - [ ] 任意后续“需要签名的写接口”都可复用该 guard（无需复制粘贴）

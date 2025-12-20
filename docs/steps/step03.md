@@ -24,11 +24,23 @@
 
 - [ ] `prisma validate` 通过
 - [ ] `prisma migrate dev`/`prisma migrate deploy` 在空库成功
-- [ ] 关键约束（至少 2 个）有集成测试覆盖：
+- [ ] 关键约束（建议 ≥ 5 个）有集成测试覆盖（直接插入“坏数据”应失败）：
   - 每个 Topic 只有一个 Root（`parent_id IS NULL` unique）
-  - Stake 的 `cost = votes^2`（DB 层 check 或写入策略保证）
+  - 父子同 Topic：`parent_id` 必须指向同一 `topic_id` 下的 argument（见 `docs/database.md` 3.2 建议）
+  - `ledgers` 唯一键：`(topic_id, pubkey)` 不能重复
+  - `stakes` 唯一键：`(topic_id, argument_id, voter_pubkey)` 不能重复
+  - Stake `votes` 范围与 `cost = votes^2`（若 DB 层有 check，则必须覆盖；若改为“写入策略保证”，也要测策略）
+  - （可选）pgvector：`vector` extension 已安装，且 embedding 维度固定为 4096（插入错误维度应失败）
 
-建议落点：`packages/database/src/__tests__/db-constraints.test.ts`（连接到测试库执行）。
+建议落点：`packages/database/src/__tests__/db-constraints.test.ts`（连接到测试库执行，推荐使用独立的 `DATABASE_URL_TEST`）。
+
+### Coolify CLI 服务器验收（黑盒）
+
+> 目的：确保验收机上的 DB 可用、migrations 已应用、API 能正常读写（运行手册：`docs/coolify-acceptance.md`）。
+
+- [ ] Postgres 处于可用状态：`coolify database get <postgres_uuid>`
+- [ ] 部署 API：`coolify deploy name <api_app_name>`；部署日志不应出现 migrate 失败
+- [ ] 最小写入验证：`curl -fsS -X POST "$API_BASE_URL/v1/topics" -H 'Content-Type: application/json' -d '{"title":"E2E::db","body":"seed"}'`
 
 ## 2) Green：最小实现（让测试通过）
 
@@ -53,13 +65,16 @@
 ## 4) 验收
 
 - 前置
-  - `docker compose up -d postgres`
-  - `DATABASE_URL` 指向本地库
+  - 服务器验收：确保 Coolify 上的 Postgres 可用（`coolify database get <postgres_uuid>`）
+  - 本地快速反馈（可选）：`docker compose up -d postgres`，`DATABASE_URL` 指向本地库
 - 命令
-  - `pnpm -C packages/database prisma validate`
-  - `pnpm -C packages/database prisma migrate deploy`
-  - `pnpm -C packages/database test`
+  - 服务器验收（推荐）：
+    - `coolify deploy name <api_app_name>`（启动时应完成 migrations 或至少不报错）
+    - `curl -fsS -X POST "$API_BASE_URL/v1/topics" -H 'Content-Type: application/json' -d '{"title":"E2E::db","body":"seed"}'`
+  - 本地快速反馈（可选）：
+    - `pnpm -C packages/database prisma validate`
+    - `pnpm -C packages/database prisma migrate deploy`
+    - `pnpm -C packages/database test`
 - 验收点
   - [ ] migrations 可重复执行（空库/新库）
   - [ ] 约束集成测试通过
-

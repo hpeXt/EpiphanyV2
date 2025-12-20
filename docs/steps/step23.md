@@ -25,8 +25,14 @@
 ## 1) Red：先写测试
 
 - [ ] 同 IP 或同 pubkey 在时间窗内超限 → `429 RATE_LIMITED`
+- [ ] `429` 响应结构符合契约（`{ error: { code:\"RATE_LIMITED\", ... } }`），并可选返回 `Retry-After`
 - [ ] 限流不影响公共读接口
 - [ ] 被 topic 黑名单命中 → 写接口拒绝（错误码需固定）
+
+### 服务器验收（压测/回归）
+
+- [ ] 部署 API：`coolify deploy name <api_app_name>`
+- [ ] 在验收机上对 write endpoints 做固定 QPS 压测：超过阈值被限流且系统不崩溃
 
 ## 2) Green：最小实现（让测试通过）
 
@@ -42,4 +48,3 @@
 
 - 验收点
   - [ ] 高压请求下系统仍可用，且错误可预期
-

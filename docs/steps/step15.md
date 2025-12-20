@@ -26,6 +26,8 @@
 
 ## 1) Red：先写测试
 
+对照全量规划：`docs/test-plan.md`（Suite W — Web 端到端验收：W3，及 Suite D/E/SSE 相关项）。
+
 - [ ] 发言：
   - 提交成功后，UI 将新节点插入（或触发刷新）
   - 余额不足时显示明确错误（402）
@@ -38,6 +40,14 @@
 - [ ] 签名：
   - 写请求/私密读自动带 `X-Pubkey/X-Signature/X-Timestamp/X-Nonce`
   - canonical message 的 `BODY_HASH` 基于 raw body string（与 `packages/crypto` 一致）
+  - `PATH` 不含 query string（与服务端验签口径一致）
+  - nonce 每次请求都不同（避免误触发幂等/重放）
+  - 验签失败（401）时 UI 有明确提示（不静默失败）
+
+### Coolify CLI 服务器验收（黑盒）
+
+- [ ] 部署 API/Web：`coolify deploy name <api_app_name>`、`coolify deploy name <web_app_name>`
+- [ ] 两窗口打开同一 topic：发言/投票后另一窗口通过 SSE 秒级同步（对照 `docs/test-plan.md` Suite W3）
 
 ## 2) Green：最小实现（让测试通过）
 
@@ -58,5 +68,7 @@
 - 命令
   - `pnpm -C apps/web test`
   - 两窗口手动验收：同时打开同一 topic
+  - （服务器验收前置）`coolify deploy name <api_app_name>`、`coolify deploy name <web_app_name>`
 - 验收点
   - [ ] 发言/投票后另一窗口在秒级更新（无需手动刷新）
+  - [ ] `reload_required` 出现时有可恢复策略（自动全量刷新或提示用户刷新）

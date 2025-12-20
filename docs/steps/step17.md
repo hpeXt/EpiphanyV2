@@ -26,16 +26,25 @@
 
 ## 1) Red：先写测试
 
+对照全量规划：`docs/test-plan.md`（Suite W — Web 端到端验收：W5，及 Suite F）。
+
 - [ ] 本地 topic 记录：
   - 进入 topic 页面会把 topicId 追加到本地集合（去重）
 - [ ] batch-balance：
   - items 逐项签名
   - 单项失败不影响其它项展示
+  - topic 不存在/验签失败：该项展示为失败且包含可读错误（不影响其它 topic）
 - [ ] stakes/me：
   - pruned stake 仍显示（标记为 pruned）
 - [ ] 一键撤回：
   - 对每个 stake 发送 `setVotes(0)`（可串行，避免把 API 打爆）
   - 任一撤回失败不会导致状态错乱（展示失败项并可重试）
+
+### 服务器验收（推荐 Playwright，黑盒）
+
+- [ ] 部署 API/Web：`coolify deploy name <api_app_name>`、`coolify deploy name <web_app_name>`
+- [ ] 访问过的 topics 在“我的”中可见（纯客户端聚合，不依赖服务端）
+- [ ] pruned 的 stake 在“我的”中可见且可撤回成功（资金返还到 ledger）
 
 ## 2) Green：最小实现（让测试通过）
 
@@ -53,7 +62,9 @@
 
 ## 4) 验收
 
+- 命令
+  - 服务器验收（推荐）：`coolify deploy name <api_app_name>`、`coolify deploy name <web_app_name>`
+  - 本地快速反馈（可选）：`pnpm -C apps/web test`
 - 验收点
   - [ ] 清空本地后，通过助记词恢复同一身份与余额（同 topic）
   - [ ] pruned 节点质押在“我的”可见并可撤回
-

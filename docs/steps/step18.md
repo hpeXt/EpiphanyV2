@@ -26,12 +26,22 @@
 
 ## 1) Red：先写测试
 
+对照全量规划：`docs/test-plan.md`（Suite D 的 AI 回填部分 + SSE 专项）。
+
 - [ ] Worker unit/integration：
   - 同一 argument 反复入队：只会写一次（ready 后短路）
   - 失败语义：写 `analysis_status=failed`、`stance_score/embedding=NULL`，仍发事件
   - event：`XADD topic:events:{topicId}` 写入 `argument_updated` + `reason="analysis_done"`
+  - embedding 维度：成功时必须写入 4096 维向量；失败时为 NULL
+  - `stanceScore` 范围：成功时 clamp/校验在 [-1,1]；非法输出视为失败
 - [ ] Web（可选）：
   - pending → ready 的 UI 状态切换（占位样式）
+
+### 服务器验收（端到端，黑盒）
+
+- [ ] 部署 API/Worker：`coolify deploy name <api_app_name>`、`coolify deploy name <worker_app_name>`
+- [ ] 创建 argument 后立刻可读（tree/children 能看到 pending 节点）
+- [ ] 在 N 秒内（mock 可立即）pending → ready/failed，并通过 SSE 收到 `analysis_done` invalidation
 
 ## 2) Green：最小实现（让测试通过）
 
@@ -56,4 +66,3 @@
 - 验收点
   - [ ] 新发言在 1~数十秒内从 pending 变为 ready/failed（开发期 mock 可立即）
   - [ ] stance 只影响样式，不参与聚类输入（聚类只用 embedding）
-

@@ -25,6 +25,8 @@
 
 ## 1) Red：先写测试
 
+对照全量规划：`docs/test-plan.md`（Suite W — Web 端到端验收：W1）。
+
 由于当前 `apps/web` 未配置测试框架，先以 “能测试组件/数据流” 为目标建立最小测试基建：
 
 - [ ] 增加 Web 单测框架（Vitest/Jest 二选一，但要能跑 React 组件测试）
@@ -34,6 +36,15 @@
 - [ ] `CreateTopicForm`：
   - 校验必填
   - 提交后跳转到 `/topics/{topicId}`
+
+### 服务器验收（推荐 Playwright，黑盒）
+
+- [ ] 部署 API/Web：`coolify deploy name <api_app_name>`、`coolify deploy name <web_app_name>`
+- [ ] 打开 Web 首页能看到 Topic 列表（来自 `GET /v1/topics`）
+- [ ] 创建 Topic：
+  - 提交后跳转到详情页（URL 含 `topicId`）
+  - 返回列表后能看到新建 Topic
+- [ ] API 不可用时：页面展示明确错误态（不白屏）
 
 ## 2) Green：最小实现（让测试通过）
 
@@ -51,9 +62,10 @@
 ## 4) 验收
 
 - 命令
-  - `pnpm -C apps/web test`
-  - `pnpm -C apps/web dev`
+  - 服务器验收（推荐）：`coolify deploy name <api_app_name>`、`coolify deploy name <web_app_name>`
+  - 本地快速反馈（可选）：
+    - `pnpm -C apps/web test`
+    - `pnpm -C apps/web dev`
 - 验收点
   - [ ] 能创建 topic 并在列表中出现
   - [ ] 点击/创建后可进入详情页（占位也可）
-

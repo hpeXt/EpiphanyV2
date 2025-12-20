@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     ports:
       - "5432:5432"
     environment:
@@ -10,6 +10,7 @@ services:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=epiphany
     volumes:
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
 

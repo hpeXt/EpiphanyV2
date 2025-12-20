@@ -1,0 +1,15 @@
+{
+  "name": "worker",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node src/main.mjs",
+    "start": "node src/main.mjs",
+    "enqueue:ping": "node src/enqueue-ping.mjs"
+  },
+  "dependencies": {
+    "bullmq": "^5.58.5"
+  }
+}
+

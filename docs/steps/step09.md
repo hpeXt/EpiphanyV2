@@ -22,12 +22,21 @@
 
 ## 1) Red：先写测试
 
+对照全量规划：`docs/test-plan.md`（Suite D — Flow 3：发言 + initialVotes）。
+
 ### API e2e（supertest）
 
 - [ ] 需要签名：无签名 → `401 INVALID_SIGNATURE`
+- [ ] timestamp 超窗 → `401 TIMESTAMP_OUT_OF_RANGE`（对齐鉴权层）
+- [ ] nonce 重放 → `409 NONCE_REPLAY`
 - [ ] topic 不存在 → `404 TOPIC_NOT_FOUND`
 - [ ] parent 不存在 → `404 ARGUMENT_NOT_FOUND`
 - [ ] topic.status 非 `active` 时拒绝写入（`409 TOPIC_STATUS_DISALLOWS_WRITE`）
+- [ ] 请求体校验：
+  - 缺少 `parentId` 或 `body` → `400 BAD_REQUEST`
+  - `initialVotes` 不传等价于 `0`（响应与 DB 结果一致）
+  - （可选）`initialVotes` 非整数或 <0 或 >10 → `400 BAD_REQUEST`
+- [ ] pruned parent 允许回复：当 parent `prunedAt != null` 时仍可创建子 argument（契约明确允许）
 - [ ] `initialVotes`：
   - 余额不足 → `402 INSUFFICIENT_BALANCE`，且 DB 中 **不产生** argument
   - 余额足够 → 同一事务内：
@@ -35,10 +44,23 @@
     - upsert stake（votes/cost）
     - 更新 ledger（balance/totalCostStaked/totalVotesStaked）
     - 更新 argument totals（`totalVotes/totalCost`）
+    - `cost == votes^2` 且 `balance + totalCostStaked == 100`
+- [ ] `authorId`：响应中的 `argument.authorId` 必须等于 `sha256(pubkey_bytes).hex().slice(0,16)`（见 `docs/api-contract.md#2.4`）
+- [ ] 契约校验：响应能被 `shared-contracts` parse（字段名/类型一致）
 
 可选（推荐）：
 
-- [ ] 成功写入后，Redis Stream `topic:events:{topicId}` 有一条 `argument_updated` invalidation（SSE endpoint 在 Step 12）
+- [ ] （端到端）在 Step 18 完成后：argument 在 worker 回填时会触发 `argument_updated(reason="analysis_done")`（用于两窗口同步）
+
+### Coolify CLI 服务器验收（黑盒）
+
+运行手册：`docs/coolify-acceptance.md`。
+
+- [ ] 部署 API：`coolify deploy name <api_app_name>`
+- [ ] 发言（签名）：
+  - `node scripts/coolify/signed-request.mjs POST /v1/topics/<topicId>/arguments '{"parentId":"<parentId>","title":null,"body":"E2E::arg","initialVotes":0}'`
+- [ ] 发言 + initialVotes（签名）：
+  - `node scripts/coolify/signed-request.mjs POST /v1/topics/<topicId>/arguments '{"parentId":"<parentId>","title":null,"body":"E2E::arg+votes","initialVotes":3}'`
 
 ## 2) Green：最小实现（让测试通过）
 
@@ -60,9 +82,12 @@
 ## 4) 验收
 
 - 命令
-  - `docker compose up -d postgres redis`
-  - `pnpm -C apps/api test`
+  - 服务器验收（推荐）：
+    - `coolify deploy name <api_app_name>`
+    - `node scripts/coolify/signed-request.mjs POST /v1/topics/<topicId>/arguments '{"parentId":"<parentId>","title":null,"body":"E2E::arg","initialVotes":0}'`
+  - 本地快速反馈（可选）：
+    - `docker compose up -d postgres redis`
+    - `pnpm -C apps/api test`
 - 验收点
   - [ ] 对照契约：响应中 argument/ledger 字段口径一致
   - [ ] 余额不足不会产生脏数据（无 argument、无 stake、ledger 不变）
-

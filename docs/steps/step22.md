@@ -25,14 +25,21 @@
 
 ## 1) Red：先写测试
 
+- [ ] 先冻结契约：在实现前补齐/确认对外接口与 SSE 事件（若需新增 `report_updated`，必须先更新 `docs/api-contract.md` + `shared-contracts`）
 - [ ] Worker：
   - job 幂等：同 reportId 重跑不重复生成
   - 失败语义：`status=failed`，error 写入 metadata
   - 生成成功：`status=ready`，`contentMd` 有值
+  - 输入口径：过滤 pruned；输入顺序/抽样策略固定并可回溯（写入 `promptVersion/params`）
 - [ ] API：
   - 读取 latest report（若设计为公共读/私密读需先固定）
 - [ ] Web：
   - 能打开模态并渲染 markdown（失败/生成中有状态提示）
+
+### 服务器验收（黑盒）
+
+- [ ] 部署 API/Worker/Web：`coolify deploy name <api_app_name>`、`coolify deploy name <worker_app_name>`、`coolify deploy name <web_app_name>`
+- [ ] Host 触发生成后，report 在可接受时间内进入 ready/failed，且不阻塞核心写路径（createArgument/setVotes 仍快速返回）
 
 ## 2) Green：最小实现（让测试通过）
 
@@ -50,4 +57,3 @@
 - 验收点
   - [ ] Host 可触发生成并在 UI 查看
   - [ ] 不影响核心写路径（createArgument/setVotes 仍快速返回）
-

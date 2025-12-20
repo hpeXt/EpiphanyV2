@@ -31,13 +31,31 @@
 
 ## 1) Red：先写测试
 
+对照全量规划：`docs/test-plan.md`（Suite F 的 pruning 找回资金 + 权限/只读语义回归，及 Suite W 的治理 UI）。
+
 ### API e2e
 
 - [ ] 非 owner 调用 commands → `403 NOT_TOPIC_OWNER`
+- [ ] command payload 校验：
+  - 缺少/非法 `type/payload` → `400 BAD_REQUEST`
+- [ ] Topic 状态限制（对齐契约）：
+  - `active`：允许命令
+  - `frozen`：仅允许 `SET_STATUS(active)` 解冻，其它命令 → `409 TOPIC_STATUS_DISALLOWS_WRITE`
+  - `archived`：所有命令 → `409 TOPIC_STATUS_DISALLOWS_WRITE`
+- [ ] `EDIT_ROOT`：
+  - root argument 内容更新
+  - `topics.title` 同步更新（列表页缓存口径）
+  - SSE：`topic_updated(reason="root_edited")`
+- [ ] `SET_STATUS`：
+  - 状态更新生效
+  - SSE：`topic_updated(reason="status_changed")`
 - [ ] `PRUNE_ARGUMENT` 后：
   - 公共读 tree/children 不再返回该节点
   - `stakes/me` 仍返回该节点的质押（含 `argumentPrunedAt`）
   - 对该节点 `setVotes` 增票被拒绝（`ARGUMENT_PRUNED_INCREASE_FORBIDDEN`），撤回允许
+  - SSE：`argument_updated(reason="pruned")`
+- [ ] `UNPRUNE_ARGUMENT`：
+  - 公共读 tree/children 恢复可见
 - [ ] `SET_STATUS=frozen/archived` 后：
   - createArgument 被拒绝（`TOPIC_STATUS_DISALLOWS_WRITE`）
   - setVotes 增票被拒绝，但撤回允许
@@ -46,6 +64,15 @@
 
 - [ ] 只有 owner 才看到管理入口
 - [ ] frozen/archived/pruned 的 UI 禁用态与后端一致
+
+### Coolify CLI 服务器验收（黑盒）
+
+运行手册：`docs/coolify-acceptance.md`。
+
+- [ ] 部署 API/Web：`coolify deploy name <api_app_name>`、`coolify deploy name <web_app_name>`
+- [ ] 用 Host 身份执行命令后：
+  - `coolify app logs <api_app_uuid> -n 200` 不应出现权限/验签异常
+  - tree/children/stakes/me 的对外行为与测试用例一致（可用 `curl` + `scripts/coolify/*.mjs` 验证）
 
 ## 2) Green：最小实现（让测试通过）
 
@@ -67,4 +94,3 @@
 - 验收点
   - [ ] 与 `docs/prd.md`/`docs/architecture.md` 决策清单一致
   - [ ] 资金找回路径成立（pruned 上的 stake 可撤回）
-

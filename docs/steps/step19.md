@@ -26,6 +26,8 @@
 
 ## 1) Red：先写测试
 
+对照全量规划：`docs/test-plan.md`（Suite G — Flow 6：聚类 + cluster-map + SSE）。
+
 - [ ] 阈值逻辑单测：
   - 过滤 pruned，且只统计 `analysis_status=ready & embedding != NULL`
   - `new_arguments`/`total_votes_change_ratio` 计算口径与文档一致
@@ -36,6 +38,14 @@
   - x/y 归一化到 [-1,1]
   - `clusterId=-1` 表示噪声点（DB NULL 映射）
   - `weight=log(totalVotes+1)`
+  - 过滤 pruned：被 pruning 的 argument 不应出现在 points 中
+  - 契约校验：响应能被 `shared-contracts` parse
+  - 聚类完成后通过 SSE 发 `cluster_updated`（写入 Redis Stream，SSE endpoint 在 Step 12）
+
+### Coolify CLI 服务器验收（黑盒）
+
+- [ ] 部署 API/Worker：`coolify deploy name <api_app_name>`、`coolify deploy name <worker_app_name>`
+- [ ] 触发聚类后：`curl -fsS "$API_BASE_URL/v1/topics/<topicId>/cluster-map"` 返回可解析结果，并收到 `cluster_updated`
 
 ## 2) Green：最小实现（让测试通过）
 
@@ -58,4 +68,4 @@
 - 验收点
   - [ ] >50 节点时能稳定产出 cluster-map（不要求 UI，但 API 输出正确）
   - [ ] pruning 后聚类输入过滤 pruned，结果更新
-
+  - [ ] （服务器验收前置）`coolify deploy name <api_app_name>`、`coolify deploy name <worker_app_name>`

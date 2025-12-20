@@ -6,7 +6,7 @@
 
 - 首屏：`GET /v1/topics/:topicId/tree?depth=3`
 - 点击节点：右侧 Dialogue Stream 拉 `GET /v1/arguments/:argumentId/children`
-- 支持“最新/最热”切换与分页（cursor）
+- 支持“最新/最热”切换与分页（`beforeId/nextBeforeId`）
 
 来源：`docs/roadmap.md` M3、`docs/core-flows.md#2`、`docs/api-contract.md` 3.4/3.5。
 
@@ -26,13 +26,22 @@
 
 ## 1) Red：先写测试
 
+对照全量规划：`docs/test-plan.md`（Suite W — Web 端到端验收：W2）。
+
 - [ ] `TopicPage`：
   - 初次渲染会请求 tree
   - tree 返回后渲染根节点与前 3 层
 - [ ] 点击节点：
-  - 请求 children（带 orderBy/cursor）
-  - 切换 orderBy 会重置 cursor 并重新加载
+  - 请求 children（带 `orderBy/beforeId/limit`）
+  - 切换 `orderBy` 会重置 `beforeId` 并重新加载
+  - “加载更多”会使用 `nextBeforeId` 拉取下一页且不重复
 - [ ] pruned 不可见：当 API 返回不含 pruned 时，UI 不应凭空渲染 pruned 占位
+
+### 服务器验收（推荐 Playwright，黑盒）
+
+- [ ] 部署 API/Web：`coolify deploy name <api_app_name>`、`coolify deploy name <web_app_name>`
+- [ ] 进入 `/topics/:topicId`：首屏能渲染 tree(depth=3)
+- [ ] 点击任一节点：Dialogue Stream 出现并能切换 `最新/最热` 与分页
 
 建议用 MSW/mock fetch 来写组件测试，避免依赖真实 API。
 
@@ -51,9 +60,10 @@
 ## 4) 验收
 
 - 命令
-  - `pnpm -C apps/web test`
-  - `pnpm -C apps/web dev`
+  - 服务器验收（推荐）：`coolify deploy name <api_app_name>`、`coolify deploy name <web_app_name>`
+  - 本地快速反馈（可选）：
+    - `pnpm -C apps/web test`
+    - `pnpm -C apps/web dev`
 - 验收点
   - [ ] tree + children 两条读路径可用
   - [ ] “最新/最热”切换与分页正常
-

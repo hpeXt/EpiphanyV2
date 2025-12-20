@@ -24,10 +24,18 @@
 
 ## 1) Red：先写测试
 
+对照全量规划：`docs/test-plan.md`（Suite W — Web 端到端验收：W6）。
+
 - [ ] `GodView` 组件：
   - 能拉取并 parse `cluster-map`（用 shared-contracts）
   - API 返回空/错误时有降级提示
 - [ ] hover 信息卡：给定点数据能渲染 Calling Card 样式（不要求最终美术，但结构需稳定）
+
+### 服务器验收（推荐 Playwright，黑盒）
+
+- [ ] 部署 API/Web：`coolify deploy name <api_app_name>`、`coolify deploy name <web_app_name>`
+- [ ] 打开 God View 能看到点云（至少渲染出 >0 个点）
+- [ ] hover 任一点：信息卡出现且不遮挡主要交互（缩放/平移仍可用）
 
 ## 2) Green：最小实现（让测试通过）
 
@@ -46,4 +54,3 @@
 - 验收点
   - [ ] >50 节点时 UI 可用，且 stance 与 cluster 编码不冲突
   - [ ] pruning 后点不显示（依赖 API 已过滤）
-

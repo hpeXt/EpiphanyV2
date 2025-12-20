@@ -25,13 +25,23 @@
 
 ## 1) Red：先写测试
 
+对照全量规划：`docs/test-plan.md`（Suite W — Web 端到端验收：W4，及签名/防重放安全项）。
+
 - [ ] `identity` 模块（纯函数）：
   - 从 mnemonic 恢复得到稳定 masterSeed
   - 对同一 `topicId` 派生出稳定 `pubkey`
   - canonical message 与 `packages/crypto` 一致（空 body 末尾 `|`）
+  - `authorId`（展示用）可由 pubkey 稳定派生：`sha256(pubkey).slice(0,16)`（与契约一致）
 - [ ] API 调用层：
   - 写请求自动带 `X-Pubkey/X-Signature/X-Timestamp/X-Nonce`
   - 私密读同样带签名
+  - 清空本地后重新导入助记词：同一 topic 的 pubkey 必须保持一致（可作为回归测试）
+
+### 服务器验收（Coolify + 黑盒）
+
+- [ ] 部署 API/Web：`coolify deploy name <api_app_name>`、`coolify deploy name <web_app_name>`
+- [ ] 浏览器端生成助记词后在同一 topic 内完成一次写请求（发言/投票）不再返回 `INVALID_SIGNATURE`
+- [ ] 清空本地存储后导入同一助记词：同一 topic 的 pubkey/余额可恢复（对照 `ledger/me`）
 
 ## 2) Green：最小实现（让测试通过）
 
@@ -48,7 +58,8 @@
 ## 4) 验收
 
 - 命令
-  - `pnpm -C apps/web test`
+  - 服务器验收（推荐）：`coolify deploy name <api_app_name>`、`coolify deploy name <web_app_name>`
+  - 本地快速反馈（可选）：`pnpm -C apps/web test`
 - 验收点
   - [ ] 清空本地后，用同一助记词能恢复同一 pubkey（对同一 topic）
   - [ ] 写请求验签通过（API 不再返回 INVALID_SIGNATURE）

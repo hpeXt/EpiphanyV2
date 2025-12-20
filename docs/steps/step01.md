@@ -20,10 +20,24 @@
 
 ## 1) Red：先写测试
 
+对照全量规划：`docs/test-plan.md`（Suite A — 基础健康检查）。
+
 ### API（e2e / smoke）
 
-- [x] `GET /health`：返回 200，且响应体包含 `db: "ok"`、`redis: "ok"`（或等价字段）
-- [x] 当 Postgres/Redis 不可用时：`/health` 返回非 200（或 `db:"fail"/redis:"fail"`，但要有明确口径）
+- [ ] `GET /health`：返回 `200`，响应体为 JSON，且包含 `db: "ok"`、`redis: "ok"`（或等价字段）
+- [ ] Health 响应不得泄露敏感信息（例如 `DATABASE_URL`、密码、内部 IP）
+- [ ] 当 Postgres/Redis 不可用时：`/health` 返回非 `200`（或 `db:"fail"/redis:"fail"`，但要在测试里锁死口径）
+
+### 服务器验收（Smoke，黑盒）
+
+通过 Coolify CLI 围绕同一台验收机执行（运行手册：`docs/coolify-acceptance.md`）。
+
+- [ ] `coolify context verify --context <ctx>`
+- [ ] Postgres/Redis 资源处于可用状态（`coolify database get <postgres_uuid>` / `coolify database get <redis_uuid>`）
+- [ ] 部署 API：`coolify deploy name <api_app_name>`
+- [ ] API 运行正常：`coolify app logs <api_app_uuid> -n 200` 无启动错误
+- [ ] 对外冒烟：`curl -fsS "$API_BASE_URL/health"` 返回 `db:"ok"`、`redis:"ok"`
+- [ ] 故意让 DB 或 Redis 不可用（停服务/改环境变量）时：`curl -fsS "$API_BASE_URL/health"` 必须失败（防止“假绿”）
 
 建议落点：`apps/api/test/health.e2e-spec.ts`（沿用现有 Jest e2e 结构）。
 
@@ -43,16 +57,20 @@
 
 ## 3) Refactor：模块化与收敛
 
-- [x] 把 DB/Redis 探测封装成可注入 service（避免 controller 里直接写连接逻辑）
-- [x] 约定统一的配置读取方式（`.env` → `process.env`；具体配置模块可后置）
+- [ ] 把 DB/Redis 探测封装成可注入 service（避免 controller 里直接写连接逻辑）
+- [ ] 约定统一的配置读取方式（`.env` → `process.env`；具体配置模块可后置）
 
 ## 4) 验收
 
 - 命令
-  - `cp .env.example .env`
-  - `docker compose up -d postgres redis`
-  - `pnpm -C apps/api test:e2e`
-  - `pnpm dev`（至少能启动 api/web）
+  - 服务器验收（推荐）：
+    - `coolify deploy name <api_app_name>`
+    - `curl -fsS "$API_BASE_URL/health"`
+  - 本地快速反馈（可选）：
+    - `cp .env.example .env`
+    - `docker compose up -d postgres redis`
+    - `pnpm -C apps/api test:e2e`
+    - `pnpm dev`
 - 验收点
   - [ ] API `/health` 通过（含 DB/Redis 探测）
   - [ ] Web 可启动（页面可暂时空）
