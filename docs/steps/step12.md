@@ -41,7 +41,9 @@
 
 ### 服务器验收（黑盒）
 
-- [ ] 部署 API：`coolify deploy name <api_app_name>`
+前置：先按 `docs/coolify-target.md` export 环境变量（`COOLIFY_CONTEXT/API_BASE_URL/...`）。
+
+- [ ] 部署 API：`coolify deploy name "$API_APP_NAME" --force`
 - [ ] 连接 SSE：`curl -N -H "Accept: text/event-stream" "$API_BASE_URL/v1/sse/<topicId>"`
 - [ ] 触发一次投票/回填后能在 1~数秒内收到事件（可配合 `node scripts/coolify/signed-request.mjs` 发起 `setVotes`/`createArgument`）
 - [ ] 断线后携带 `Last-Event-ID` 续传：只收到 lastId 之后的事件
@@ -65,7 +67,7 @@
 
 - 命令
   - 服务器验收（推荐）：
-    - `coolify deploy name <api_app_name>`
+    - `coolify deploy name "$API_APP_NAME" --force`
     - `curl -N -H "Accept: text/event-stream" "$API_BASE_URL/v1/sse/<topicId>"`
   - 本地快速反馈（可选）：`pnpm -C apps/api test`
 - 验收点

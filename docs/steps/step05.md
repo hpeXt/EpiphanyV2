@@ -44,8 +44,10 @@
 ### Coolify CLI 服务器验收（黑盒）
 
 > 目的：保证签名实现与验收机的 API 验签口径一致（运行手册：`docs/coolify-acceptance.md`）。
+>
+> 前置：先按 `docs/coolify-target.md` export 环境变量（`COOLIFY_CONTEXT/API_BASE_URL/...`）。
 
-- [ ] 部署 API：`coolify deploy name <api_app_name>`（crypto 变更不应导致构建/启动失败）
+- [ ] 部署 API：`coolify deploy name "$API_APP_NAME" --force`（crypto 变更不应导致构建/启动失败）
 - [ ] （回归，需 Step 07 已完成）用脚本对 `CLAIM_OWNER` 发起签名请求并通过验签：
   - `node scripts/coolify/signed-request.mjs POST /v1/topics/<topicId>/commands '{"type":"CLAIM_OWNER","payload":{}}' --extra-header "X-Claim-Token: <claimToken>"`
 
@@ -68,7 +70,7 @@
 ## 4) 验收
 
 - 命令
-  - 服务器验收（推荐）：`coolify deploy name <api_app_name>`
+  - 服务器验收（推荐）：`coolify deploy name "$API_APP_NAME" --force`
   - 本地快速反馈（可选）：`pnpm -C packages/crypto test`
 - 验收点
   - [ ] 测试向量稳定

@@ -50,7 +50,9 @@
 
 运行手册：`docs/coolify-acceptance.md`。
 
-- [ ] 部署 API：`coolify deploy name <api_app_name>`；确认 API 正常启动（`coolify app logs <api_app_uuid> -n 200`）
+前置：先按 `docs/coolify-target.md` export 环境变量（`COOLIFY_CONTEXT/API_BASE_URL/...`）。
+
+- [ ] 部署 API：`coolify deploy name "$API_APP_NAME" --force`；确认 API 正常启动（`coolify app logs "$API_APP_UUID" -n 200`）
 - [ ] 创建 Topic（不签名）：
   - `curl -fsS -X POST "$API_BASE_URL/v1/topics" -H 'Content-Type: application/json' -d '{"title":"E2E::topic","body":"root"}'`
 - [ ] CLAIM_OWNER（签名 + claimToken）：
@@ -75,7 +77,7 @@
 
 - 命令
   - 服务器验收（推荐）：
-    - `coolify deploy name <api_app_name>`
+    - `coolify deploy name "$API_APP_NAME" --force`
     - `curl -fsS -X POST "$API_BASE_URL/v1/topics" -H 'Content-Type: application/json' -d '{"title":"E2E::topic","body":"root"}'`
     - `node scripts/coolify/signed-request.mjs POST /v1/topics/<topicId>/commands '{"type":"CLAIM_OWNER","payload":{}}' --extra-header "X-Claim-Token: <claimToken>"`
   - 本地快速反馈（可选）：

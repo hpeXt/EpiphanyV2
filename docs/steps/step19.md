@@ -44,7 +44,8 @@
 
 ### Coolify CLI 服务器验收（黑盒）
 
-- [ ] 部署 API/Worker：`coolify deploy name <api_app_name>`、`coolify deploy name <worker_app_name>`
+- 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+- [ ] 部署 API/Worker：`coolify deploy name "$API_APP_NAME" --force`、`coolify deploy name "$WORKER_APP_NAME" --force`
 - [ ] 触发聚类后：`curl -fsS "$API_BASE_URL/v1/topics/<topicId>/cluster-map"` 返回可解析结果，并收到 `cluster_updated`
 
 ## 2) Green：最小实现（让测试通过）
@@ -65,7 +66,11 @@
 
 ## 4) 验收
 
+- 命令
+  - 服务器验收（推荐）：
+    - `coolify deploy name "$API_APP_NAME" --force`
+    - `coolify deploy name "$WORKER_APP_NAME" --force`
+    - `curl -fsS "$API_BASE_URL/v1/topics/<topicId>/cluster-map"`
 - 验收点
   - [ ] >50 节点时能稳定产出 cluster-map（不要求 UI，但 API 输出正确）
   - [ ] pruning 后聚类输入过滤 pruned，结果更新
-  - [ ] （服务器验收前置）`coolify deploy name <api_app_name>`、`coolify deploy name <worker_app_name>`

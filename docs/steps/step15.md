@@ -46,7 +46,9 @@
 
 ### Coolify CLI 服务器验收（黑盒）
 
-- [ ] 部署 API/Web：`coolify deploy name <api_app_name>`、`coolify deploy name <web_app_name>`
+前置：先按 `docs/coolify-target.md` export 环境变量（`COOLIFY_CONTEXT/WEB_BASE_URL/API_BASE_URL/...`）。
+
+- [ ] 部署 API/Web：`coolify deploy name "$API_APP_NAME" --force`、`coolify deploy name "$WEB_APP_NAME" --force`
 - [ ] 两窗口打开同一 topic：发言/投票后另一窗口通过 SSE 秒级同步（对照 `docs/test-plan.md` Suite W3）
 
 ## 2) Green：最小实现（让测试通过）
@@ -66,9 +68,11 @@
 ## 4) 验收
 
 - 命令
-  - `pnpm -C apps/web test`
-  - 两窗口手动验收：同时打开同一 topic
-  - （服务器验收前置）`coolify deploy name <api_app_name>`、`coolify deploy name <web_app_name>`
+  - 服务器验收（推荐）：
+    - `coolify deploy name "$API_APP_NAME" --force`
+    - `coolify deploy name "$WEB_APP_NAME" --force`
+    - 两窗口手动验收：同时打开同一 topic（建议用 `$WEB_BASE_URL`）
+  - 本地快速反馈（可选）：`pnpm -C apps/web test`
 - 验收点
   - [ ] 发言/投票后另一窗口在秒级更新（无需手动刷新）
   - [ ] `reload_required` 出现时有可恢复策略（自动全量刷新或提示用户刷新）

@@ -56,7 +56,9 @@
 
 运行手册：`docs/coolify-acceptance.md`。
 
-- [ ] 部署 API：`coolify deploy name <api_app_name>`
+前置：先按 `docs/coolify-target.md` export 环境变量（`COOLIFY_CONTEXT/API_BASE_URL/...`）。
+
+- [ ] 部署 API：`coolify deploy name "$API_APP_NAME" --force`
 - [ ] 发言（签名）：
   - `node scripts/coolify/signed-request.mjs POST /v1/topics/<topicId>/arguments '{"parentId":"<parentId>","title":null,"body":"E2E::arg","initialVotes":0}'`
 - [ ] 发言 + initialVotes（签名）：
@@ -83,7 +85,7 @@
 
 - 命令
   - 服务器验收（推荐）：
-    - `coolify deploy name <api_app_name>`
+    - `coolify deploy name "$API_APP_NAME" --force`
     - `node scripts/coolify/signed-request.mjs POST /v1/topics/<topicId>/arguments '{"parentId":"<parentId>","title":null,"body":"E2E::arg","initialVotes":0}'`
   - 本地快速反馈（可选）：
     - `docker compose up -d postgres redis`

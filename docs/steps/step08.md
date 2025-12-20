@@ -51,7 +51,9 @@
 
 运行手册：`docs/coolify-acceptance.md`。
 
-- [ ] 部署 API：`coolify deploy name <api_app_name>`
+前置：先按 `docs/coolify-target.md` export 环境变量（`COOLIFY_CONTEXT/API_BASE_URL/...`）。
+
+- [ ] 部署 API：`coolify deploy name "$API_APP_NAME" --force`
 - [ ] tree（公共读）：
   - `curl -fsS "$API_BASE_URL/v1/topics/<topicId>/tree?depth=3"`
 - [ ] children（公共读）：
@@ -72,7 +74,7 @@
 
 - 命令
   - 服务器验收（推荐）：
-    - `coolify deploy name <api_app_name>`
+    - `coolify deploy name "$API_APP_NAME" --force`
     - `curl -fsS "$API_BASE_URL/v1/topics/<topicId>/tree?depth=3"`
     - `curl -fsS "$API_BASE_URL/v1/arguments/<rootArgumentId>/children?orderBy=createdAt_desc&limit=30"`
   - 本地快速反馈（可选）：`pnpm -C apps/api test`

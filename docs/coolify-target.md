@@ -59,3 +59,29 @@ export WORKER_BASE_URL="http://wc40sgskgwcgocg0400k808k.45.77.19.115.sslip.io"
 export POSTGRES_UUID="vss04sksckos8s88o4wg4g0w"
 export REDIS_UUID="kgc80gs8ookw80owgg4o8sgo"
 ```
+
+## 外部服务配置状态
+
+### OpenRouter（AI Provider）
+
+- **状态**：已配置
+- **Base URL**：`https://openrouter.ai/api/v1`
+- **环境变量**：`OPENROUTER_API_KEY`（已在 `.env` 中配置，勿提交）
+
+已配置模型：
+
+| 用途 | 环境变量 | 模型 ID |
+|------|----------|---------|
+| Embedding | `EMBEDDING_MODEL` | `qwen/qwen3-embedding-8b` |
+| 立场判定 | `STANCE_MODEL` | `google/gemini-2.5-flash-preview` |
+| 报告生成 | `REPORT_MODEL` | `deepseek/deepseek-chat-v3-0324` |
+
+验证：
+
+```bash
+# 测试 API Key 有效性
+curl -s https://openrouter.ai/api/v1/models \
+  -H "Authorization: Bearer $OPENROUTER_API_KEY" | head -c 200
+```
+
+> 注意：部署到 Coolify 时需在应用环境变量中配置 `OPENROUTER_API_KEY`。

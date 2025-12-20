@@ -31,7 +31,8 @@
 
 ### 服务器验收（压测/回归）
 
-- [ ] 部署 API：`coolify deploy name <api_app_name>`
+- 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+- [ ] 部署 API：`coolify deploy name "$API_APP_NAME" --force`
 - [ ] 在验收机上对 write endpoints 做固定 QPS 压测：超过阈值被限流且系统不崩溃
 
 ## 2) Green：最小实现（让测试通过）
@@ -46,5 +47,8 @@
 
 ## 4) 验收
 
+- 命令
+  - 服务器验收（推荐）：
+    - `coolify deploy name "$API_APP_NAME" --force`
 - 验收点
   - [ ] 高压请求下系统仍可用，且错误可预期

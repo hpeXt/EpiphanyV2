@@ -39,7 +39,9 @@
 
 ### 服务器验收（推荐 Playwright，黑盒）
 
-- [ ] 部署 API/Web：`coolify deploy name <api_app_name>`、`coolify deploy name <web_app_name>`
+前置：先按 `docs/coolify-target.md` export 环境变量（`COOLIFY_CONTEXT/WEB_BASE_URL/API_BASE_URL/...`）。
+
+- [ ] 部署 API/Web：`coolify deploy name "$API_APP_NAME" --force`、`coolify deploy name "$WEB_APP_NAME" --force`
 - [ ] 进入 `/topics/:topicId`：首屏能渲染 tree(depth=3)
 - [ ] 点击任一节点：Dialogue Stream 出现并能切换 `最新/最热` 与分页
 
@@ -60,7 +62,7 @@
 ## 4) 验收
 
 - 命令
-  - 服务器验收（推荐）：`coolify deploy name <api_app_name>`、`coolify deploy name <web_app_name>`
+  - 服务器验收（推荐）：`coolify deploy name "$API_APP_NAME" --force`、`coolify deploy name "$WEB_APP_NAME" --force`
   - 本地快速反馈（可选）：
     - `pnpm -C apps/web test`
     - `pnpm -C apps/web dev`

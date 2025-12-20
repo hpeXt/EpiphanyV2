@@ -333,13 +333,16 @@ Worker（Node）：
 
 - `DATABASE_URL`
 - `REDIS_URL`
-- `AI_PROVIDER_API_KEY`（或按实际 Provider 拆分多个 key）
-- `EMBEDDING_MODEL`（默认：`qwen/qwen3-embedding-8b`）
-- `STANCE_MODEL`（默认：`google/gemini-3-flash-preview`）
-- `REPORT_MODEL`（默认：`deepseek/deepseek-v3.2`，后置）
+- `OPENROUTER_API_KEY`（OpenRouter API 密钥，**已配置**）
+- `OPENROUTER_BASE_URL`（默认：`https://openrouter.ai/api/v1`）
+- `EMBEDDING_MODEL`（默认：`qwen/qwen3-embedding-8b`，**已配置**）
+- `STANCE_MODEL`（默认：`google/gemini-2.5-flash-preview`，**已配置**）
+- `REPORT_MODEL`（默认：`deepseek/deepseek-chat-v3-0324`，后置，**已配置**）
 - `CLUSTER_ENGINE=node|python`（默认 `node`）
 - `AI_WORKER_URL`（当 `CLUSTER_ENGINE=python` 时必填）
 - `AI_WORKER_TOKEN`（内部鉴权 token）
+
+> **当前状态**：OpenRouter 已配置完成，API Key 验证通过。详见 `docs/coolify-target.md` 外部服务配置状态。
 
 AI Worker（Python，可选）：
 

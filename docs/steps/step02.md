@@ -49,9 +49,11 @@
 ### Coolify CLI 服务器验收（黑盒）
 
 > 目的：保证 shared-contracts 的变更不会导致 API/Web 在验收机上构建失败或运行时契约漂移（运行手册：`docs/coolify-acceptance.md`）。
+>
+> 前置：先按 `docs/coolify-target.md` export 环境变量（`COOLIFY_CONTEXT/API_BASE_URL/...`）。
 
-- [ ] 部署 API：`coolify deploy name <api_app_name>`；部署日志无 TS/Zod 相关报错
-- [ ] 部署 Web：`coolify deploy name <web_app_name>`；部署日志无 TS/Zod 相关报错
+- [ ] 部署 API：`coolify deploy name "$API_APP_NAME" --force`；部署日志无 TS/Zod 相关报错
+- [ ] 部署 Web：`coolify deploy name "$WEB_APP_NAME" --force`；部署日志无 TS/Zod 相关报错
 - [ ] API 对外可用：`curl -fsS "$API_BASE_URL/v1/topics?limit=1"`（至少不应 5xx）
 
 ## 2) Green：最小实现（让测试通过）
@@ -70,10 +72,12 @@
 
 ## 4) 验收
 
+- 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
 - 命令
   - 服务器验收（推荐）：
-    - `coolify deploy name <api_app_name>`
-    - `coolify deploy name <web_app_name>`
+    - `coolify deploy name "$API_APP_NAME" --force`
+    - `coolify deploy name "$WEB_APP_NAME" --force`
+    - `curl -fsS "$API_BASE_URL/v1/topics?limit=1"`
   - 本地快速反馈（可选）：
     - `pnpm -C packages/shared-contracts test`
     - `pnpm -C apps/api build`（或 `pnpm -C apps/api test`，确保能引用该包）
