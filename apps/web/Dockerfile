@@ -1,7 +1,7 @@
 FROM node:20-alpine AS base
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Install pnpm (match version in root package.json)
+RUN corepack enable && corepack prepare pnpm@10.12.4 --activate
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -24,6 +24,8 @@ COPY . .
 
 # Build the application
 ENV NEXT_TELEMETRY_DISABLED=1
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 RUN pnpm --filter=web build
 
 # Production image, copy all the files and run next

@@ -1,0 +1,33 @@
+.git
+.DS_Store
+
+# Dependencies
+node_modules
+**/node_modules
+.pnpm-store
+
+# Build outputs
+.next
+**/.next
+dist
+**/dist
+out
+**/out
+build
+**/build
+.turbo
+**/.turbo
+coverage
+
+# Logs
+logs
+*.log
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea
+.vscode

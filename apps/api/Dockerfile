@@ -1,7 +1,7 @@
 FROM node:20-alpine AS base
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Install pnpm (match version in root package.json)
+RUN corepack enable && corepack prepare pnpm@10.12.4 --activate
 
 # Install dependencies only when needed
 FROM base AS deps
