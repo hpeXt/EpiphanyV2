@@ -42,8 +42,10 @@
 ### Coolify CLI 服务器验收（黑盒）
 
 > 该 step 本身是纯逻辑；在验收机上主要验证“构建可用 + 后续写路径回归不破坏”。
+>
+> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
 
-- [ ] 部署 API：`coolify deploy name <api_app_name>`（确保 `packages/core-logic` 的变更不会导致构建/启动失败）
+- [ ] 部署 API：`coolify deploy name "$API_APP_NAME" --force`（确保 `packages/core-logic` 的变更不会导致构建/启动失败）
 - [ ] （回归，需 Step 10 已完成）执行一次 `setVotes` 黑盒用例并确认资金守恒（见 `docs/test-plan.md` Suite E）
 
 建议落点：`packages/core-logic/src/__tests__/setVotes.test.ts`
@@ -63,7 +65,7 @@
 ## 4) 验收
 
 - 命令
-  - 服务器验收（推荐）：`coolify deploy name <api_app_name>`
+  - 服务器验收（推荐）：`coolify deploy name "$API_APP_NAME" --force`
   - 本地快速反馈（可选）：`pnpm -C packages/core-logic test`
 - 验收点
   - [ ] 单测覆盖核心边界与不变量

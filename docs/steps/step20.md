@@ -31,9 +31,11 @@
   - API 返回空/错误时有降级提示
 - [ ] hover 信息卡：给定点数据能渲染 Calling Card 样式（不要求最终美术，但结构需稳定）
 
-### 服务器验收（推荐 Playwright，黑盒）
+### Coolify CLI 服务器验收（推荐 Playwright，黑盒）
 
-- [ ] 部署 API/Web：`coolify deploy name <api_app_name>`、`coolify deploy name <web_app_name>`
+前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+
+- [ ] 部署 API/Web：`coolify deploy name "$API_APP_NAME" --force`、`coolify deploy name "$WEB_APP_NAME" --force`
 - [ ] 打开 God View 能看到点云（至少渲染出 >0 个点）
 - [ ] hover 任一点：信息卡出现且不遮挡主要交互（缩放/平移仍可用）
 
@@ -51,6 +53,11 @@
 
 ## 4) 验收
 
+- 命令
+  - 服务器验收（推荐）：
+    - `coolify deploy name "$API_APP_NAME" --force`
+    - `coolify deploy name "$WEB_APP_NAME" --force`
+    - 手动/Playwright：打开 `$WEB_BASE_URL` 并进入 God View
 - 验收点
   - [ ] >50 节点时 UI 可用，且 stance 与 cluster 编码不冲突
   - [ ] pruning 后点不显示（依赖 API 已过滤）

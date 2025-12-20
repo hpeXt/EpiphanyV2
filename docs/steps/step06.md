@@ -46,8 +46,10 @@
 ### Coolify CLI 服务器验收（黑盒）
 
 > 本 step 的成果体现在“线上验签/防重放”正确工作；建议直接用后续真实接口做黑盒验收（运行手册：`docs/coolify-acceptance.md`）。
+>
+> 前置：先按 `docs/coolify-target.md` export 环境变量（`COOLIFY_CONTEXT/API_BASE_URL/...`）。
 
-- [ ] 部署 API：`coolify deploy name <api_app_name>`
+- [ ] 部署 API：`coolify deploy name "$API_APP_NAME" --force`
 - [ ] （回归，需 Step 07 已完成）对 `CLAIM_OWNER` 发起：
   - 正确签名 → 200
   - timestamp 超窗 → `401 TIMESTAMP_OUT_OF_RANGE`
@@ -75,7 +77,7 @@
 ## 4) 验收
 
 - 命令
-  - 服务器验收（推荐）：`coolify deploy name <api_app_name>`（然后按 Step 07/10 的黑盒用例验证验签/防重放）
+  - 服务器验收（推荐）：`coolify deploy name "$API_APP_NAME" --force`（然后按 Step 07/10 的黑盒用例验证验签/防重放）
   - 本地快速反馈（可选）：
     - `docker compose up -d postgres redis`
     - `pnpm -C apps/api test`（或 `test:e2e` 覆盖鉴权用例）

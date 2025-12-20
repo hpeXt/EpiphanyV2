@@ -148,7 +148,7 @@ coolify app env create <api_app_uuid> --key PORT --value 3001
 
 ### 0.5 创建 Worker（BullMQ consumer）
 
-Worker 不一定需要对外域名；若没有 HTTP server，建议关闭 healthcheck，用日志验收即可。
+本仓库的 Worker 默认内置极简 HTTP server（`GET /health`、`POST /enqueue-ping`）用于验收；若你不想对外暴露，也可以不绑定域名并关闭 healthcheck，仅用日志验收即可。
 
 ```bash
 coolify app create github \
@@ -205,16 +205,18 @@ coolify app env create <web_app_uuid> --key NEXT_PUBLIC_API_URL --value "<api_pu
 
 通过 Coolify CLI 围绕同一台验收机执行（运行手册：`docs/coolify-acceptance.md`）。
 
-- [ ] `coolify context verify --context <ctx>`
-- [ ] Postgres/Redis 资源处于可用状态（`coolify database get <postgres_uuid>` / `coolify database get <redis_uuid>`）
-- [ ] pgvector 已启用（在库里执行一次即可）：`CREATE EXTENSION IF NOT EXISTS vector;`
-- [ ] 部署 API：`coolify deploy name <api_app_name>`
-- [ ] API 运行正常：`coolify app logs <api_app_uuid> -n 200` 无启动错误
+前置：先按 `docs/coolify-target.md` export 环境变量（`COOLIFY_CONTEXT/API_BASE_URL/...`）。
+
+- [ ] `coolify context verify --context "$COOLIFY_CONTEXT"`
+- [ ] Postgres/Redis 资源处于可用状态（`coolify database get "$POSTGRES_UUID"` / `coolify database get "$REDIS_UUID"`）
+- [ ] Postgres 镜像为 `pgvector/pgvector:pg16`（`coolify database get "$POSTGRES_UUID"` 可见；`vector` extension 将在 Step 03 migrations 自动创建）
+- [ ] 部署 API：`coolify deploy name "$API_APP_NAME" --force`
+- [ ] API 运行正常：`coolify app logs "$API_APP_UUID" -n 200` 无启动错误
 - [ ] 对外冒烟：`curl -fsS "$API_BASE_URL/health"` 返回 `db:"ok"`、`redis:"ok"`
-- [ ] 部署 Worker：`coolify deploy name <worker_app_name>`
-- [ ] Worker 运行正常：`coolify app logs <worker_app_uuid> -n 200` 无启动错误
-- [ ] （若 Worker 暴露健康检查）对外冒烟：`curl -fsS "$WORKER_BASE_URL/health"` 返回 `{"ok":true}`（或等价字段）
-- [ ] （可选）Worker 消费验证：`curl -fsS -X POST "$WORKER_BASE_URL/enqueue-ping"` 后查看 `coolify app logs <worker_app_uuid> -n 200`
+- [ ] 部署 Worker：`coolify deploy name "$WORKER_APP_NAME" --force`
+- [ ] Worker 运行正常：`coolify app logs "$WORKER_APP_UUID" -n 200` 无启动错误
+- [ ] 对外冒烟：`curl -fsS "$WORKER_BASE_URL/health"` 返回 `{"ok":true}`（或等价字段）
+- [ ] （可选）Worker 消费验证：`curl -fsS -X POST "$WORKER_BASE_URL/enqueue-ping"` 后查看 `coolify app logs "$WORKER_APP_UUID" -n 200`
 - [ ] 故意让 DB 或 Redis 不可用（停服务/改环境变量）时：`curl -fsS "$API_BASE_URL/health"` 必须失败（防止“假绿”）
 
 建议落点：`apps/api/test/health.e2e-spec.ts`（沿用现有 Jest e2e 结构）。
@@ -242,7 +244,7 @@ coolify app env create <web_app_uuid> --key NEXT_PUBLIC_API_URL --value "<api_pu
 
 - 命令
   - 服务器验收（推荐）：
-    - `coolify deploy batch <postgres_name>,<redis_name>,<api_app_name>,<worker_app_name>,<web_app_name> --force`
+    - `coolify deploy batch epiphany-postgres,epiphany-redis,epiphany-api,epiphany-worker,epiphany-web --force`
     - `curl -fsS "$API_BASE_URL/health"`
     - `curl -fsS "$WORKER_BASE_URL/health"`
   - 本地快速反馈（可选）：

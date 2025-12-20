@@ -69,9 +69,10 @@
 
 运行手册：`docs/coolify-acceptance.md`。
 
-- [ ] 部署 API/Web：`coolify deploy name <api_app_name>`、`coolify deploy name <web_app_name>`
+- 前置：先按 `docs/coolify-target.md` export 环境变量（`COOLIFY_CONTEXT/WEB_BASE_URL/API_BASE_URL/...`）。
+- [ ] 部署 API/Web：`coolify deploy name "$API_APP_NAME" --force`、`coolify deploy name "$WEB_APP_NAME" --force`
 - [ ] 用 Host 身份执行命令后：
-  - `coolify app logs <api_app_uuid> -n 200` 不应出现权限/验签异常
+  - `coolify app logs "$API_APP_UUID" -n 200` 不应出现权限/验签异常
   - tree/children/stakes/me 的对外行为与测试用例一致（可用 `curl` + `scripts/coolify/*.mjs` 验证）
 
 ## 2) Green：最小实现（让测试通过）
@@ -91,6 +92,11 @@
 
 ## 4) 验收
 
+- 命令
+  - 服务器验收（推荐）：
+    - `coolify deploy name "$API_APP_NAME" --force`
+    - `coolify deploy name "$WEB_APP_NAME" --force`
+    - `coolify app logs "$API_APP_UUID" -n 200`
 - 验收点
   - [ ] 与 `docs/prd.md`/`docs/architecture.md` 决策清单一致
   - [ ] 资金找回路径成立（pruned 上的 stake 可撤回）

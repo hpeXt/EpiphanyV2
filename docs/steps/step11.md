@@ -53,7 +53,9 @@
 
 运行手册：`docs/coolify-acceptance.md`。
 
-- [ ] 部署 API：`coolify deploy name <api_app_name>`
+前置：先按 `docs/coolify-target.md` export 环境变量（`COOLIFY_CONTEXT/API_BASE_URL/...`）。
+
+- [ ] 部署 API：`coolify deploy name "$API_APP_NAME" --force`
 - [ ] ledger/me（签名 headers）：
   - `node scripts/coolify/signed-request.mjs GET /v1/topics/<topicId>/ledger/me`
 - [ ] stakes/me（签名 headers）：
@@ -80,7 +82,7 @@
 
 - 命令
   - 服务器验收（推荐）：
-    - `coolify deploy name <api_app_name>`
+    - `coolify deploy name "$API_APP_NAME" --force`
     - `node scripts/coolify/signed-request.mjs GET /v1/topics/<topicId>/ledger/me`
     - `node scripts/coolify/signed-request.mjs GET /v1/topics/<topicId>/stakes/me`
     - `node scripts/coolify/batch-balance.mjs <topicId1> <topicId2>`
