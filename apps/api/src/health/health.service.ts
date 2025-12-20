@@ -23,35 +23,43 @@ async function probeRedisPing(opts: {
   host: string;
   port: number;
   timeoutMs: number;
+  username?: string;
+  password?: string;
 }): Promise<boolean> {
   return new Promise((resolve) => {
-    const done = finishOnce(resolve);
     const socket = net.createConnection({ host: opts.host, port: opts.port });
-
-    const timeout = setTimeout(() => {
-      socket.destroy();
-      done(false);
-    }, opts.timeoutMs);
-
-    socket.once('error', () => {
+    const done = finishOnce((ok: boolean) => {
       clearTimeout(timeout);
-      done(false);
+      socket.destroy();
+      resolve(ok);
     });
+
+    const timeout = setTimeout(() => done(false), opts.timeoutMs);
+
+    socket.once('error', () => done(false));
 
     socket.once('connect', () => {
-      socket.write('*1\r\n$4\r\nPING\r\n');
+      const commands: string[] = [];
+      if (opts.password) {
+        if (opts.username) {
+          commands.push(`AUTH ${opts.username} ${opts.password}`);
+        } else {
+          commands.push(`AUTH ${opts.password}`);
+        }
+      }
+      commands.push('PING');
+      socket.write(`${commands.join('\r\n')}\r\n`);
     });
 
-    socket.once('data', (data) => {
-      clearTimeout(timeout);
-      socket.end();
-      done(data.toString('utf8').includes('PONG'));
+    let buffer = '';
+    socket.on('data', (data) => {
+      buffer += data.toString('utf8');
+      if (buffer.includes('PONG')) done(true);
+      if (buffer.includes('NOAUTH')) done(false);
+      if (buffer.includes('WRONGPASS')) done(false);
     });
 
-    socket.once('close', () => {
-      clearTimeout(timeout);
-      done(false);
-    });
+    socket.once('close', () => done(false));
   });
 }
 
@@ -128,12 +136,22 @@ export class HealthService {
     if (!rawUrl) return 'fail';
 
     try {
-      const { host, port } = getHostPortFromUrl(rawUrl, 6379);
-      const ok = await probeRedisPing({ host, port, timeoutMs: 500 });
+      const url = new URL(rawUrl);
+      const host = url.hostname;
+      const port = url.port ? Number(url.port) : 6379;
+      const username = url.username ? decodeURIComponent(url.username) : undefined;
+      const password = url.password ? decodeURIComponent(url.password) : undefined;
+
+      const ok = await probeRedisPing({
+        host,
+        port,
+        timeoutMs: 500,
+        username,
+        password,
+      });
       return ok ? 'ok' : 'fail';
     } catch {
       return 'fail';
     }
   }
 }
-
