@@ -31,7 +31,7 @@ coolify resource list --format table
 
 - Web：`x00s88swo4swcg0kw0wo0gk0` / `epiphany-web`
 - API：`q88skk4c04kwwg8wwok0skos` / `epiphany-api`
-- Worker：`wc40sgskgwcgocg0400k808k` / `epiphany-worker`（当前：`exited:unhealthy`）
+- Worker：`wc40sgskgwcgocg0400k808k` / `epiphany-worker`（期望：`running:*`；状态以 `coolify resource list` 为准）
 
 数据库/服务：
 
@@ -57,4 +57,3 @@ export WORKER_APP_UUID="wc40sgskgwcgocg0400k808k"
 export POSTGRES_UUID="vss04sksckos8s88o4wg4g0w"
 export REDIS_UUID="kgc80gs8ookw80owgg4o8sgo"
 ```
-
