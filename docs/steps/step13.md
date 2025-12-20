@@ -37,17 +37,6 @@
   - 校验必填
   - 提交后跳转到 `/topics/{topicId}`
 
-### 服务器验收（推荐 Playwright，黑盒）
-
-前置：先按 `docs/coolify-target.md` export 环境变量（`COOLIFY_CONTEXT/WEB_BASE_URL/API_BASE_URL/...`）。
-
-- [ ] 部署 API/Web：`coolify deploy name "$API_APP_NAME" --force`、`coolify deploy name "$WEB_APP_NAME" --force`
-- [ ] 打开 Web 首页能看到 Topic 列表（来自 `GET /v1/topics`）
-- [ ] 创建 Topic：
-  - 提交后跳转到详情页（URL 含 `topicId`）
-  - 返回列表后能看到新建 Topic
-- [ ] API 不可用时：页面展示明确错误态（不白屏）
-
 ## 2) Green：最小实现（让测试通过）
 
 - `apps/web`：
@@ -63,11 +52,36 @@
 
 ## 4) 验收
 
-- 命令
-  - 服务器验收（推荐）：`coolify deploy name "$API_APP_NAME" --force`、`coolify deploy name "$WEB_APP_NAME" --force`
-  - 本地快速反馈（可选）：
-    - `pnpm -C apps/web test`
-    - `pnpm -C apps/web dev`
-- 验收点
-  - [ ] 能创建 topic 并在列表中出现
-  - [ ] 点击/创建后可进入详情页（占位也可）
+> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+
+### 服务器验收（推荐）
+
+```bash
+# 部署 API 和 Web
+coolify deploy name "$API_APP_NAME" --force
+coolify deploy name "$WEB_APP_NAME" --force
+coolify app logs "$WEB_APP_UUID" -n 200
+```
+
+手动验收或 Playwright：
+
+- [ ] 打开 `$WEB_BASE_URL` 能看到 Topic 列表（来自 `GET /v1/topics`）
+- [ ] 创建 Topic：提交后跳转到详情页（URL 含 `topicId`）
+- [ ] 返回列表后能看到新建 Topic
+- [ ] API 不可用时：页面展示明确错误态（不白屏）
+
+验收点：
+
+- [ ] 能创建 topic 并在列表中出现
+- [ ] 点击/创建后可进入详情页（占位也可）
+
+### 本地快速反馈（可选）
+
+```bash
+pnpm -C apps/web test
+pnpm -C apps/web dev
+```
+
+验收点：
+
+- [ ] 组件测试通过

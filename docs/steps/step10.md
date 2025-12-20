@@ -53,17 +53,6 @@
 - [ ] 契约校验：响应能被 `shared-contracts` parse（字段名/类型一致）
 - [ ] （推荐）成功投票/撤回后写入 SSE invalidation：`argument_updated(reason="new_vote")`（写入 Redis Stream，SSE endpoint 在 Step 12）
 
-### Coolify CLI 服务器验收（黑盒）
-
-运行手册：`docs/coolify-acceptance.md`。
-
-前置：先按 `docs/coolify-target.md` export 环境变量（`COOLIFY_CONTEXT/API_BASE_URL/...`）。
-
-- [ ] 部署 API：`coolify deploy name "$API_APP_NAME" --force`
-- [ ] setVotes（签名）：
-  - `node scripts/coolify/signed-request.mjs POST /v1/arguments/<argumentId>/votes '{"targetVotes":4}'`
-  - `node scripts/coolify/signed-request.mjs POST /v1/arguments/<argumentId>/votes '{"targetVotes":0}'`
-
 ## 2) Green：最小实现（让测试通过）
 
 - `apps/api`：
@@ -85,14 +74,39 @@
 
 ## 4) 验收
 
-- 命令
-  - 服务器验收（推荐）：
-    - `coolify deploy name "$API_APP_NAME" --force`
-    - `node scripts/coolify/signed-request.mjs POST /v1/arguments/<argumentId>/votes '{"targetVotes":4}'`
-    - `node scripts/coolify/signed-request.mjs POST /v1/arguments/<argumentId>/votes '{"targetVotes":0}'`
-  - 本地快速反馈（可选）：
-    - `docker compose up -d postgres redis`
-    - `pnpm -C apps/api test`
-- 验收点
-  - [ ] 并发/重放下不变量成立（至少用测试覆盖重放）
-  - [ ] pruned/只读限制只影响“增票”，不阻断撤回
+> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+
+### 服务器验收（推荐）
+
+```bash
+# 部署 API
+coolify deploy name "$API_APP_NAME" --force
+coolify app logs "$API_APP_UUID" -n 200
+
+# setVotes 增票（签名）
+node scripts/coolify/signed-request.mjs POST /v1/arguments/<argumentId>/votes \
+  '{"targetVotes":4}'
+
+# setVotes 撤回（签名）
+node scripts/coolify/signed-request.mjs POST /v1/arguments/<argumentId>/votes \
+  '{"targetVotes":0}'
+```
+
+验收点：
+
+- [ ] 增票：`0 -> 4`，balance 减 16，stake=4
+- [ ] 撤回：`4 -> 0`，balance 加 16，stake 删除
+- [ ] 不变量：`balance + totalCostStaked == 100` 恒成立
+- [ ] 并发/重放下不变量成立（至少用测试覆盖重放）
+- [ ] pruned/只读限制只影响"增票"，不阻断撤回
+
+### 本地快速反馈（可选）
+
+```bash
+docker compose up -d postgres redis
+pnpm -C apps/api test
+```
+
+验收点：
+
+- [ ] e2e 测试通过

@@ -42,12 +42,6 @@
   - 契约校验：响应能被 `shared-contracts` parse
   - 聚类完成后通过 SSE 发 `cluster_updated`（写入 Redis Stream，SSE endpoint 在 Step 12）
 
-### Coolify CLI 服务器验收（黑盒）
-
-- 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
-- [ ] 部署 API/Worker：`coolify deploy name "$API_APP_NAME" --force`、`coolify deploy name "$WORKER_APP_NAME" --force`
-- [ ] 触发聚类后：`curl -fsS "$API_BASE_URL/v1/topics/<topicId>/cluster-map"` 返回可解析结果，并收到 `cluster_updated`
-
 ## 2) Green：最小实现（让测试通过）
 
 - Worker：
@@ -66,11 +60,32 @@
 
 ## 4) 验收
 
-- 命令
-  - 服务器验收（推荐）：
-    - `coolify deploy name "$API_APP_NAME" --force`
-    - `coolify deploy name "$WORKER_APP_NAME" --force`
-    - `curl -fsS "$API_BASE_URL/v1/topics/<topicId>/cluster-map"`
-- 验收点
-  - [ ] >50 节点时能稳定产出 cluster-map（不要求 UI，但 API 输出正确）
-  - [ ] pruning 后聚类输入过滤 pruned，结果更新
+> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+
+### 服务器验收（推荐）
+
+```bash
+# 部署 API 和 Worker
+coolify deploy name "$API_APP_NAME" --force
+coolify deploy name "$WORKER_APP_NAME" --force
+coolify app logs "$WORKER_APP_UUID" -n 200
+
+# 查询 cluster-map
+curl -fsS "$API_BASE_URL/v1/topics/<topicId>/cluster-map"
+```
+
+验收点：
+
+- [ ] 触发聚类后：`cluster-map` 返回可解析结果，并收到 `cluster_updated`
+- [ ] >50 节点时能稳定产出 cluster-map（不要求 UI，但 API 输出正确）
+- [ ] pruning 后聚类输入过滤 pruned，结果更新
+
+### 本地快速反馈（可选）
+
+```bash
+pnpm -C apps/worker test
+```
+
+验收点：
+
+- [ ] 聚类相关测试通过

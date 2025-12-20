@@ -18,12 +18,6 @@
 - [ ] 组件库/可视化组件的可复用性测试（props/渲染一致性）
 - [ ] 性能基准（至少有一个可重复的 perf 场景与阈值）
 
-### Coolify CLI 服务器验收（黑盒）
-
-- 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
-- [ ] 部署 Web：`coolify deploy name "$WEB_APP_NAME" --force`
-- [ ] 用 Playwright/手动在验收机上跑一次交互回归（确保不改 API 契约也能迭代视觉）
-
 ## 2) Green：最小实现（让测试通过）
 
 - 旭日图：先做只读（输入为 tree），再做交互（hover/click）
@@ -35,7 +29,30 @@
 
 ## 4) 验收
 
-- 命令
-  - 服务器验收（推荐）：`coolify deploy name "$WEB_APP_NAME" --force`
-- 验收点
-  - [ ] 在不修改 API 契约的前提下可迭代视觉表现
+> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+
+### 服务器验收（推荐）
+
+```bash
+# 部署 Web
+coolify deploy name "$WEB_APP_NAME" --force
+coolify app logs "$WEB_APP_UUID" -n 200
+```
+
+手动验收或 Playwright：
+
+- [ ] 在验收机上跑一次交互回归（确保不改 API 契约也能迭代视觉）
+
+验收点：
+
+- [ ] 在不修改 API 契约的前提下可迭代视觉表现
+
+### 本地快速反馈（可选）
+
+```bash
+pnpm -C apps/web test
+```
+
+验收点：
+
+- [ ] 组件测试通过

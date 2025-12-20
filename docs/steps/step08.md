@@ -47,18 +47,6 @@
   - 分页：当 children 数量 > limit 时，`nextBeforeId` 不为 null；带 `beforeId` 能取到下一页且不重复
   - `authorId`：每个 child 的 `authorId` 为 16 hex chars（小写）
 
-### Coolify CLI 服务器验收（黑盒）
-
-运行手册：`docs/coolify-acceptance.md`。
-
-前置：先按 `docs/coolify-target.md` export 环境变量（`COOLIFY_CONTEXT/API_BASE_URL/...`）。
-
-- [ ] 部署 API：`coolify deploy name "$API_APP_NAME" --force`
-- [ ] tree（公共读）：
-  - `curl -fsS "$API_BASE_URL/v1/topics/<topicId>/tree?depth=3"`
-- [ ] children（公共读）：
-  - `curl -fsS "$API_BASE_URL/v1/arguments/<rootArgumentId>/children?orderBy=createdAt_desc&limit=30"`
-
 ## 2) Green：最小实现（让测试通过）
 
 - `apps/api`：
@@ -72,12 +60,35 @@
 
 ## 4) 验收
 
-- 命令
-  - 服务器验收（推荐）：
-    - `coolify deploy name "$API_APP_NAME" --force`
-    - `curl -fsS "$API_BASE_URL/v1/topics/<topicId>/tree?depth=3"`
-    - `curl -fsS "$API_BASE_URL/v1/arguments/<rootArgumentId>/children?orderBy=createdAt_desc&limit=30"`
-  - 本地快速反馈（可选）：`pnpm -C apps/api test`
-- 验收点
-  - [ ] 公共读接口不需要签名（对齐契约）
-  - [ ] pruning 口径成立（pruned 不出现在 tree/children）
+> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+
+### 服务器验收（推荐）
+
+```bash
+# 部署 API
+coolify deploy name "$API_APP_NAME" --force
+coolify app logs "$API_APP_UUID" -n 200
+
+# tree（公共读）
+curl -fsS "$API_BASE_URL/v1/topics/<topicId>/tree?depth=3"
+
+# children（公共读）
+curl -fsS "$API_BASE_URL/v1/arguments/<rootArgumentId>/children?orderBy=createdAt_desc&limit=30"
+```
+
+验收点：
+
+- [ ] tree 返回 depth=3 的节点（Root 必定出现）
+- [ ] children 返回子节点列表，`nextBeforeId` 分页正常
+- [ ] pruned 的节点不出现
+- [ ] 公共读接口不需要签名（对齐契约）
+
+### 本地快速反馈（可选）
+
+```bash
+pnpm -C apps/api test
+```
+
+验收点：
+
+- [ ] pruning 口径成立（pruned 不出现在 tree/children）

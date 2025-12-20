@@ -36,12 +36,6 @@
 - [ ] Web：
   - 能打开模态并渲染 markdown（失败/生成中有状态提示）
 
-### 服务器验收（黑盒）
-
-- 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
-- [ ] 部署 API/Worker/Web：`coolify deploy name "$API_APP_NAME" --force`、`coolify deploy name "$WORKER_APP_NAME" --force`、`coolify deploy name "$WEB_APP_NAME" --force`
-- [ ] Host 触发生成后，report 在可接受时间内进入 ready/failed，且不阻塞核心写路径（createArgument/setVotes 仍快速返回）
-
 ## 2) Green：最小实现（让测试通过）
 
 - `consensus_reports` 表字段与契约对齐（Step 03 已预留则复用）
@@ -55,11 +49,34 @@
 
 ## 4) 验收
 
-- 命令
-  - 服务器验收（推荐）：
-    - `coolify deploy name "$API_APP_NAME" --force`
-    - `coolify deploy name "$WORKER_APP_NAME" --force`
-    - `coolify deploy name "$WEB_APP_NAME" --force`
-- 验收点
-  - [ ] Host 可触发生成并在 UI 查看
-  - [ ] 不影响核心写路径（createArgument/setVotes 仍快速返回）
+> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+
+### 服务器验收（推荐）
+
+```bash
+# 部署 API、Worker 和 Web
+coolify deploy name "$API_APP_NAME" --force
+coolify deploy name "$WORKER_APP_NAME" --force
+coolify deploy name "$WEB_APP_NAME" --force
+coolify app logs "$WORKER_APP_UUID" -n 200
+```
+
+手动验收：
+
+- [ ] Host 触发生成后，report 在可接受时间内进入 ready/failed
+- [ ] 不阻塞核心写路径（createArgument/setVotes 仍快速返回）
+
+验收点：
+
+- [ ] Host 可触发生成并在 UI 查看
+- [ ] 不影响核心写路径（createArgument/setVotes 仍快速返回）
+
+### 本地快速反馈（可选）
+
+```bash
+pnpm -C apps/worker test
+```
+
+验收点：
+
+- [ ] Worker 测试通过

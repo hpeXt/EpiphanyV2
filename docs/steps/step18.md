@@ -37,14 +37,6 @@
 - [ ] Web（可选）：
   - pending → ready 的 UI 状态切换（占位样式）
 
-### Coolify CLI 服务器验收（端到端，黑盒）
-
-前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
-
-- [ ] 部署 API/Worker：`coolify deploy name "$API_APP_NAME" --force`、`coolify deploy name "$WORKER_APP_NAME" --force`
-- [ ] 创建 argument 后立刻可读（tree/children 能看到 pending 节点）
-- [ ] 在 N 秒内（mock 可立即）pending → ready/failed，并通过 SSE 收到 `analysis_done` invalidation
-
 ## 2) Green：最小实现（让测试通过）
 
 - 新增 Worker 进程（选项二选一，选一种并固化）：
@@ -65,11 +57,36 @@
 
 ## 4) 验收
 
-- 命令
-  - 服务器验收（推荐）：
-    - `coolify deploy name "$API_APP_NAME" --force`
-    - `coolify deploy name "$WORKER_APP_NAME" --force`
-    - （可选）SSE 观察：`curl -N -H "Accept: text/event-stream" "$API_BASE_URL/v1/sse/<topicId>"`
-- 验收点
-  - [ ] 新发言在 1~数十秒内从 pending 变为 ready/failed（开发期 mock 可立即）
-  - [ ] stance 只影响样式，不参与聚类输入（聚类只用 embedding）
+> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+
+### 服务器验收（推荐）
+
+```bash
+# 部署 API 和 Worker
+coolify deploy name "$API_APP_NAME" --force
+coolify deploy name "$WORKER_APP_NAME" --force
+coolify app logs "$WORKER_APP_UUID" -n 200
+
+# （可选）SSE 观察
+curl -N -H "Accept: text/event-stream" "$API_BASE_URL/v1/sse/<topicId>"
+```
+
+手动验收：
+
+- [ ] 创建 argument 后立刻可读（tree/children 能看到 pending 节点）
+- [ ] 在 N 秒内（mock 可立即）pending → ready/failed，并通过 SSE 收到 `analysis_done` invalidation
+
+验收点：
+
+- [ ] 新发言在 1~数十秒内从 pending 变为 ready/failed（开发期 mock 可立即）
+- [ ] stance 只影响样式，不参与聚类输入（聚类只用 embedding）
+
+### 本地快速反馈（可选）
+
+```bash
+pnpm -C apps/worker test
+```
+
+验收点：
+
+- [ ] Worker 测试通过

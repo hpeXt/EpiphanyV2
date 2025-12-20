@@ -41,16 +41,6 @@
 
 建议落点：`packages/crypto/src/__tests__/*.test.ts`
 
-### Coolify CLI 服务器验收（黑盒）
-
-> 目的：保证签名实现与验收机的 API 验签口径一致（运行手册：`docs/coolify-acceptance.md`）。
->
-> 前置：先按 `docs/coolify-target.md` export 环境变量（`COOLIFY_CONTEXT/API_BASE_URL/...`）。
-
-- [ ] 部署 API：`coolify deploy name "$API_APP_NAME" --force`（crypto 变更不应导致构建/启动失败）
-- [ ] （回归，需 Step 07 已完成）用脚本对 `CLAIM_OWNER` 发起签名请求并通过验签：
-  - `node scripts/coolify/signed-request.mjs POST /v1/topics/<topicId>/commands '{"type":"CLAIM_OWNER","payload":{}}' --extra-header "X-Claim-Token: <claimToken>"`
-
 ## 2) Green：最小实现（让测试通过）
 
 按 `docs/crypto.md#6` 建议 API 面实现（可按实际选型调整）：
@@ -69,9 +59,35 @@
 
 ## 4) 验收
 
-- 命令
-  - 服务器验收（推荐）：`coolify deploy name "$API_APP_NAME" --force`
-  - 本地快速反馈（可选）：`pnpm -C packages/crypto test`
-- 验收点
-  - [ ] 测试向量稳定
-  - [ ] canonical message 与契约完全一致
+> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+
+### 服务器验收（推荐）
+
+目的：保证签名实现与验收机的 API 验签口径一致。
+
+```bash
+# 部署 API（crypto 变更不应导致构建/启动失败）
+coolify deploy name "$API_APP_NAME" --force
+coolify app logs "$API_APP_UUID" -n 200
+
+# （回归，需 Step 07 已完成）用脚本对 CLAIM_OWNER 发起签名请求并通过验签
+node scripts/coolify/signed-request.mjs POST /v1/topics/<topicId>/commands \
+  '{"type":"CLAIM_OWNER","payload":{}}' \
+  --extra-header "X-Claim-Token: <claimToken>"
+```
+
+验收点：
+
+- [ ] 部署成功，无构建/启动失败
+- [ ] （回归）签名请求通过验签，不返回 `INVALID_SIGNATURE`
+
+### 本地快速反馈（可选）
+
+```bash
+pnpm -C packages/crypto test
+```
+
+验收点：
+
+- [ ] 测试向量稳定
+- [ ] canonical message 与契约完全一致

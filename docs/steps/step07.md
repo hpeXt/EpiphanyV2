@@ -46,19 +46,6 @@
   - 分页口径：使用 `beforeId` 请求下一页，响应 `nextBeforeId` 稳定且不重复
   - limit：默认 `20`，最大 `100`（超过最大值要 clamp 或 `400`，二选一并锁死）
 
-### Coolify CLI 服务器验收（黑盒）
-
-运行手册：`docs/coolify-acceptance.md`。
-
-前置：先按 `docs/coolify-target.md` export 环境变量（`COOLIFY_CONTEXT/API_BASE_URL/...`）。
-
-- [ ] 部署 API：`coolify deploy name "$API_APP_NAME" --force`；确认 API 正常启动（`coolify app logs "$API_APP_UUID" -n 200`）
-- [ ] 创建 Topic（不签名）：
-  - `curl -fsS -X POST "$API_BASE_URL/v1/topics" -H 'Content-Type: application/json' -d '{"title":"E2E::topic","body":"root"}'`
-- [ ] CLAIM_OWNER（签名 + claimToken）：
-  - `node scripts/coolify/signed-request.mjs POST /v1/topics/<topicId>/commands '{"type":"CLAIM_OWNER","payload":{}}' --extra-header "X-Claim-Token: <claimToken>"`
-- [ ] 列表可见：`curl -fsS "$API_BASE_URL/v1/topics?limit=20"`
-
 ## 2) Green：最小实现（让测试通过）
 
 - `apps/api`：
@@ -75,13 +62,44 @@
 
 ## 4) 验收
 
-- 命令
-  - 服务器验收（推荐）：
-    - `coolify deploy name "$API_APP_NAME" --force`
-    - `curl -fsS -X POST "$API_BASE_URL/v1/topics" -H 'Content-Type: application/json' -d '{"title":"E2E::topic","body":"root"}'`
-    - `node scripts/coolify/signed-request.mjs POST /v1/topics/<topicId>/commands '{"type":"CLAIM_OWNER","payload":{}}' --extra-header "X-Claim-Token: <claimToken>"`
-  - 本地快速反馈（可选）：
-    - `docker compose up -d postgres redis`
-    - `pnpm -C apps/api test`
-- 验收点
-  - [ ] 对照 `docs/api-contract.md`：请求/响应字段完全一致
+> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+
+### 服务器验收（推荐）
+
+```bash
+# 部署 API 并确认正常启动
+coolify deploy name "$API_APP_NAME" --force
+coolify app logs "$API_APP_UUID" -n 200
+
+# 创建 Topic（不签名）
+curl -fsS -X POST "$API_BASE_URL/v1/topics" \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"E2E::topic","body":"root"}'
+# 记录返回的 topicId 和 claimToken
+
+# CLAIM_OWNER（签名 + claimToken）
+node scripts/coolify/signed-request.mjs POST /v1/topics/<topicId>/commands \
+  '{"type":"CLAIM_OWNER","payload":{}}' \
+  --extra-header "X-Claim-Token: <claimToken>"
+
+# 列表可见
+curl -fsS "$API_BASE_URL/v1/topics?limit=20"
+```
+
+验收点：
+
+- [ ] 创建 Topic 返回 `topicId/rootArgumentId/claimToken/expiresAt`
+- [ ] CLAIM_OWNER 成功后 `topics.owner_pubkey` 被写入
+- [ ] 列表能看到新建 Topic
+- [ ] 对照 `docs/api-contract.md`：请求/响应字段完全一致
+
+### 本地快速反馈（可选）
+
+```bash
+docker compose up -d postgres redis
+pnpm -C apps/api test
+```
+
+验收点：
+
+- [ ] e2e 测试通过

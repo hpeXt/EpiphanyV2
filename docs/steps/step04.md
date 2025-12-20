@@ -39,15 +39,6 @@
 - [ ] 随机序列：从 balance=100 开始随机执行多次 setVotes（含撤回），每步不变量都成立（可用表驱动或 property-based）
 - [ ] 只用整数：所有输出都为整数（避免引入浮点）
 
-### Coolify CLI 服务器验收（黑盒）
-
-> 该 step 本身是纯逻辑；在验收机上主要验证“构建可用 + 后续写路径回归不破坏”。
->
-> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
-
-- [ ] 部署 API：`coolify deploy name "$API_APP_NAME" --force`（确保 `packages/core-logic` 的变更不会导致构建/启动失败）
-- [ ] （回归，需 Step 10 已完成）执行一次 `setVotes` 黑盒用例并确认资金守恒（见 `docs/test-plan.md` Suite E）
-
 建议落点：`packages/core-logic/src/__tests__/setVotes.test.ts`
 
 ## 2) Green：最小实现（让测试通过）
@@ -64,9 +55,33 @@
 
 ## 4) 验收
 
-- 命令
-  - 服务器验收（推荐）：`coolify deploy name "$API_APP_NAME" --force`
-  - 本地快速反馈（可选）：`pnpm -C packages/core-logic test`
-- 验收点
-  - [ ] 单测覆盖核心边界与不变量
-  - [ ] 无 DB/框架依赖（可在 Node 环境直接跑）
+> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+
+### 服务器验收（推荐）
+
+目的：该 step 本身是纯逻辑；在验收机上主要验证"构建可用 + 后续写路径回归不破坏"。
+
+```bash
+# 部署 API（确保 packages/core-logic 的变更不会导致构建/启动失败）
+coolify deploy name "$API_APP_NAME" --force
+coolify app logs "$API_APP_UUID" -n 200
+
+# （回归，需 Step 10 已完成）执行一次 setVotes 黑盒用例并确认资金守恒
+node scripts/coolify/signed-request.mjs POST /v1/arguments/<argumentId>/votes '{"targetVotes":4}'
+```
+
+验收点：
+
+- [ ] 部署成功，无构建/启动失败
+- [ ] （回归）setVotes 黑盒用例通过，资金守恒（见 `docs/test-plan.md` Suite E）
+
+### 本地快速反馈（可选）
+
+```bash
+pnpm -C packages/core-logic test
+```
+
+验收点：
+
+- [ ] 单测覆盖核心边界与不变量
+- [ ] 无 DB/框架依赖（可在 Node 环境直接跑）
