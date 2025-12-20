@@ -5,7 +5,7 @@
 import { Module, Global } from '@nestjs/common';
 import { RedisModule } from '@nestjs-modules/ioredis';
 import { AuthGuard } from './auth.guard';
-import { NonceService, REDIS_CLIENT } from './nonce.service';
+import { NonceService } from './nonce.service';
 
 @Global()
 @Module({
