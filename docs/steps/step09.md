@@ -52,18 +52,6 @@
 
 - [ ] （端到端）在 Step 18 完成后：argument 在 worker 回填时会触发 `argument_updated(reason="analysis_done")`（用于两窗口同步）
 
-### Coolify CLI 服务器验收（黑盒）
-
-运行手册：`docs/coolify-acceptance.md`。
-
-前置：先按 `docs/coolify-target.md` export 环境变量（`COOLIFY_CONTEXT/API_BASE_URL/...`）。
-
-- [ ] 部署 API：`coolify deploy name "$API_APP_NAME" --force`
-- [ ] 发言（签名）：
-  - `node scripts/coolify/signed-request.mjs POST /v1/topics/<topicId>/arguments '{"parentId":"<parentId>","title":null,"body":"E2E::arg","initialVotes":0}'`
-- [ ] 发言 + initialVotes（签名）：
-  - `node scripts/coolify/signed-request.mjs POST /v1/topics/<topicId>/arguments '{"parentId":"<parentId>","title":null,"body":"E2E::arg+votes","initialVotes":3}'`
-
 ## 2) Green：最小实现（让测试通过）
 
 - `apps/api`：
@@ -83,13 +71,38 @@
 
 ## 4) 验收
 
-- 命令
-  - 服务器验收（推荐）：
-    - `coolify deploy name "$API_APP_NAME" --force`
-    - `node scripts/coolify/signed-request.mjs POST /v1/topics/<topicId>/arguments '{"parentId":"<parentId>","title":null,"body":"E2E::arg","initialVotes":0}'`
-  - 本地快速反馈（可选）：
-    - `docker compose up -d postgres redis`
-    - `pnpm -C apps/api test`
-- 验收点
-  - [ ] 对照契约：响应中 argument/ledger 字段口径一致
-  - [ ] 余额不足不会产生脏数据（无 argument、无 stake、ledger 不变）
+> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+
+### 服务器验收（推荐）
+
+```bash
+# 部署 API
+coolify deploy name "$API_APP_NAME" --force
+coolify app logs "$API_APP_UUID" -n 200
+
+# 发言（签名，initialVotes=0）
+node scripts/coolify/signed-request.mjs POST /v1/topics/<topicId>/arguments \
+  '{"parentId":"<parentId>","title":null,"body":"E2E::arg","initialVotes":0}'
+
+# 发言 + initialVotes（签名，initialVotes=3）
+node scripts/coolify/signed-request.mjs POST /v1/topics/<topicId>/arguments \
+  '{"parentId":"<parentId>","title":null,"body":"E2E::arg+votes","initialVotes":3}'
+```
+
+验收点：
+
+- [ ] 发言成功返回 `argument` + `ledger`
+- [ ] `initialVotes=3` 时：`cost=9`，`balance` 减少 9
+- [ ] 对照契约：响应中 argument/ledger 字段口径一致
+- [ ] 余额不足不会产生脏数据（无 argument、无 stake、ledger 不变）
+
+### 本地快速反馈（可选）
+
+```bash
+docker compose up -d postgres redis
+pnpm -C apps/api test
+```
+
+验收点：
+
+- [ ] e2e 测试通过

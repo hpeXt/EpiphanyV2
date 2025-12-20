@@ -34,16 +34,6 @@
 
 建议落点：`packages/database/src/__tests__/db-constraints.test.ts`（连接到测试库执行，推荐使用独立的 `DATABASE_URL_TEST`）。
 
-### Coolify CLI 服务器验收（黑盒）
-
-> 目的：确保验收机上的 DB 可用、migrations 已应用、API 能正常读写（运行手册：`docs/coolify-acceptance.md`）。
->
-> 前置：先按 `docs/coolify-target.md` export 环境变量（`COOLIFY_CONTEXT/API_BASE_URL/...`）。
-
-- [ ] Postgres 处于可用状态：`coolify database get "$POSTGRES_UUID"`
-- [ ] 部署 API：`coolify deploy name "$API_APP_NAME" --force`；部署日志不应出现 migrate 失败
-- [ ] 最小写入验证：`curl -fsS -X POST "$API_BASE_URL/v1/topics" -H 'Content-Type: application/json' -d '{"title":"E2E::db","body":"seed"}'`
-
 ## 2) Green：最小实现（让测试通过）
 
 - `packages/database`：
@@ -66,17 +56,42 @@
 
 ## 4) 验收
 
-- 前置
-  - 服务器验收：确保 Coolify 上的 Postgres 可用（`coolify database get "$POSTGRES_UUID"`）
-  - 本地快速反馈（可选）：`docker compose up -d postgres`，`DATABASE_URL` 指向本地库
-- 命令
-  - 服务器验收（推荐）：
-    - `coolify deploy name "$API_APP_NAME" --force`（启动时应完成 migrations 或至少不报错）
-    - `curl -fsS -X POST "$API_BASE_URL/v1/topics" -H 'Content-Type: application/json' -d '{"title":"E2E::db","body":"seed"}'`
-  - 本地快速反馈（可选）：
-    - `pnpm -C packages/database prisma validate`
-    - `pnpm -C packages/database prisma migrate deploy`
-    - `pnpm -C packages/database test`
-- 验收点
-  - [ ] migrations 可重复执行（空库/新库）
-  - [ ] 约束集成测试通过
+> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+
+### 服务器验收（推荐）
+
+目的：确保验收机上的 DB 可用、migrations 已应用、API 能正常读写。
+
+```bash
+# 确认 Postgres 处于可用状态
+coolify database get "$POSTGRES_UUID"
+
+# 部署 API（启动时应完成 migrations 或至少不报错）
+coolify deploy name "$API_APP_NAME" --force
+coolify app deployments logs "$API_APP_UUID" --format pretty
+
+# 最小写入验证
+curl -fsS -X POST "$API_BASE_URL/v1/topics" \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"E2E::db","body":"seed"}'
+```
+
+验收点：
+
+- [ ] Postgres 处于可用状态
+- [ ] 部署日志不应出现 migrate 失败
+- [ ] 最小写入验证成功
+
+### 本地快速反馈（可选）
+
+```bash
+docker compose up -d postgres
+pnpm -C packages/database prisma validate
+pnpm -C packages/database prisma migrate deploy
+pnpm -C packages/database test
+```
+
+验收点：
+
+- [ ] migrations 可重复执行（空库/新库）
+- [ ] 约束集成测试通过

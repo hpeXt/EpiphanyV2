@@ -43,19 +43,7 @@
 - [ ] 用“正确签名”调用受保护接口必须 200
 - [ ] 篡改 `METHOD/PATH/TIMESTAMP/NONCE/BODY` 任一字段后必须 401（防重放/防篡改）
 
-### Coolify CLI 服务器验收（黑盒）
-
-> 本 step 的成果体现在“线上验签/防重放”正确工作；建议直接用后续真实接口做黑盒验收（运行手册：`docs/coolify-acceptance.md`）。
->
-> 前置：先按 `docs/coolify-target.md` export 环境变量（`COOLIFY_CONTEXT/API_BASE_URL/...`）。
-
-- [ ] 部署 API：`coolify deploy name "$API_APP_NAME" --force`
-- [ ] （回归，需 Step 07 已完成）对 `CLAIM_OWNER` 发起：
-  - 正确签名 → 200
-  - timestamp 超窗 → `401 TIMESTAMP_OUT_OF_RANGE`
-  - nonce 重放 → `409 NONCE_REPLAY`
-
-建议先在 API 加一个“受保护的 dummy endpoint”（例如 `GET /v1/auth/ping`）用于专测鉴权层。
+建议先在 API 加一个"受保护的 dummy endpoint"（例如 `GET /v1/auth/ping`）用于专测鉴权层。
 （推荐做法：只在 e2e TestingModule 里挂载测试用 controller，避免把非契约路由带到生产构建。）
 
 ## 2) Green：最小实现（让测试通过）
@@ -76,10 +64,41 @@
 
 ## 4) 验收
 
-- 命令
-  - 服务器验收（推荐）：`coolify deploy name "$API_APP_NAME" --force`（然后按 Step 07/10 的黑盒用例验证验签/防重放）
-  - 本地快速反馈（可选）：
-    - `docker compose up -d postgres redis`
-    - `pnpm -C apps/api test`（或 `test:e2e` 覆盖鉴权用例）
-- 验收点
-  - [ ] 任意后续“需要签名的写接口”都可复用该 guard（无需复制粘贴）
+> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+
+### 服务器验收（推荐）
+
+目的：验证"线上验签/防重放"正确工作；建议直接用后续真实接口做黑盒验收。
+
+```bash
+# 部署 API
+coolify deploy name "$API_APP_NAME" --force
+coolify app logs "$API_APP_UUID" -n 200
+
+# （回归，需 Step 07 已完成）对 CLAIM_OWNER 发起验签测试
+# 正确签名 → 200
+node scripts/coolify/signed-request.mjs POST /v1/topics/<topicId>/commands \
+  '{"type":"CLAIM_OWNER","payload":{}}' \
+  --extra-header "X-Claim-Token: <claimToken>"
+
+# 测试 timestamp 超窗 → 401 TIMESTAMP_OUT_OF_RANGE
+# 测试 nonce 重放 → 409 NONCE_REPLAY
+```
+
+验收点：
+
+- [ ] 正确签名 → 200
+- [ ] timestamp 超窗 → `401 TIMESTAMP_OUT_OF_RANGE`
+- [ ] nonce 重放 → `409 NONCE_REPLAY`
+- [ ] 任意后续"需要签名的写接口"都可复用该 guard（无需复制粘贴）
+
+### 本地快速反馈（可选）
+
+```bash
+docker compose up -d postgres redis
+pnpm -C apps/api test      # 或 test:e2e 覆盖鉴权用例
+```
+
+验收点：
+
+- [ ] 鉴权层测试通过

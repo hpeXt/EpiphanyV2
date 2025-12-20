@@ -39,16 +39,6 @@
 - [ ] `data:` JSON 必须能被 `shared-contracts` 的 `zSseEnvelope` parse（事件 union 不漂移）
 - [ ] 事件只推 invalidation（`id + reason`），不得携带私密数据（例如 ledger/stakes 明细）
 
-### 服务器验收（黑盒）
-
-前置：先按 `docs/coolify-target.md` export 环境变量（`COOLIFY_CONTEXT/API_BASE_URL/...`）。
-
-- [ ] 部署 API：`coolify deploy name "$API_APP_NAME" --force`
-- [ ] 连接 SSE：`curl -N -H "Accept: text/event-stream" "$API_BASE_URL/v1/sse/<topicId>"`
-- [ ] 触发一次投票/回填后能在 1~数秒内收到事件（可配合 `node scripts/coolify/signed-request.mjs` 发起 `setVotes`/`createArgument`）
-- [ ] 断线后携带 `Last-Event-ID` 续传：只收到 lastId 之后的事件
-- [ ] 人为制造“Last-Event-ID 过旧”（裁剪/重置 stream）时会收到 `reload_required(reason="trimmed")`
-
 ## 2) Green：最小实现（让测试通过）
 
 - `apps/api`：
@@ -65,11 +55,40 @@
 
 ## 4) 验收
 
-- 命令
-  - 服务器验收（推荐）：
-    - `coolify deploy name "$API_APP_NAME" --force`
-    - `curl -N -H "Accept: text/event-stream" "$API_BASE_URL/v1/sse/<topicId>"`
-  - 本地快速反馈（可选）：`pnpm -C apps/api test`
-- 验收点
-  - [ ] 两个浏览器窗口对同一 topic：投票/发言后能秒级收到 invalidation（手动验证）
-  - [ ] 断线后携带 `Last-Event-ID` 可续传（手动或集成测试）
+> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+
+### 服务器验收（推荐）
+
+```bash
+# 部署 API
+coolify deploy name "$API_APP_NAME" --force
+coolify app logs "$API_APP_UUID" -n 200
+
+# 连接 SSE（在终端保持连接）
+curl -N -H "Accept: text/event-stream" "$API_BASE_URL/v1/sse/<topicId>"
+
+# 在另一个终端触发一次投票
+node scripts/coolify/signed-request.mjs POST /v1/arguments/<argumentId>/votes \
+  '{"targetVotes":1}'
+
+# 断线后携带 Last-Event-ID 续传
+curl -N -H "Accept: text/event-stream" -H "Last-Event-ID: <lastId>" \
+  "$API_BASE_URL/v1/sse/<topicId>"
+```
+
+验收点：
+
+- [ ] 连接 SSE 后，触发投票/回填能在 1~数秒内收到事件
+- [ ] 断线后携带 `Last-Event-ID` 续传：只收到 lastId 之后的事件
+- [ ] 人为制造"Last-Event-ID 过旧"时会收到 `reload_required(reason="trimmed")`
+- [ ] 两个浏览器窗口对同一 topic：投票/发言后能秒级收到 invalidation（手动验证）
+
+### 本地快速反馈（可选）
+
+```bash
+pnpm -C apps/api test
+```
+
+验收点：
+
+- [ ] SSE 相关测试通过

@@ -44,13 +44,6 @@
   - nonce 每次请求都不同（避免误触发幂等/重放）
   - 验签失败（401）时 UI 有明确提示（不静默失败）
 
-### Coolify CLI 服务器验收（黑盒）
-
-前置：先按 `docs/coolify-target.md` export 环境变量（`COOLIFY_CONTEXT/WEB_BASE_URL/API_BASE_URL/...`）。
-
-- [ ] 部署 API/Web：`coolify deploy name "$API_APP_NAME" --force`、`coolify deploy name "$WEB_APP_NAME" --force`
-- [ ] 两窗口打开同一 topic：发言/投票后另一窗口通过 SSE 秒级同步（对照 `docs/test-plan.md` Suite W3）
-
 ## 2) Green：最小实现（让测试通过）
 
 - `apps/web`：
@@ -67,12 +60,34 @@
 
 ## 4) 验收
 
-- 命令
-  - 服务器验收（推荐）：
-    - `coolify deploy name "$API_APP_NAME" --force`
-    - `coolify deploy name "$WEB_APP_NAME" --force`
-    - 两窗口手动验收：同时打开同一 topic（建议用 `$WEB_BASE_URL`）
-  - 本地快速反馈（可选）：`pnpm -C apps/web test`
-- 验收点
-  - [ ] 发言/投票后另一窗口在秒级更新（无需手动刷新）
-  - [ ] `reload_required` 出现时有可恢复策略（自动全量刷新或提示用户刷新）
+> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+
+### 服务器验收（推荐）
+
+```bash
+# 部署 API 和 Web
+coolify deploy name "$API_APP_NAME" --force
+coolify deploy name "$WEB_APP_NAME" --force
+coolify app logs "$WEB_APP_UUID" -n 200
+```
+
+手动验收：
+
+- [ ] 两窗口打开同一 topic（使用 `$WEB_BASE_URL`）
+- [ ] 在一个窗口发言/投票
+- [ ] 另一个窗口通过 SSE 秒级同步更新（对照 `docs/test-plan.md` Suite W3）
+
+验收点：
+
+- [ ] 发言/投票后另一窗口在秒级更新（无需手动刷新）
+- [ ] `reload_required` 出现时有可恢复策略（自动全量刷新或提示用户刷新）
+
+### 本地快速反馈（可选）
+
+```bash
+pnpm -C apps/web test
+```
+
+验收点：
+
+- [ ] 组件测试通过

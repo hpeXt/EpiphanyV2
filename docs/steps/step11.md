@@ -49,20 +49,6 @@
   - topic 不存在：该项 `ok:false` 且 error.code=`TOPIC_NOT_FOUND`
   - 契约校验：整体响应能被 `shared-contracts` parse
 
-### Coolify CLI 服务器验收（黑盒）
-
-运行手册：`docs/coolify-acceptance.md`。
-
-前置：先按 `docs/coolify-target.md` export 环境变量（`COOLIFY_CONTEXT/API_BASE_URL/...`）。
-
-- [ ] 部署 API：`coolify deploy name "$API_APP_NAME" --force`
-- [ ] ledger/me（签名 headers）：
-  - `node scripts/coolify/signed-request.mjs GET /v1/topics/<topicId>/ledger/me`
-- [ ] stakes/me（签名 headers）：
-  - `node scripts/coolify/signed-request.mjs GET /v1/topics/<topicId>/stakes/me`
-- [ ] batch-balance（item 级签名）：
-  - `node scripts/coolify/batch-balance.mjs <topicId1> <topicId2>`
-
 ## 2) Green：最小实现（让测试通过）
 
 - `apps/api`：
@@ -80,13 +66,38 @@
 
 ## 4) 验收
 
-- 命令
-  - 服务器验收（推荐）：
-    - `coolify deploy name "$API_APP_NAME" --force`
-    - `node scripts/coolify/signed-request.mjs GET /v1/topics/<topicId>/ledger/me`
-    - `node scripts/coolify/signed-request.mjs GET /v1/topics/<topicId>/stakes/me`
-    - `node scripts/coolify/batch-balance.mjs <topicId1> <topicId2>`
-  - 本地快速反馈（可选）：`pnpm -C apps/api test`
-- 验收点
-  - [ ] pruned 节点的 stake 在 `stakes/me` 可见
-  - [ ] batch-balance “item 级隔离失败”成立
+> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+
+### 服务器验收（推荐）
+
+```bash
+# 部署 API
+coolify deploy name "$API_APP_NAME" --force
+coolify app logs "$API_APP_UUID" -n 200
+
+# ledger/me（签名 headers）
+node scripts/coolify/signed-request.mjs GET /v1/topics/<topicId>/ledger/me
+
+# stakes/me（签名 headers）
+node scripts/coolify/signed-request.mjs GET /v1/topics/<topicId>/stakes/me
+
+# batch-balance（item 级签名）
+node scripts/coolify/batch-balance.mjs <topicId1> <topicId2>
+```
+
+验收点：
+
+- [ ] ledger/me 返回余额（没有 ledger 时自动初始化为 balance=100）
+- [ ] stakes/me 返回质押列表（包含 pruned 的 argument）
+- [ ] batch-balance 单项失败不影响其它项
+- [ ] pruned 节点的 stake 在 `stakes/me` 可见
+
+### 本地快速反馈（可选）
+
+```bash
+pnpm -C apps/api test
+```
+
+验收点：
+
+- [ ] e2e 测试通过

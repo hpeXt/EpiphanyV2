@@ -37,14 +37,6 @@
   - 私密读同样带签名
   - 清空本地后重新导入助记词：同一 topic 的 pubkey 必须保持一致（可作为回归测试）
 
-### 服务器验收（Coolify + 黑盒）
-
-前置：先按 `docs/coolify-target.md` export 环境变量（`COOLIFY_CONTEXT/WEB_BASE_URL/API_BASE_URL/...`）。
-
-- [ ] 部署 API/Web：`coolify deploy name "$API_APP_NAME" --force`、`coolify deploy name "$WEB_APP_NAME" --force`
-- [ ] 浏览器端生成助记词后在同一 topic 内完成一次写请求（发言/投票）不再返回 `INVALID_SIGNATURE`
-- [ ] 清空本地存储后导入同一助记词：同一 topic 的 pubkey/余额可恢复（对照 `ledger/me`）
-
 ## 2) Green：最小实现（让测试通过）
 
 - `apps/web`：
@@ -59,9 +51,33 @@
 
 ## 4) 验收
 
-- 命令
-  - 服务器验收（推荐）：`coolify deploy name "$API_APP_NAME" --force`、`coolify deploy name "$WEB_APP_NAME" --force`
-  - 本地快速反馈（可选）：`pnpm -C apps/web test`
-- 验收点
-  - [ ] 清空本地后，用同一助记词能恢复同一 pubkey（对同一 topic）
-  - [ ] 写请求验签通过（API 不再返回 INVALID_SIGNATURE）
+> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+
+### 服务器验收（推荐）
+
+```bash
+# 部署 API 和 Web
+coolify deploy name "$API_APP_NAME" --force
+coolify deploy name "$WEB_APP_NAME" --force
+coolify app logs "$WEB_APP_UUID" -n 200
+```
+
+手动验收：
+
+- [ ] 浏览器端生成助记词后在同一 topic 内完成一次写请求（发言/投票）不再返回 `INVALID_SIGNATURE`
+- [ ] 清空本地存储后导入同一助记词：同一 topic 的 pubkey/余额可恢复（对照 `ledger/me`）
+
+验收点：
+
+- [ ] 清空本地后，用同一助记词能恢复同一 pubkey（对同一 topic）
+- [ ] 写请求验签通过（API 不再返回 INVALID_SIGNATURE）
+
+### 本地快速反馈（可选）
+
+```bash
+pnpm -C apps/web test
+```
+
+验收点：
+
+- [ ] identity 模块测试通过

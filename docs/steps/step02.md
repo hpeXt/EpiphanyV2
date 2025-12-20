@@ -46,16 +46,6 @@
 
 建议落点：`packages/shared-contracts/src/__tests__/*.test.ts`
 
-### Coolify CLI 服务器验收（黑盒）
-
-> 目的：保证 shared-contracts 的变更不会导致 API/Web 在验收机上构建失败或运行时契约漂移（运行手册：`docs/coolify-acceptance.md`）。
->
-> 前置：先按 `docs/coolify-target.md` export 环境变量（`COOLIFY_CONTEXT/API_BASE_URL/...`）。
-
-- [ ] 部署 API：`coolify deploy name "$API_APP_NAME" --force`；部署日志无 TS/Zod 相关报错
-- [ ] 部署 Web：`coolify deploy name "$WEB_APP_NAME" --force`；部署日志无 TS/Zod 相关报错
-- [ ] API 对外可用：`curl -fsS "$API_BASE_URL/v1/topics?limit=1"`（至少不应 5xx）
-
 ## 2) Green：最小实现（让测试通过）
 
 - 建包：`packages/shared-contracts/package.json` + `tsconfig.json`
@@ -72,16 +62,39 @@
 
 ## 4) 验收
 
-- 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
-- 命令
-  - 服务器验收（推荐）：
-    - `coolify deploy name "$API_APP_NAME" --force`
-    - `coolify deploy name "$WEB_APP_NAME" --force`
-    - `curl -fsS "$API_BASE_URL/v1/topics?limit=1"`
-  - 本地快速反馈（可选）：
-    - `pnpm -C packages/shared-contracts test`
-    - `pnpm -C apps/api build`（或 `pnpm -C apps/api test`，确保能引用该包）
-    - `pnpm -C apps/web build`（确保能引用该包）
-- 验收点
-  - [ ] schema 测试通过
-  - [ ] `apps/api` 与 `apps/web` 都能引用并编译通过
+> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+
+### 服务器验收（推荐）
+
+目的：保证 shared-contracts 的变更不会导致 API/Web 在验收机上构建失败或运行时契约漂移。
+
+```bash
+# 部署 API（确认部署日志无 TS/Zod 相关报错）
+coolify deploy name "$API_APP_NAME" --force
+coolify app deployments logs "$API_APP_UUID" --format pretty
+
+# 部署 Web（确认部署日志无 TS/Zod 相关报错）
+coolify deploy name "$WEB_APP_NAME" --force
+coolify app deployments logs "$WEB_APP_UUID" --format pretty
+
+# API 对外可用（至少不应 5xx）
+curl -fsS "$API_BASE_URL/v1/topics?limit=1"
+```
+
+验收点：
+
+- [ ] 部署日志无 TS/Zod 相关报错
+- [ ] API 对外可用：`curl -fsS "$API_BASE_URL/v1/topics?limit=1"` 不应 5xx
+
+### 本地快速反馈（可选）
+
+```bash
+pnpm -C packages/shared-contracts test
+pnpm -C apps/api build   # 确保能引用该包
+pnpm -C apps/web build   # 确保能引用该包
+```
+
+验收点：
+
+- [ ] schema 测试通过
+- [ ] `apps/api` 与 `apps/web` 都能引用并编译通过
