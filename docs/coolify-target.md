@@ -20,6 +20,7 @@ coolify resource list --format table
 
 - Web：`https://epiphany.4seas.dev/`
 - API Base：`https://epiphany.4seas.dev/api`
+- Worker Base（临时）：`http://wc40sgskgwcgocg0400k808k.45.77.19.115.sslip.io`
 
 > 说明：若 API 实际挂载在 `/api`（即对外路径为 `/api/v1/...`），`scripts/coolify/*.mjs` 会自动把 baseUrl 的 mount path 拼到请求 URL 上；签名默认仍按契约的 `/v1/...` 计算。
 >
@@ -53,6 +54,7 @@ export API_APP_NAME="epiphany-api"
 export API_APP_UUID="q88skk4c04kwwg8wwok0skos"
 export WORKER_APP_NAME="epiphany-worker"
 export WORKER_APP_UUID="wc40sgskgwcgocg0400k808k"
+export WORKER_BASE_URL="http://wc40sgskgwcgocg0400k808k.45.77.19.115.sslip.io"
 
 export POSTGRES_UUID="vss04sksckos8s88o4wg4g0w"
 export REDIS_UUID="kgc80gs8ookw80owgg4o8sgo"

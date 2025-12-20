@@ -9,6 +9,47 @@
 - 你有 Coolify API Token（不要写进仓库；用 context 或环境变量传入）
 - 本仓库默认目标环境见：`docs/coolify-target.md`
 
+## 0.1 快速开始（本仓库默认验收机）
+
+把 `docs/coolify-target.md` 的 export 段复制到你的终端（不含任何敏感信息），然后执行：
+
+```bash
+coolify context verify --context "$COOLIFY_CONTEXT"
+coolify resource list --format table
+
+# 一键部署/回归（可重复执行）
+coolify deploy batch epiphany-postgres,epiphany-redis,epiphany-api,epiphany-worker,epiphany-web --force
+
+# Smoke
+curl -fsS "$API_BASE_URL/health"
+curl -fsS "$WORKER_BASE_URL/health"
+```
+
+若需要验证 Worker 能消费最小 job（Suite A3），可执行：
+
+```bash
+curl -fsS -X POST "$WORKER_BASE_URL/enqueue-ping"
+coolify app logs "$WORKER_APP_UUID" -n 200
+```
+
+## 0.2 日常迭代（Server-first）
+
+本仓库默认“在服务器上开发”：本地写代码 → push → Coolify 拉取构建 → HTTP/脚本验收。
+
+```bash
+# 部署（常用）
+coolify deploy name "$API_APP_NAME" --force
+coolify deploy name "$WORKER_APP_NAME" --force
+
+# 查看当前部署的 commit / 状态
+coolify app deployments list "$API_APP_UUID" --format table | head
+coolify app get "$API_APP_UUID" --format pretty
+
+# 失败排查
+coolify app deployments logs "$API_APP_UUID" --debuglogs -n 200
+coolify app logs "$API_APP_UUID" -n 200
+```
+
 ## 1. 配置 Coolify Context（一次性）
 
 ```bash

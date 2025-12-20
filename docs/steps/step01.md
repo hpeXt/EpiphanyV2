@@ -4,6 +4,9 @@
 
 把后续迭代需要的“地基”先跑通：本地可一键启动 Postgres（含 pgvector）/Redis，`apps/api`/`apps/web` 能跑起来并读到环境变量；服务器验收环境（Coolify）具备同等最低依赖。
 
+> 重要：本仓库后续所有 step 的“验收/回归/冒烟”默认都围绕 **同一台 Coolify 服务器**进行，本地只作为可选的快速反馈。
+> 默认验收机的 context/uuid/URL 见：`docs/coolify-target.md`（不含任何敏感信息）。
+
 ## 依赖
 
 - 无
@@ -23,7 +26,28 @@
 
 > 注意：Token/密码/连接串不要提交到 git；建议写到你自己的密码管理器。
 
-### 0.1 找到 server / project / env
+### 0.1 使用本仓库默认验收机（推荐）
+
+把 `docs/coolify-target.md` 的 export 段复制到你的终端，然后执行：
+
+```bash
+coolify context verify --context "$COOLIFY_CONTEXT"
+coolify resource list --format table
+
+coolify deploy batch epiphany-postgres,epiphany-redis,epiphany-api,epiphany-worker,epiphany-web --force
+
+curl -fsS "$API_BASE_URL/health"
+curl -fsS "$WORKER_BASE_URL/health"
+```
+
+（可选）验证 Worker 能消费最小 job（Suite A3）：
+
+```bash
+curl -fsS -X POST "$WORKER_BASE_URL/enqueue-ping"
+coolify app logs "$WORKER_APP_UUID" -n 200
+```
+
+### 0.2 找到 server / project / env
 
 ```bash
 coolify context verify --context <ctx>
@@ -35,7 +59,7 @@ coolify project list --format table
 coolify project get <project_uuid> --format pretty
 ```
 
-### 0.2 创建 PostgreSQL（pgvector）与 Redis
+### 0.3 创建 PostgreSQL（pgvector）与 Redis
 
 ```bash
 coolify database create postgresql \
@@ -66,7 +90,34 @@ coolify database create redis \
 coolify --debug database list --format json --show-sensitive
 ```
 
-### 0.3 创建 API（NestJS）
+#### pgvector 启用/校验（一次性）
+
+在还没有 migrations（Step 03）之前，你需要在库里执行一次：
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+推荐流程（执行完立刻关回公网端口）：
+
+```bash
+# 1) 临时开放 Postgres 公网端口（示例用 6543）
+coolify database update <postgres_uuid> --is-public --public-port 6543
+
+# 2) 用 debug 输出拿到 postgres 密码（或 internal_db_url 里解析）
+coolify --debug database list --format json --show-sensitive
+
+# 3) 用 psql 执行（<server_public_ip> 为服务器公网 IP；port 为上一步 public-port）
+PGPASSWORD="<postgres_password>" psql -h <server_public_ip> -p 6543 -U postgres -d epiphany \
+  -v ON_ERROR_STOP=1 \
+  -c "CREATE EXTENSION IF NOT EXISTS vector;" \
+  -c "SELECT extname, extversion FROM pg_extension WHERE extname='vector';"
+
+# 4) 关回公网访问
+coolify database update <postgres_uuid> --is-public=false
+```
+
+### 0.4 创建 API（NestJS）
 
 ```bash
 coolify github list --format table
@@ -95,7 +146,7 @@ coolify app env create <api_app_uuid> --key REDIS_URL --value "<redis_internal_d
 coolify app env create <api_app_uuid> --key PORT --value 3001
 ```
 
-### 0.4 创建 Worker（BullMQ consumer）
+### 0.5 创建 Worker（BullMQ consumer）
 
 Worker 不一定需要对外域名；若没有 HTTP server，建议关闭 healthcheck，用日志验收即可。
 
@@ -163,6 +214,7 @@ coolify app env create <web_app_uuid> --key NEXT_PUBLIC_API_URL --value "<api_pu
 - [ ] 部署 Worker：`coolify deploy name <worker_app_name>`
 - [ ] Worker 运行正常：`coolify app logs <worker_app_uuid> -n 200` 无启动错误
 - [ ] （若 Worker 暴露健康检查）对外冒烟：`curl -fsS "$WORKER_BASE_URL/health"` 返回 `{"ok":true}`（或等价字段）
+- [ ] （可选）Worker 消费验证：`curl -fsS -X POST "$WORKER_BASE_URL/enqueue-ping"` 后查看 `coolify app logs <worker_app_uuid> -n 200`
 - [ ] 故意让 DB 或 Redis 不可用（停服务/改环境变量）时：`curl -fsS "$API_BASE_URL/health"` 必须失败（防止“假绿”）
 
 建议落点：`apps/api/test/health.e2e-spec.ts`（沿用现有 Jest e2e 结构）。
@@ -190,9 +242,9 @@ coolify app env create <web_app_uuid> --key NEXT_PUBLIC_API_URL --value "<api_pu
 
 - 命令
   - 服务器验收（推荐）：
-    - `coolify deploy name <api_app_name>`
+    - `coolify deploy batch <postgres_name>,<redis_name>,<api_app_name>,<worker_app_name>,<web_app_name> --force`
     - `curl -fsS "$API_BASE_URL/health"`
-    - `coolify deploy name <worker_app_name>`
+    - `curl -fsS "$WORKER_BASE_URL/health"`
   - 本地快速反馈（可选）：
     - `cp .env.example .env`
     - `docker compose up -d postgres redis`
