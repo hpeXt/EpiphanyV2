@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 
 let prismaClient: PrismaClient | undefined;
 
@@ -7,5 +7,5 @@ export function getPrisma() {
   return prismaClient;
 }
 
-export { PrismaClient };
+export { PrismaClient, Prisma };
 
