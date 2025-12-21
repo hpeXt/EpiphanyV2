@@ -11,7 +11,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
-import { json, Request, Response } from 'express';
 import { AppModule } from '../src/app.module';
 import {
   zCreateTopicResponse,
@@ -19,6 +18,7 @@ import {
   zTopicCommandResponse,
   zErrorResponse,
 } from '@epiphany/shared-contracts';
+import { RawBodyMiddleware } from '../src/middleware/raw-body.middleware';
 import {
   createHash,
   randomBytes,
@@ -41,16 +41,7 @@ describe('Topic API (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication({ bodyParser: false });
-
-    // Add raw body capture middleware (same as main.ts)
-    app.use(
-      json({
-        verify: (req: Request, _res: Response, buf: Buffer) => {
-          (req as Request & { rawBody?: Buffer }).rawBody = buf;
-        },
-      }),
-    );
-
+    app.use(RawBodyMiddleware);
     app.useGlobalPipes(new ValidationPipe({ transform: true }));
     await app.init();
   });
