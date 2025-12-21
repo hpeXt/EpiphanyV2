@@ -7,25 +7,17 @@
  * - POST /v1/topics/:topicId/commands (CLAIM_OWNER)
  * - GET /v1/topics (list with beforeId/nextBeforeId pagination)
  */
-import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
-import { AppModule } from '../src/app.module';
 import {
   zCreateTopicResponse,
   zListTopicsResponse,
   zTopicCommandResponse,
   zErrorResponse,
 } from '@epiphany/shared-contracts';
-import { RawBodyMiddleware } from '../src/middleware/raw-body.middleware';
-import {
-  createHash,
-  randomBytes,
-  generateKeyPairSync,
-  sign as cryptoSign,
-  KeyObject,
-} from 'node:crypto';
+import { KeyObject } from 'node:crypto';
+import { createE2eApp, generateEd25519Keypair, makeSignedHeaders } from './e2e-helpers';
 
 interface TopicListItem {
   id: string;
@@ -36,14 +28,7 @@ describe('Topic API (e2e)', () => {
   let app: INestApplication<App>;
 
   beforeAll(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-
-    app = moduleFixture.createNestApplication({ bodyParser: false });
-    app.use(RawBodyMiddleware);
-    app.useGlobalPipes(new ValidationPipe({ transform: true }));
-    await app.init();
+    app = await createE2eApp();
   });
 
   afterAll(async () => {
@@ -141,49 +126,21 @@ describe('Topic API (e2e)', () => {
       topicId = res.body.topicId;
       claimToken = res.body.claimToken;
 
-      // Generate a keypair for signing using Node.js crypto
-      const keypair = generateKeyPairSync('ed25519');
+      const keypair = generateEd25519Keypair();
       privateKey = keypair.privateKey;
-      // Export raw public key (32 bytes)
-      const pubkeyBuffer = keypair.publicKey.export({ type: 'spki', format: 'der' });
-      // Skip the DER header (12 bytes) to get raw 32-byte public key
-      pubkeyHex = (pubkeyBuffer as Buffer).subarray(12).toString('hex');
+      pubkeyHex = keypair.pubkeyHex;
     });
-
-    function signRequest(
-      method: string,
-      path: string,
-      body: object | null,
-      privKey: KeyObject,
-      pubHex: string,
-    ): {
-      'X-Pubkey': string;
-      'X-Signature': string;
-      'X-Timestamp': string;
-      'X-Nonce': string;
-    } {
-      const timestamp = Date.now().toString();
-      const nonce = randomBytes(16).toString('hex');
-      const bodyStr = body ? JSON.stringify(body) : '';
-      const bodyHash = bodyStr
-        ? createHash('sha256').update(bodyStr).digest('hex')
-        : '';
-
-      const canonical = `v1|${method}|${path}|${timestamp}|${nonce}|${bodyHash}`;
-      const signature = cryptoSign(null, Buffer.from(canonical, 'utf8'), privKey);
-
-      return {
-        'X-Pubkey': pubHex,
-        'X-Signature': signature.toString('hex'),
-        'X-Timestamp': timestamp,
-        'X-Nonce': nonce,
-      };
-    }
 
     it('should claim owner with valid token and signature', async () => {
       const body = { type: 'CLAIM_OWNER', payload: {} };
       const path = `/v1/topics/${topicId}/commands`;
-      const headers = signRequest('POST', path, body, privateKey, pubkeyHex);
+      const headers = makeSignedHeaders({
+        method: 'POST',
+        path,
+        body,
+        privateKey,
+        pubkeyHex,
+      });
 
       const res = await request(app.getHttpServer())
         .post(path)
@@ -202,7 +159,13 @@ describe('Topic API (e2e)', () => {
     it('should return 400 CLAIM_TOKEN_INVALID when token is reused', async () => {
       const body = { type: 'CLAIM_OWNER', payload: {} };
       const path = `/v1/topics/${topicId}/commands`;
-      const headers = signRequest('POST', path, body, privateKey, pubkeyHex);
+      const headers = makeSignedHeaders({
+        method: 'POST',
+        path,
+        body,
+        privateKey,
+        pubkeyHex,
+      });
 
       // First claim should succeed
       await request(app.getHttpServer())
@@ -213,7 +176,13 @@ describe('Topic API (e2e)', () => {
         .expect(200);
 
       // Second claim with same token should fail
-      const headers2 = signRequest('POST', path, body, privateKey, pubkeyHex);
+      const headers2 = makeSignedHeaders({
+        method: 'POST',
+        path,
+        body,
+        privateKey,
+        pubkeyHex,
+      });
       const res = await request(app.getHttpServer())
         .post(path)
         .set(headers2)
@@ -234,7 +203,13 @@ describe('Topic API (e2e)', () => {
     it('should return 400 CLAIM_TOKEN_INVALID when token is wrong', async () => {
       const body = { type: 'CLAIM_OWNER', payload: {} };
       const path = `/v1/topics/${topicId}/commands`;
-      const headers = signRequest('POST', path, body, privateKey, pubkeyHex);
+      const headers = makeSignedHeaders({
+        method: 'POST',
+        path,
+        body,
+        privateKey,
+        pubkeyHex,
+      });
 
       const res = await request(app.getHttpServer())
         .post(path)
@@ -270,7 +245,13 @@ describe('Topic API (e2e)', () => {
     it('should consume token after successful claim (cannot claim again)', async () => {
       const body = { type: 'CLAIM_OWNER', payload: {} };
       const path = `/v1/topics/${topicId}/commands`;
-      const headers = signRequest('POST', path, body, privateKey, pubkeyHex);
+      const headers = makeSignedHeaders({
+        method: 'POST',
+        path,
+        body,
+        privateKey,
+        pubkeyHex,
+      });
 
       // First claim
       await request(app.getHttpServer())
@@ -281,10 +262,14 @@ describe('Topic API (e2e)', () => {
         .expect(200);
 
       // Another user tries to claim with same token
-      const newKeypair = generateKeyPairSync('ed25519');
-      const newPubkeyBuffer = newKeypair.publicKey.export({ type: 'spki', format: 'der' });
-      const newPubkeyHex = (newPubkeyBuffer as Buffer).subarray(12).toString('hex');
-      const headers2 = signRequest('POST', path, body, newKeypair.privateKey, newPubkeyHex);
+      const newKeypair = generateEd25519Keypair();
+      const headers2 = makeSignedHeaders({
+        method: 'POST',
+        path,
+        body,
+        privateKey: newKeypair.privateKey,
+        pubkeyHex: newKeypair.pubkeyHex,
+      });
 
       const res = await request(app.getHttpServer())
         .post(path)

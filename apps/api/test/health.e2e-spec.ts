@@ -3,11 +3,13 @@ import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { ensureTestEnv } from './e2e-helpers';
 
 describe('Health (e2e)', () => {
   let app: INestApplication<App>;
 
   beforeAll(async () => {
+    ensureTestEnv();
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -82,4 +84,3 @@ describe('Health (e2e)', () => {
     );
   });
 });
-
