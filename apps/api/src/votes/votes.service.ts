@@ -15,6 +15,7 @@ import { validateSetVotes } from '@epiphany/core-logic';
 import { zSetVotesResponse, type SetVotesResponse, type LedgerMe } from '@epiphany/shared-contracts';
 import { PrismaService } from '../infrastructure/prisma.module.js';
 import { RedisService } from '../infrastructure/redis.module.js';
+import { TopicEventsPublisher } from '../sse/topic-events.publisher.js';
 
 const IDEMPOTENCY_TTL_SECONDS = 300; // 5 minutes
 
@@ -23,6 +24,7 @@ export class VotesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    private readonly topicEvents: TopicEventsPublisher,
   ) {}
 
   private getIdempotencyKey(pubkey: string, nonce: string): string {
@@ -304,18 +306,10 @@ export class VotesService {
 
     // (Optional, Step 12 consumes) SSE invalidation stream write
     try {
-      await this.redis.xadd(
-        `topic:events:${result.topicId}`,
-        'MAXLEN',
-        '~',
-        '1000',
-        '*',
-        'data',
-        JSON.stringify({
-          event: 'argument_updated',
-          data: { argumentId: result.response.argumentId, reason: 'new_vote' },
-        }),
-      );
+      await this.topicEvents.publish(result.topicId, {
+        event: 'argument_updated',
+        data: { argumentId: result.response.argumentId, reason: 'new_vote' },
+      });
     } catch {
       // Best-effort; voting should not fail due to SSE stream issues
     }

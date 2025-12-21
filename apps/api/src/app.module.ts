@@ -11,6 +11,7 @@ import { ArgumentModule } from './argument/argument.module.js';
 import { FocusViewModule } from './focus-view/focus-view.module.js';
 import { VotesModule } from './votes/votes.module.js';
 import { UserModule } from './user/user.module.js';
+import { SseModule } from './sse/sse.module.js';
 
 loadEnv();
 
@@ -25,6 +26,7 @@ loadEnv();
     FocusViewModule,
     VotesModule,
     UserModule,
+    SseModule,
   ],
   controllers: [AppController],
   providers: [AppService],
