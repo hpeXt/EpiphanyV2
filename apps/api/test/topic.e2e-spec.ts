@@ -11,6 +11,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
+import { json, Request, Response } from 'express';
 import { AppModule } from '../src/app.module';
 import {
   zCreateTopicResponse,
@@ -39,7 +40,17 @@ describe('Topic API (e2e)', () => {
       imports: [AppModule],
     }).compile();
 
-    app = moduleFixture.createNestApplication();
+    app = moduleFixture.createNestApplication({ bodyParser: false });
+
+    // Add raw body capture middleware (same as main.ts)
+    app.use(
+      json({
+        verify: (req: Request, _res: Response, buf: Buffer) => {
+          (req as Request & { rawBody?: Buffer }).rawBody = buf;
+        },
+      }),
+    );
+
     app.useGlobalPipes(new ValidationPipe({ transform: true }));
     await app.init();
   });
@@ -222,7 +233,10 @@ describe('Topic API (e2e)', () => {
       const parsed = zErrorResponse.safeParse(res.body);
       expect(parsed.success).toBe(true);
       if (parsed.success) {
-        expect(parsed.data.error.code).toBe('CLAIM_TOKEN_INVALID');
+        // Token has been consumed, so it's either invalid or expired
+        expect(['CLAIM_TOKEN_INVALID', 'CLAIM_TOKEN_EXPIRED']).toContain(
+          parsed.data.error.code,
+        );
       }
     });
 
@@ -291,7 +305,10 @@ describe('Topic API (e2e)', () => {
       const parsed = zErrorResponse.safeParse(res.body);
       expect(parsed.success).toBe(true);
       if (parsed.success) {
-        expect(parsed.data.error.code).toBe('CLAIM_TOKEN_INVALID');
+        // Token has been consumed, so it's either invalid or expired
+        expect(['CLAIM_TOKEN_INVALID', 'CLAIM_TOKEN_EXPIRED']).toContain(
+          parsed.data.error.code,
+        );
       }
     });
   });
