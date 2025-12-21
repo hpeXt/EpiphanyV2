@@ -2,12 +2,19 @@
  * @file topic.service.ts
  * @description Topic business logic service
  */
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import { v7 as uuidv7 } from 'uuid';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../infrastructure/prisma.module.js';
 import { RedisService } from '../infrastructure/redis.module.js';
+import { TopicEventsPublisher } from '../sse/topic-events.publisher.js';
 import type { CreateTopicRequest, TopicSummary, LedgerMe, StakesMeResponse, StakeMeItem } from '@epiphany/shared-contracts';
 
 type TransactionClient = Prisma.TransactionClient;
@@ -39,7 +46,46 @@ export class TopicService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    private readonly topicEvents: TopicEventsPublisher,
   ) {}
+
+  private assertIsTopicOwner(topic: { ownerPubkey: Uint8Array | null }, pubkeyHex: string): void {
+    const ownerHex = topic.ownerPubkey ? Buffer.from(topic.ownerPubkey).toString('hex') : null;
+    if (!ownerHex || ownerHex !== pubkeyHex) {
+      throw new ForbiddenException({
+        error: { code: 'NOT_TOPIC_OWNER', message: 'Not topic owner' },
+      });
+    }
+  }
+
+  private assertTopicStatusAllowsHostCommand(params: {
+    currentStatus: 'active' | 'frozen' | 'archived';
+    command: { type: 'SET_STATUS' | 'EDIT_ROOT' | 'PRUNE_ARGUMENT' | 'UNPRUNE_ARGUMENT'; payload: unknown };
+  }): void {
+    if (params.currentStatus === 'active') return;
+
+    if (params.currentStatus === 'archived') {
+      throw new ConflictException({
+        error: {
+          code: 'TOPIC_STATUS_DISALLOWS_WRITE',
+          message: 'Topic status disallows write',
+        },
+      });
+    }
+
+    // frozen: only allow SET_STATUS(active)
+    if (params.command.type === 'SET_STATUS') {
+      const payload = params.command.payload as { status?: string };
+      if (payload.status === 'active') return;
+    }
+
+    throw new ConflictException({
+      error: {
+        code: 'TOPIC_STATUS_DISALLOWS_WRITE',
+        message: 'Topic status disallows write',
+      },
+    });
+  }
 
   /**
    * Create a new topic with root argument
@@ -266,6 +312,282 @@ export class TopicService {
       createdAt: updated.createdAt.toISOString(),
       updatedAt: updated.updatedAt.toISOString(),
     };
+  }
+
+  /**
+   * SET_STATUS host command (requires owner)
+   * @see docs/api-contract.md#3.2
+   */
+  async setStatus(topicId: string, status: 'active' | 'frozen' | 'archived', pubkeyHex: string): Promise<TopicSummary> {
+    const topic = await this.prisma.topic.findUnique({
+      where: { id: topicId },
+      select: {
+        id: true,
+        title: true,
+        rootArgumentId: true,
+        status: true,
+        ownerPubkey: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!topic) {
+      throw new NotFoundException({
+        error: { code: 'TOPIC_NOT_FOUND', message: 'Topic not found' },
+      });
+    }
+
+    this.assertIsTopicOwner(topic, pubkeyHex);
+    this.assertTopicStatusAllowsHostCommand({
+      currentStatus: topic.status,
+      command: { type: 'SET_STATUS', payload: { status } },
+    });
+
+    const updated = await this.prisma.topic.update({
+      where: { id: topicId },
+      data: { status },
+      select: {
+        id: true,
+        title: true,
+        rootArgumentId: true,
+        status: true,
+        ownerPubkey: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    // SSE invalidation (best-effort)
+    try {
+      await this.topicEvents.publish(topicId, {
+        event: 'topic_updated',
+        data: { topicId, reason: 'status_changed' },
+      });
+    } catch {
+      // ignore
+    }
+
+    return {
+      id: updated.id,
+      title: updated.title,
+      rootArgumentId: updated.rootArgumentId || '',
+      status: updated.status,
+      ownerPubkey: updated.ownerPubkey ? Buffer.from(updated.ownerPubkey).toString('hex') : null,
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+    };
+  }
+
+  /**
+   * EDIT_ROOT host command (requires owner)
+   * @see docs/api-contract.md#3.2
+   */
+  async editRoot(
+    topicId: string,
+    input: { title: string; body: string },
+    pubkeyHex: string,
+  ): Promise<TopicSummary> {
+    const topic = await this.prisma.topic.findUnique({
+      where: { id: topicId },
+      select: {
+        id: true,
+        rootArgumentId: true,
+        status: true,
+        ownerPubkey: true,
+      },
+    });
+
+    if (!topic) {
+      throw new NotFoundException({
+        error: { code: 'TOPIC_NOT_FOUND', message: 'Topic not found' },
+      });
+    }
+
+    if (!topic.rootArgumentId) {
+      throw new NotFoundException({
+        error: { code: 'TOPIC_NOT_FOUND', message: 'Topic not found' },
+      });
+    }
+
+    this.assertIsTopicOwner(topic, pubkeyHex);
+    this.assertTopicStatusAllowsHostCommand({
+      currentStatus: topic.status,
+      command: { type: 'EDIT_ROOT', payload: input },
+    });
+
+    const updatedTopic = await this.prisma.$transaction(async (tx: TransactionClient) => {
+      await tx.argument.update({
+        where: { topicId_id: { topicId, id: topic.rootArgumentId as string } },
+        data: {
+          title: input.title,
+          body: input.body,
+        },
+      });
+
+      return tx.topic.update({
+        where: { id: topicId },
+        data: { title: input.title },
+        select: {
+          id: true,
+          title: true,
+          rootArgumentId: true,
+          status: true,
+          ownerPubkey: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+    });
+
+    // SSE invalidation (best-effort)
+    try {
+      await this.topicEvents.publish(topicId, {
+        event: 'topic_updated',
+        data: { topicId, reason: 'root_edited' },
+      });
+    } catch {
+      // ignore
+    }
+
+    return {
+      id: updatedTopic.id,
+      title: updatedTopic.title,
+      rootArgumentId: updatedTopic.rootArgumentId || '',
+      status: updatedTopic.status,
+      ownerPubkey: updatedTopic.ownerPubkey ? Buffer.from(updatedTopic.ownerPubkey).toString('hex') : null,
+      createdAt: updatedTopic.createdAt.toISOString(),
+      updatedAt: updatedTopic.updatedAt.toISOString(),
+    };
+  }
+
+  /**
+   * PRUNE_ARGUMENT host command (requires owner)
+   * @see docs/api-contract.md#3.2
+   */
+  async pruneArgument(
+    topicId: string,
+    input: { argumentId: string; reason: string | null },
+    pubkeyHex: string,
+  ): Promise<TopicSummary> {
+    const pubkeyBytes = Buffer.from(pubkeyHex, 'hex');
+
+    const topic = await this.prisma.topic.findUnique({
+      where: { id: topicId },
+      select: {
+        id: true,
+        rootArgumentId: true,
+        status: true,
+        ownerPubkey: true,
+      },
+    });
+
+    if (!topic) {
+      throw new NotFoundException({
+        error: { code: 'TOPIC_NOT_FOUND', message: 'Topic not found' },
+      });
+    }
+
+    this.assertIsTopicOwner(topic, pubkeyHex);
+    this.assertTopicStatusAllowsHostCommand({
+      currentStatus: topic.status,
+      command: { type: 'PRUNE_ARGUMENT', payload: input },
+    });
+
+    if (topic.rootArgumentId && input.argumentId === topic.rootArgumentId) {
+      throw new BadRequestException({
+        error: { code: 'BAD_REQUEST', message: 'Cannot prune root argument' },
+      });
+    }
+
+    await this.prisma.argument.update({
+      where: { topicId_id: { topicId, id: input.argumentId } },
+      data: {
+        prunedAt: new Date(),
+        pruneReason: input.reason,
+        prunedByPubkey: pubkeyBytes,
+      },
+    }).catch(() => {
+      throw new NotFoundException({
+        error: { code: 'ARGUMENT_NOT_FOUND', message: 'Argument not found' },
+      });
+    });
+
+    // SSE invalidation (best-effort)
+    try {
+      await this.topicEvents.publish(topicId, {
+        event: 'argument_updated',
+        data: { argumentId: input.argumentId, reason: 'pruned' },
+      });
+    } catch {
+      // ignore
+    }
+
+    const updatedTopic = await this.getTopicById(topicId);
+    if (!updatedTopic) {
+      throw new NotFoundException({
+        error: { code: 'TOPIC_NOT_FOUND', message: 'Topic not found' },
+      });
+    }
+    return updatedTopic;
+  }
+
+  /**
+   * UNPRUNE_ARGUMENT host command (requires owner)
+   * @see docs/api-contract.md#3.2
+   */
+  async unpruneArgument(topicId: string, input: { argumentId: string }, pubkeyHex: string): Promise<TopicSummary> {
+    const topic = await this.prisma.topic.findUnique({
+      where: { id: topicId },
+      select: {
+        id: true,
+        status: true,
+        ownerPubkey: true,
+      },
+    });
+
+    if (!topic) {
+      throw new NotFoundException({
+        error: { code: 'TOPIC_NOT_FOUND', message: 'Topic not found' },
+      });
+    }
+
+    this.assertIsTopicOwner(topic, pubkeyHex);
+    this.assertTopicStatusAllowsHostCommand({
+      currentStatus: topic.status,
+      command: { type: 'UNPRUNE_ARGUMENT', payload: input },
+    });
+
+    await this.prisma.argument.update({
+      where: { topicId_id: { topicId, id: input.argumentId } },
+      data: {
+        prunedAt: null,
+        pruneReason: null,
+        prunedByPubkey: null,
+      },
+    }).catch(() => {
+      throw new NotFoundException({
+        error: { code: 'ARGUMENT_NOT_FOUND', message: 'Argument not found' },
+      });
+    });
+
+    // Optional invalidation: use the same 'pruned' reason for pruning-state changes.
+    try {
+      await this.topicEvents.publish(topicId, {
+        event: 'argument_updated',
+        data: { argumentId: input.argumentId, reason: 'pruned' },
+      });
+    } catch {
+      // ignore
+    }
+
+    const updatedTopic = await this.getTopicById(topicId);
+    if (!updatedTopic) {
+      throw new NotFoundException({
+        error: { code: 'TOPIC_NOT_FOUND', message: 'Topic not found' },
+      });
+    }
+    return updatedTopic;
   }
 
   /**

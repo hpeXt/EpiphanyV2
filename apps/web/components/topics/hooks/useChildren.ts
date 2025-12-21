@@ -9,6 +9,7 @@ export type ChildrenOrderBy = "totalVotes_desc" | "createdAt_desc";
 export type DialogueItem = {
   id: string;
   label: string;
+  prunedAt: string | null;
 };
 
 type UseChildrenState =
@@ -127,6 +128,7 @@ export function useChildren(input: {
         items: result.data.items.map((item) => ({
           id: item.id,
           label: toLabel(item),
+          prunedAt: item.prunedAt,
         })),
         nextBeforeId: result.data.nextBeforeId,
         isLoadingMore: false,
@@ -171,6 +173,7 @@ export function useChildren(input: {
     const incoming = result.data.items.map((item) => ({
       id: item.id,
       label: toLabel(item),
+      prunedAt: item.prunedAt,
     }));
 
     setState((prev) => ({

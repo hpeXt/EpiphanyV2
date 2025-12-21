@@ -6,10 +6,12 @@ import {
   zLedgerMe,
   zListTopicsResponse,
   zSetVotesResponse,
+  zTopicCommandResponse,
   zTopicTreeResponse,
   type CreateArgumentRequest,
   type CreateTopicRequest,
   type SetVotesRequest,
+  type TopicCommand,
 } from "@epiphany/shared-contracts";
 import type { z } from "zod";
 
@@ -230,6 +232,21 @@ export function createApiClient(deps?: { signer?: Signer }) {
           body,
         },
         zSetVotesResponse,
+      );
+    },
+    executeTopicCommand(topicId: string, command: TopicCommand, extraHeaders?: Record<string, string>) {
+      const encodedTopicId = encodeURIComponent(topicId);
+      const body = JSON.stringify(command);
+      return requestJsonSigned(
+        signer,
+        topicId,
+        `/v1/topics/${encodedTopicId}/commands`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json", ...(extraHeaders ?? {}) },
+          body,
+        },
+        zTopicCommandResponse,
       );
     },
   };

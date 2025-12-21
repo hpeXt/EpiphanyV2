@@ -12,6 +12,7 @@ import { useTopicSse } from "@/components/topics/hooks/useTopicSse";
 import { deriveTopicKeypairFromMasterSeedHex } from "@/lib/identity";
 import { apiClient } from "@/lib/apiClient";
 import { createLocalStorageKeyStore } from "@/lib/signing";
+import { TopicManagePanel } from "@/components/topics/TopicManagePanel";
 
 type Props = {
   topicId: string;
@@ -21,6 +22,8 @@ export function TopicPage({ topicId }: Props) {
   const keyStore = useMemo(() => createLocalStorageKeyStore(), []);
   const [hasIdentity, setHasIdentity] = useState<boolean | null>(null);
   const [identityFingerprint, setIdentityFingerprint] = useState<string | null>(null);
+  const [identityPubkeyHex, setIdentityPubkeyHex] = useState<string | null>(null);
+  const [isManageOpen, setIsManageOpen] = useState(false);
 
   const [refreshToken, setRefreshToken] = useState(0);
   const invalidate = useCallback(() => setRefreshToken((prev) => prev + 1), []);
@@ -52,17 +55,20 @@ export function TopicPage({ topicId }: Props) {
   useEffect(() => {
     if (!hasIdentity) {
       setIdentityFingerprint(null);
+      setIdentityPubkeyHex(null);
       return;
     }
 
     const masterSeedHex = keyStore.getMasterSeedHex();
     if (!masterSeedHex) {
       setIdentityFingerprint(null);
+      setIdentityPubkeyHex(null);
       return;
     }
 
     const { pubkeyHex } = deriveTopicKeypairFromMasterSeedHex(masterSeedHex, topicId);
     setIdentityFingerprint(`${pubkeyHex.slice(0, 6)}…${pubkeyHex.slice(-6)}`);
+    setIdentityPubkeyHex(pubkeyHex);
   }, [hasIdentity, keyStore, topicId]);
 
   useEffect(() => {
@@ -108,6 +114,12 @@ export function TopicPage({ topicId }: Props) {
     );
   }
 
+  const isOwner =
+    hasIdentity === true &&
+    identityPubkeyHex !== null &&
+    tree.topic.ownerPubkey !== null &&
+    identityPubkeyHex === tree.topic.ownerPubkey;
+
   return (
     <div className="space-y-6">
       {hasIdentity === false ? (
@@ -131,9 +143,23 @@ export function TopicPage({ topicId }: Props) {
         </div>
       ) : null}
       <header className="space-y-1">
-        <h1 className="text-xl font-semibold">{tree.topic.title}</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-xl font-semibold">{tree.topic.title}</h1>
+          {isOwner ? (
+            <button
+              type="button"
+              onClick={() => setIsManageOpen((prev) => !prev)}
+              className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100"
+            >
+              Manage
+            </button>
+          ) : null}
+        </div>
         <p className="text-sm text-zinc-600">
           TopicId: <code className="font-mono">{tree.topic.id}</code>
+        </p>
+        <p className="text-sm text-zinc-600">
+          Status: <span className="font-mono">{tree.topic.status}</span>
         </p>
         {identityFingerprint ? (
           <p className="text-sm text-zinc-600">
@@ -149,6 +175,17 @@ export function TopicPage({ topicId }: Props) {
         ) : null}
       </header>
 
+      {isOwner && isManageOpen ? (
+        <TopicManagePanel
+          topicId={topicId}
+          topicTitle={tree.topic.title}
+          topicStatus={tree.topic.status}
+          rootBody={tree.topic.rootBody}
+          onInvalidate={invalidate}
+          onClose={() => setIsManageOpen(false)}
+        />
+      ) : null}
+
       <div className="grid gap-8 lg:grid-cols-[1fr_1.25fr]">
         <FocusView
           rootId={tree.topic.rootArgumentId}
@@ -159,6 +196,7 @@ export function TopicPage({ topicId }: Props) {
         <DialogueStream
           topicId={topicId}
           parentArgumentId={selectedArgumentId}
+          topicStatus={tree.topic.status}
           refreshToken={refreshToken}
           onInvalidate={invalidate}
           canWrite={hasIdentity === true}
