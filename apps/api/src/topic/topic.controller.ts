@@ -22,7 +22,6 @@ import {
   type CreateTopicRequest,
   type TopicCommand,
 } from '@epiphany/shared-contracts';
-import { Request } from 'express';
 
 @Controller('v1/topics')
 export class TopicController {
@@ -123,5 +122,31 @@ export class TopicController {
           },
         });
     }
+  }
+
+  /**
+   * GET /v1/topics/:topicId/ledger/me - Get my ledger (signature required)
+   * @see docs/api-contract.md#3.8
+   */
+  @Get(':topicId/ledger/me')
+  @RequireSignature()
+  async getLedgerMe(
+    @Param('topicId') topicId: string,
+    @Headers('x-pubkey') pubkey: string,
+  ) {
+    return this.topicService.getLedgerMe(topicId, pubkey);
+  }
+
+  /**
+   * GET /v1/topics/:topicId/stakes/me - Get my stakes (signature required)
+   * @see docs/api-contract.md#3.9
+   */
+  @Get(':topicId/stakes/me')
+  @RequireSignature()
+  async getStakesMe(
+    @Param('topicId') topicId: string,
+    @Headers('x-pubkey') pubkey: string,
+  ) {
+    return this.topicService.getStakesMe(topicId, pubkey);
   }
 }

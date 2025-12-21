@@ -8,7 +8,7 @@ import { v7 as uuidv7 } from 'uuid';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../infrastructure/prisma.module.js';
 import { RedisService } from '../infrastructure/redis.module.js';
-import type { CreateTopicRequest, TopicSummary } from '@epiphany/shared-contracts';
+import type { CreateTopicRequest, TopicSummary, LedgerMe, StakesMeResponse, StakeMeItem } from '@epiphany/shared-contracts';
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -265,6 +265,123 @@ export class TopicService {
       ownerPubkey: updated.ownerPubkey ? Buffer.from(updated.ownerPubkey).toString('hex') : null,
       createdAt: updated.createdAt.toISOString(),
       updatedAt: updated.updatedAt.toISOString(),
+    };
+  }
+
+  /**
+   * Get ledger for a user in a topic (auto-initializes if not exists)
+   * @see docs/api-contract.md#3.8
+   */
+  async getLedgerMe(topicId: string, pubkeyHex: string): Promise<LedgerMe> {
+    // Check if topic exists
+    const topic = await this.prisma.topic.findUnique({
+      where: { id: topicId },
+      select: { id: true },
+    });
+
+    if (!topic) {
+      throw new NotFoundException({
+        error: { code: 'TOPIC_NOT_FOUND', message: 'Topic not found' },
+      });
+    }
+
+    const pubkeyBytes = Buffer.from(pubkeyHex, 'hex');
+
+    // Try to find existing ledger, or return default values
+    const ledger = await this.prisma.ledger.findUnique({
+      where: { topicId_pubkey: { topicId, pubkey: pubkeyBytes } },
+      select: {
+        topicId: true,
+        pubkey: true,
+        balance: true,
+        totalVotesStaked: true,
+        totalCostStaked: true,
+        lastInteractionAt: true,
+      },
+    });
+
+    if (ledger) {
+      return {
+        topicId: ledger.topicId,
+        pubkey: Buffer.from(ledger.pubkey).toString('hex'),
+        balance: ledger.balance,
+        myTotalVotes: ledger.totalVotesStaked,
+        myTotalCost: ledger.totalCostStaked,
+        lastInteractionAt: ledger.lastInteractionAt?.toISOString() ?? null,
+      };
+    }
+
+    // Return default ledger values (no actual row created until first interaction)
+    return {
+      topicId,
+      pubkey: pubkeyHex,
+      balance: 100,
+      myTotalVotes: 0,
+      myTotalCost: 0,
+      lastInteractionAt: null,
+    };
+  }
+
+  /**
+   * Get all stakes for a user in a topic (includes pruned arguments)
+   * @see docs/api-contract.md#3.9
+   */
+  async getStakesMe(topicId: string, pubkeyHex: string): Promise<StakesMeResponse> {
+    // Check if topic exists
+    const topic = await this.prisma.topic.findUnique({
+      where: { id: topicId },
+      select: { id: true },
+    });
+
+    if (!topic) {
+      throw new NotFoundException({
+        error: { code: 'TOPIC_NOT_FOUND', message: 'Topic not found' },
+      });
+    }
+
+    const pubkeyBytes = Buffer.from(pubkeyHex, 'hex');
+
+    // Get all stakes with argument info (including pruned)
+    const stakes = await this.prisma.stake.findMany({
+      where: {
+        topicId,
+        voterPubkey: pubkeyBytes,
+      },
+      include: {
+        argument: {
+          select: {
+            id: true,
+            title: true,
+            body: true,
+            prunedAt: true,
+          },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    const items: StakeMeItem[] = stakes.map((stake) => {
+      // Generate excerpt from body (first 100 chars)
+      const excerptLength = 100;
+      const argumentExcerpt = stake.argument.body.length > excerptLength
+        ? stake.argument.body.slice(0, excerptLength) + '...'
+        : stake.argument.body;
+
+      return {
+        argumentId: stake.argumentId,
+        votes: stake.votes,
+        cost: stake.cost,
+        argumentPrunedAt: stake.argument.prunedAt?.toISOString() ?? null,
+        updatedAt: stake.updatedAt.toISOString(),
+        argumentTitle: stake.argument.title,
+        argumentExcerpt,
+      };
+    });
+
+    return {
+      topicId,
+      pubkey: pubkeyHex,
+      items,
     };
   }
 }
