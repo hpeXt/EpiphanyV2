@@ -17,6 +17,21 @@ function createFetchMock() {
   return jest.fn(async (input: RequestInfo | URL) => {
     const url = new URL(typeof input === "string" ? input : input.toString());
 
+    if (url.pathname === "/v1/topics/topic-1/ledger/me") {
+      return jsonResponse({
+        ok: true,
+        status: 200,
+        json: {
+          topicId: "topic-1",
+          pubkey: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          balance: 100,
+          myTotalVotes: 0,
+          myTotalCost: 0,
+          lastInteractionAt: null,
+        },
+      });
+    }
+
     if (url.pathname === "/v1/topics/topic-1/tree") {
       return jsonResponse({
         ok: true,
@@ -294,4 +309,3 @@ describe("TopicPage", () => {
     expect(latestUrl.searchParams.get("beforeId")).toBeNull();
   });
 });
-

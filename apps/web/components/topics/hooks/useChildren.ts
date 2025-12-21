@@ -67,8 +67,10 @@ export function useChildren(input: {
   parentArgumentId: string | null;
   orderBy: ChildrenOrderBy;
   limit?: number;
+  refreshToken?: number;
 }) {
   const limit = input.limit ?? 30;
+  const refreshToken = input.refreshToken ?? 0;
   const [state, setState] = useState<UseChildrenState>({
     status: "idle",
     errorMessage: "",
@@ -134,7 +136,7 @@ export function useChildren(input: {
     return () => {
       cancelled = true;
     };
-  }, [input.parentArgumentId, input.orderBy, limit]);
+  }, [input.parentArgumentId, input.orderBy, limit, refreshToken]);
 
   const hasMore = useMemo(() => state.nextBeforeId !== null, [state.nextBeforeId]);
 
@@ -188,10 +190,20 @@ export function useChildren(input: {
     state.status,
   ]);
 
+  const prependItem = useCallback((item: DialogueItem) => {
+    setState((prev) => {
+      if (prev.items.some((existing) => existing.id === item.id)) return prev;
+      return {
+        ...prev,
+        items: [item, ...prev.items],
+      };
+    });
+  }, []);
+
   return {
     ...state,
     hasMore,
     loadMore,
+    prependItem,
   };
 }
-
