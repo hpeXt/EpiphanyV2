@@ -45,8 +45,11 @@ export class RedisService extends Redis implements OnModuleDestroy {
       return 'invalid';
     }
 
-    // Delete the token (consume it)
-    await this.del(key);
+    // Consume token but keep a short-lived sentinel so a reused token can be
+    // distinguished from an actually-expired token (per contract expectations).
+    const ttlRemaining = await this.ttl(key);
+    const sentinelTtlSeconds = ttlRemaining > 0 ? ttlRemaining : 300;
+    await this.set(key, '__consumed__', 'EX', sentinelTtlSeconds);
     return 'valid';
   }
 

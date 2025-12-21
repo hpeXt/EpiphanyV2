@@ -18,6 +18,7 @@ import {
   zTopicCommandResponse,
   zErrorResponse,
 } from '@epiphany/shared-contracts';
+import { RawBodyMiddleware } from '../src/middleware/raw-body.middleware';
 import {
   createHash,
   randomBytes,
@@ -39,7 +40,8 @@ describe('Topic API (e2e)', () => {
       imports: [AppModule],
     }).compile();
 
-    app = moduleFixture.createNestApplication();
+    app = moduleFixture.createNestApplication({ bodyParser: false });
+    app.use(RawBodyMiddleware);
     app.useGlobalPipes(new ValidationPipe({ transform: true }));
     await app.init();
   });
