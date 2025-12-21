@@ -20,6 +20,14 @@ interface ErrorBody {
   };
 }
 
+type HealthStatus = 'ok' | 'fail';
+type HealthResult = {
+  ok: boolean;
+  db: HealthStatus;
+  redis: HealthStatus;
+  timestamp: string;
+};
+
 function isErrorBody(obj: unknown): obj is ErrorBody {
   return (
     typeof obj === 'object' &&
@@ -30,6 +38,15 @@ function isErrorBody(obj: unknown): obj is ErrorBody {
     'code' in (obj as ErrorBody).error &&
     'message' in (obj as ErrorBody).error
   );
+}
+
+function isHealthResult(obj: unknown): obj is HealthResult {
+  if (typeof obj !== 'object' || obj === null) return false;
+  const rec = obj as Record<string, unknown>;
+  if (typeof rec.ok !== 'boolean') return false;
+  if (rec.db !== 'ok' && rec.db !== 'fail') return false;
+  if (rec.redis !== 'ok' && rec.redis !== 'fail') return false;
+  return typeof rec.timestamp === 'string';
 }
 
 @Catch()
@@ -49,6 +66,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       status = exception.getStatus();
       const exceptionResponse = exception.getResponse();
+
+      // Allow non-error structured responses for endpoints like /health.
+      if (isHealthResult(exceptionResponse)) {
+        response.status(status).json(exceptionResponse);
+        return;
+      }
 
       if (isErrorBody(exceptionResponse)) {
         errorBody = exceptionResponse;

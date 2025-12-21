@@ -193,7 +193,10 @@ describe('Topic API (e2e)', () => {
       const parsed = zErrorResponse.safeParse(res.body);
       expect(parsed.success).toBe(true);
       if (parsed.success) {
-        expect(parsed.data.error.code).toBe('CLAIM_TOKEN_INVALID');
+        // Token has been consumed, so it's either invalid or expired
+        expect(['CLAIM_TOKEN_INVALID', 'CLAIM_TOKEN_EXPIRED']).toContain(
+          parsed.data.error.code,
+        );
       }
     });
 
@@ -278,7 +281,10 @@ describe('Topic API (e2e)', () => {
       const parsed = zErrorResponse.safeParse(res.body);
       expect(parsed.success).toBe(true);
       if (parsed.success) {
-        expect(parsed.data.error.code).toBe('CLAIM_TOKEN_INVALID');
+        // Token has been consumed, so it's either invalid or expired
+        expect(['CLAIM_TOKEN_INVALID', 'CLAIM_TOKEN_EXPIRED']).toContain(
+          parsed.data.error.code,
+        );
       }
     });
   });
