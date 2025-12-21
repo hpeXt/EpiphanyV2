@@ -1,7 +1,9 @@
 import {
   zCreateTopicResponse,
+  zArgumentChildrenResponse,
   zErrorResponse,
   zListTopicsResponse,
+  zTopicTreeResponse,
   type CreateTopicRequest,
 } from "@epiphany/shared-contracts";
 import type { z } from "zod";
@@ -113,5 +115,32 @@ export const apiClient = {
       zCreateTopicResponse,
     );
   },
-};
+  getTopicTree(topicId: string, depth = 3) {
+    const encodedTopicId = encodeURIComponent(topicId);
+    const params = new URLSearchParams({ depth: String(depth) });
+    return requestJson(
+      `/v1/topics/${encodedTopicId}/tree?${params.toString()}`,
+      { method: "GET" },
+      zTopicTreeResponse,
+    );
+  },
+  getArgumentChildren(input: {
+    argumentId: string;
+    orderBy: "totalVotes_desc" | "createdAt_desc";
+    limit: number;
+    beforeId?: string;
+  }) {
+    const encodedArgumentId = encodeURIComponent(input.argumentId);
+    const params = new URLSearchParams({
+      orderBy: input.orderBy,
+      limit: String(input.limit),
+    });
+    if (input.beforeId) params.set("beforeId", input.beforeId);
 
+    return requestJson(
+      `/v1/arguments/${encodedArgumentId}/children?${params.toString()}`,
+      { method: "GET" },
+      zArgumentChildrenResponse,
+    );
+  },
+};
