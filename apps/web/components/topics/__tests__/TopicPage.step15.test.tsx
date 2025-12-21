@@ -123,6 +123,7 @@ describe("TopicPage (Step 15)", () => {
   beforeEach(() => {
     process.env.NEXT_PUBLIC_API_URL = "https://example.com";
     window.localStorage.clear();
+    window.localStorage.setItem("tm:master-seed:v1", "00".repeat(64));
     (globalThis.EventSource as any)?.reset?.();
   });
 
@@ -173,7 +174,7 @@ describe("TopicPage (Step 15)", () => {
     await user.click(await screen.findByRole("button", { name: "Root" }));
     expect(await screen.findByText("No replies yet.")).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText("Reply"), "Hello world");
+    await user.type(await screen.findByLabelText("Reply"), "Hello world");
     await user.click(screen.getByRole("button", { name: "Post" }));
 
     expect(await screen.findByText("Hello world")).toBeInTheDocument();
@@ -203,7 +204,7 @@ describe("TopicPage (Step 15)", () => {
     await user.click(await screen.findByRole("button", { name: "Root" }));
     expect(await screen.findByText("No replies yet.")).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText("Reply"), "Hello world");
+    await user.type(await screen.findByLabelText("Reply"), "Hello world");
     await user.click(screen.getByRole("button", { name: "Post" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("余额不足");
@@ -321,7 +322,7 @@ describe("TopicPage (Step 15)", () => {
     render(<TopicPage topicId="topic-1" />);
 
     await user.click(await screen.findByRole("button", { name: "Root" }));
-    await user.type(screen.getByLabelText("Reply"), "Hello world");
+    await user.type(await screen.findByLabelText("Reply"), "Hello world");
     await user.click(screen.getByRole("button", { name: "Post" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("签名验证失败");
@@ -368,10 +369,10 @@ describe("TopicPage (Step 15)", () => {
 
     await user.click(await screen.findByRole("button", { name: "Root" }));
 
-    await user.type(screen.getByLabelText("Reply"), "Hello 0");
+    await user.type(await screen.findByLabelText("Reply"), "Hello 0");
     await user.click(screen.getByRole("button", { name: "Post" }));
 
-    await user.type(screen.getByLabelText("Reply"), "Hello 1");
+    await user.type(await screen.findByLabelText("Reply"), "Hello 1");
     await user.click(screen.getByRole("button", { name: "Post" }));
 
     await waitFor(() => {

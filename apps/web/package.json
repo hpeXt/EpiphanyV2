@@ -3,19 +3,21 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "pnpm -C ../../packages/crypto build",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "pretest": "pnpm -C ../../packages/crypto build",
     "test": "jest",
     "test:watch": "jest --watch"
   },
   "dependencies": {
+    "@epiphany/crypto": "workspace:*",
     "@epiphany/shared-contracts": "workspace:*",
     "next": "16.1.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "tweetnacl": "^1.0.3",
     "zod": "^3.24.0"
   },
   "devDependencies": {
