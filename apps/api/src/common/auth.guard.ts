@@ -18,6 +18,9 @@ import { AuthService } from './auth.service.js';
 export const SIGNATURE_REQUIRED = 'signatureRequired';
 export const RequireSignature = () => SetMetadata(SIGNATURE_REQUIRED, true);
 
+export const ALLOW_NONCE_REPLAY = 'allowNonceReplay';
+export const AllowNonceReplay = () => SetMetadata(ALLOW_NONCE_REPLAY, true);
+
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(
@@ -30,6 +33,9 @@ export class AuthGuard implements CanActivate {
       SIGNATURE_REQUIRED,
       context.getHandler(),
     );
+    const allowNonceReplay =
+      this.reflector.get<boolean>(ALLOW_NONCE_REPLAY, context.getHandler()) ??
+      false;
 
     if (!isSignatureRequired) {
       return true;
@@ -59,6 +65,7 @@ export class AuthGuard implements CanActivate {
       rawBody: request.rawBody?.toString() || '',
       pubkey,
       signature,
+      allowNonceReplay,
     });
 
     if (!result.valid) {
@@ -96,6 +103,9 @@ export class AuthGuard implements CanActivate {
 
     // Attach pubkey to request for downstream use
     (request as Request & { pubkey?: string }).pubkey = pubkey;
+    (request as Request & { nonce?: string }).nonce = nonce;
+    (request as Request & { nonceReplay?: boolean }).nonceReplay =
+      result.nonceReplay ?? false;
 
     return true;
   }
