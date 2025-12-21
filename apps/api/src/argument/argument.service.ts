@@ -1,6 +1,6 @@
 /**
  * @file argument.service.ts
- * @description Argument write path orchestration (Step 09)
+ * @description Argument write path orchestration (Step 09, Step 18)
  */
 import {
   BadRequestException,
@@ -15,6 +15,7 @@ import { createHash } from 'node:crypto';
 import type { CreateArgumentRequest } from '@epiphany/shared-contracts';
 import { validateSetVotes, INITIAL_BALANCE } from '@epiphany/core-logic';
 import { PrismaService } from '../infrastructure/prisma.module.js';
+import { QueueService } from '../infrastructure/queue.module.js';
 
 export interface CreateArgumentParams {
   topicId: string;
@@ -24,7 +25,10 @@ export interface CreateArgumentParams {
 
 @Injectable()
 export class ArgumentService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly queueService: QueueService,
+  ) {}
 
   async createArgument(params: CreateArgumentParams) {
     const { topicId, dto, pubkeyHex } = params;
@@ -164,6 +168,12 @@ export class ArgumentService {
       }
 
       return { argument: updatedArgument, ledger: updatedLedger };
+    });
+
+    // Enqueue for AI analysis (Step 18)
+    // Fire-and-forget: don't block the response on queue
+    this.queueService.enqueueArgumentAnalysis(argumentId).catch((err) => {
+      console.error(`[argument] Failed to enqueue analysis for ${argumentId}:`, err);
     });
 
     return {

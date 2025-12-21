@@ -5,6 +5,7 @@ import { loadEnv } from './env.js';
 import { HealthModule } from './health/health.module.js';
 import { PrismaModule } from './infrastructure/prisma.module.js';
 import { RedisModule } from './infrastructure/redis.module.js';
+import { QueueModule } from './infrastructure/queue.module.js';
 import { CommonModule } from './common/common.module.js';
 import { TopicModule } from './topic/topic.module.js';
 import { ArgumentModule } from './argument/argument.module.js';
@@ -19,6 +20,7 @@ loadEnv();
   imports: [
     PrismaModule,
     RedisModule,
+    QueueModule,
     CommonModule,
     HealthModule,
     TopicModule,
