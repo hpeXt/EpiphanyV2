@@ -20,7 +20,7 @@ export class TopicEventsPublisher {
     // Sanitize + freeze contract: only allow the shared-contracts union and strip unknown keys.
     const safe = zSseEnvelope.parse(envelope);
 
-    return this.redis.xadd(
+    const id = await this.redis.xadd(
       this.streamKey(topicId),
       'MAXLEN',
       '~',
@@ -29,6 +29,12 @@ export class TopicEventsPublisher {
       'data',
       JSON.stringify(safe),
     );
+
+    if (!id) {
+      throw new Error(`Failed to publish event to stream ${this.streamKey(topicId)}`);
+    }
+
+    return id;
   }
 }
 
