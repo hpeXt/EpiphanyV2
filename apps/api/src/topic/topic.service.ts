@@ -8,7 +8,15 @@ import { v7 as uuidv7 } from 'uuid';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../infrastructure/prisma.module.js';
 import { RedisService } from '../infrastructure/redis.module.js';
-import type { CreateTopicRequest, TopicSummary, LedgerMe, StakesMeResponse, StakeMeItem } from '@epiphany/shared-contracts';
+import type {
+  CreateTopicRequest,
+  TopicSummary,
+  LedgerMe,
+  StakesMeResponse,
+  StakeMeItem,
+  ClusterMap,
+} from '@epiphany/shared-contracts';
+import { buildClusterMapResponse, getClusterMapModelVersion } from './cluster-map.mapper.js';
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -383,5 +391,72 @@ export class TopicService {
       pubkey: pubkeyHex,
       items,
     };
+  }
+
+  /**
+   * Get cluster map data for God View (public read)
+   * @see docs/api-contract.md#3.11
+   */
+  async getClusterMap(topicId: string): Promise<ClusterMap> {
+    const topic = await this.prisma.topic.findUnique({
+      where: { id: topicId },
+      select: {
+        id: true,
+        createdAt: true,
+        lastClusteredAt: true,
+      },
+    });
+
+    if (!topic) {
+      throw new NotFoundException({
+        error: { code: 'TOPIC_NOT_FOUND', message: 'Topic not found' },
+      });
+    }
+
+    const [clusterRows, campRows] = await Promise.all([
+      this.prisma.clusterData.findMany({
+        where: { topicId, argument: { prunedAt: null } },
+        select: {
+          argumentId: true,
+          clusterId: true,
+          umapX: true,
+          umapY: true,
+          argument: {
+            select: {
+              totalVotes: true,
+              stanceScore: true,
+              analysisStatus: true,
+            },
+          },
+        },
+      }),
+      this.prisma.camp.findMany({
+        where: { topicId },
+        select: { clusterId: true, label: true, summary: true },
+      }),
+    ]);
+
+    const computedAt = topic.lastClusteredAt ?? topic.createdAt;
+    const modelVersion = getClusterMapModelVersion(topic.lastClusteredAt);
+
+    return buildClusterMapResponse({
+      topicId,
+      computedAt,
+      modelVersion,
+      points: clusterRows.map((row) => ({
+        argumentId: row.argumentId,
+        umapX: row.umapX,
+        umapY: row.umapY,
+        clusterId: row.clusterId,
+        totalVotes: row.argument.totalVotes,
+        stanceScore: row.argument.stanceScore,
+        analysisStatus: row.argument.analysisStatus,
+      })),
+      camps: campRows.map((c) => ({
+        clusterId: c.clusterId,
+        label: c.label,
+        summary: c.summary,
+      })),
+    });
   }
 }

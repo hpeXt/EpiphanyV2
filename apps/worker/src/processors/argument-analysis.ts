@@ -14,7 +14,7 @@
  */
 
 import type { PrismaClient } from '@epiphany/database';
-import type Redis from 'ioredis';
+import type { Redis } from 'ioredis';
 import { type AIProvider, isValidStanceScore, isValidEmbedding } from '../providers/ai-provider.js';
 
 const EMBEDDING_DIMENSIONS = 4096;
@@ -30,6 +30,7 @@ export interface ProcessArgumentAnalysisParams {
 export interface ProcessResult {
   success: boolean;
   shortCircuited?: boolean;
+  topicId?: string;
   error?: string;
 }
 
@@ -65,7 +66,7 @@ export async function processArgumentAnalysis(
   // Step 2: Idempotency check - short circuit if already ready
   if (argument.analysisStatus === 'ready') {
     console.log(`[argument-analysis] Short circuit: ${argumentId} already ready`);
-    return { success: true, shortCircuited: true };
+    return { success: true, shortCircuited: true, topicId: argument.topicId };
   }
 
   const topicId = argument.topicId;
@@ -110,7 +111,7 @@ export async function processArgumentAnalysis(
     await publishArgumentUpdatedEvent(redis, topicId, argumentId);
 
     console.log(`[argument-analysis] Success: ${argumentId}`);
-    return { success: true };
+    return { success: true, topicId };
   } catch (error) {
     // Handle failure: write failed status and still publish event
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -118,22 +119,25 @@ export async function processArgumentAnalysis(
     console.error(`[argument-analysis] Failed: ${argumentId}`, errorMessage);
 
     try {
-      // Write failure state to DB
-      await prisma.argument.update({
-        where: { topicId_id: { topicId, id: argumentId } },
-        data: {
-          analysisStatus: 'failed',
-          stanceScore: null,
-          embedding: undefined,
-          embeddingModel: null,
-          metadata: {
-            error: {
-              message: errorMessage,
-              timestamp: new Date().toISOString(),
-            },
-          },
+      const metadata = {
+        error: {
+          message: errorMessage,
+          timestamp: new Date().toISOString(),
         },
-      });
+      };
+
+      // Write failure state to DB (embedding is an Unsupported pgvector field; use raw SQL)
+      await prisma.$executeRaw`
+        UPDATE arguments
+        SET
+          analysis_status = 'failed',
+          stance_score = NULL,
+          embedding = NULL,
+          embedding_model = NULL,
+          metadata = ${JSON.stringify(metadata)}::jsonb,
+          updated_at = NOW()
+        WHERE id = ${argumentId}::uuid AND topic_id = ${topicId}::uuid
+      `;
 
       // Still publish event so frontend knows to update from pending -> failed
       await publishArgumentUpdatedEvent(redis, topicId, argumentId);
@@ -141,7 +145,7 @@ export async function processArgumentAnalysis(
       console.error(`[argument-analysis] Failed to write failure state:`, writeError);
     }
 
-    return { success: false, error: errorMessage };
+    return { success: false, error: errorMessage, topicId };
   }
 }
 
@@ -180,7 +184,7 @@ async function publishArgumentUpdatedEvent(
     },
   };
 
-  return redis.xadd(
+  const id = await redis.xadd(
     streamKey,
     'MAXLEN',
     '~',
@@ -189,4 +193,10 @@ async function publishArgumentUpdatedEvent(
     'data',
     JSON.stringify(envelope)
   );
+
+  if (!id) {
+    throw new Error(`Failed to publish event to stream ${streamKey}`);
+  }
+
+  return id;
 }

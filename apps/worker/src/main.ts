@@ -12,15 +12,19 @@
 import process from 'node:process';
 import http from 'node:http';
 import { Worker, Queue, type Job } from 'bullmq';
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 import { getPrisma } from '@epiphany/database';
 
 import { getRedisConnection } from './lib/redis-connection.js';
 import { createAIProvider } from './providers/provider-factory.js';
 import { processArgumentAnalysis } from './processors/argument-analysis.js';
+import { processTopicCluster, enqueueTopicClusterDebounced, type TopicClusterEngine } from './processors/topic-cluster.js';
+import { createNodeTopicClusterEngine } from './clustering/node-topic-cluster-engine.js';
+import { createPythonTopicClusterEngine } from './clustering/python-topic-cluster-engine.js';
 
 // Queue names per docs/ai-worker.md (using underscore instead of colon for BullMQ compatibility)
 const QUEUE_ARGUMENT_ANALYSIS = 'ai_argument-analysis';
+const QUEUE_TOPIC_CLUSTER = 'ai_topic-cluster';
 
 // Configuration
 const port = Number(process.env.PORT ?? process.env.WORKER_PORT ?? 3002);
@@ -33,6 +37,23 @@ const aiProvider = createAIProvider();
 
 // Create queues for health checks
 const argumentAnalysisQueue = new Queue(QUEUE_ARGUMENT_ANALYSIS, { connection });
+const topicClusterQueue = new Queue(QUEUE_TOPIC_CLUSTER, { connection });
+
+function getTopicClusterEngine(): TopicClusterEngine {
+  const configured = (process.env.CLUSTER_ENGINE ?? 'node').toLowerCase();
+  if (configured === 'python') {
+    try {
+      return createPythonTopicClusterEngine();
+    } catch (err) {
+      console.warn('[worker] CLUSTER_ENGINE=python misconfigured; falling back to node:', err);
+      return createNodeTopicClusterEngine();
+    }
+  }
+
+  return createNodeTopicClusterEngine();
+}
+
+const topicClusterEngine = getTopicClusterEngine();
 
 /**
  * Argument Analysis Job Payload
@@ -58,6 +79,18 @@ const argumentAnalysisWorker = new Worker<ArgumentAnalysisJobData>(
       aiProvider,
     });
 
+    // Trigger topic clustering debounce after analysis is completed (Step 19)
+    if (result.topicId && !result.shortCircuited) {
+      try {
+        await enqueueTopicClusterDebounced(topicClusterQueue, result.topicId);
+      } catch (err) {
+        console.warn(
+          `[worker] Failed to enqueue topic-cluster for topicId=${result.topicId}:`,
+          err
+        );
+      }
+    }
+
     if (!result.success) {
       // Log but don't throw - we've already handled the failure in the processor
       console.warn(`[worker] Job ${job.id} completed with failure: ${result.error}`);
@@ -70,6 +103,62 @@ const argumentAnalysisWorker = new Worker<ArgumentAnalysisJobData>(
     concurrency: 5, // Process up to 5 jobs concurrently
   }
 );
+
+/**
+ * Topic Cluster Job Payload
+ */
+interface TopicClusterJobData {
+  topicId: string;
+}
+
+/**
+ * Topic Cluster Worker
+ */
+const topicClusterWorker = new Worker<TopicClusterJobData>(
+  QUEUE_TOPIC_CLUSTER,
+  async (job: Job<TopicClusterJobData>) => {
+    const { topicId } = job.data;
+
+    console.log(`[worker] Processing topic-cluster job=${job.id} topicId=${topicId}`);
+
+    const result = await processTopicCluster({
+      topicId,
+      prisma,
+      redis,
+      engine: topicClusterEngine,
+    });
+
+    if (!result.success) {
+      console.warn(`[worker] Topic cluster job=${job.id} failed: ${result.error}`);
+    }
+
+    return result;
+  },
+  {
+    connection,
+    concurrency: 1, // CPU-heavy; keep low
+  }
+);
+
+topicClusterWorker.on('ready', () => {
+  console.log(
+    `[worker] Topic cluster worker ready queue=${QUEUE_TOPIC_CLUSTER} redis=${connection.host}:${connection.port}`
+  );
+});
+
+topicClusterWorker.on('completed', (job) => {
+  console.log(`[worker] Completed job=${job.id} name=${job.name}`);
+});
+
+topicClusterWorker.on('failed', (job, err) => {
+  console.error(
+    `[worker] Failed job=${job?.id ?? 'unknown'} name=${job?.name ?? 'unknown'} err=${err?.message ?? err}`
+  );
+});
+
+topicClusterWorker.on('error', (err) => {
+  console.error(`[worker] Worker error: ${err?.message ?? err}`);
+});
 
 // Worker event handlers
 argumentAnalysisWorker.on('ready', () => {
@@ -109,10 +198,12 @@ const server = http.createServer(async (req, res) => {
     // Health check endpoint
     if (path === '/' || path === '/health') {
       try {
-        const client = await argumentAnalysisQueue.client;
-        await client.ping();
+        const client1 = await argumentAnalysisQueue.client;
+        await client1.ping();
+        const client2 = await topicClusterQueue.client;
+        await client2.ping();
         await prisma.$queryRaw`SELECT 1`;
-        writeJson(res, 200, { ok: true, queues: [QUEUE_ARGUMENT_ANALYSIS] });
+        writeJson(res, 200, { ok: true, queues: [QUEUE_ARGUMENT_ANALYSIS, QUEUE_TOPIC_CLUSTER] });
         return;
       } catch (err) {
         console.error('[worker] Health check failed:', err);
@@ -174,6 +265,8 @@ async function shutdown(signal: string): Promise<void> {
   server.close();
   await argumentAnalysisWorker.close();
   await argumentAnalysisQueue.close();
+  await topicClusterWorker.close();
+  await topicClusterQueue.close();
   await redis.quit();
   await prisma.$disconnect();
   process.exit(0);
