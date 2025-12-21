@@ -14,12 +14,14 @@ export interface VerifySignatureParams {
   rawBody: string;
   pubkey: string;
   signature: string;
+  allowNonceReplay?: boolean;
 }
 
 export interface VerifyResult {
   valid: boolean;
   errorCode?: 'INVALID_SIGNATURE' | 'TIMESTAMP_OUT_OF_RANGE' | 'NONCE_REPLAY' | 'BAD_REQUEST';
   message?: string;
+  nonceReplay?: boolean;
 }
 
 @Injectable()
@@ -32,7 +34,7 @@ export class AuthService {
    * Verify Ed25519 signature using Node.js crypto
    */
   async verifySignature(params: VerifySignatureParams): Promise<VerifyResult> {
-    const { method, path, timestamp, nonce, rawBody, pubkey, signature } = params;
+    const { method, path, timestamp, nonce, rawBody, pubkey, signature, allowNonceReplay } = params;
 
     // Validate header format
     if (!this.isValidHex(pubkey, 64)) {
@@ -60,9 +62,10 @@ export class AuthService {
 
     // Check nonce replay
     const nonceOk = await this.redis.checkAndSetNonce(pubkey, nonce);
-    if (!nonceOk) {
+    if (!nonceOk && !allowNonceReplay) {
       return { valid: false, errorCode: 'NONCE_REPLAY', message: 'Nonce already used' };
     }
+    const nonceReplay = !nonceOk;
 
     // Calculate body hash
     const bodyHash = rawBody
@@ -100,7 +103,7 @@ export class AuthService {
         return { valid: false, errorCode: 'INVALID_SIGNATURE', message: 'Signature verification failed' };
       }
 
-      return { valid: true };
+      return { valid: true, nonceReplay };
     } catch {
       return { valid: false, errorCode: 'INVALID_SIGNATURE', message: 'Signature verification error' };
     }

@@ -7,7 +7,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "dev": "nest start --watch",
-    "build": "pnpm --filter @epiphany/shared-contracts build && pnpm --filter @epiphany/database build && nest build",
+    "build": "pnpm --filter @epiphany/shared-contracts build && pnpm --filter @epiphany/core-logic build && pnpm --filter @epiphany/database build && nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
@@ -18,7 +18,7 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "pnpm --filter @epiphany/shared-contracts build && pnpm --filter @epiphany/database db:generate && jest --config ./test/jest-e2e.json"
+    "test:e2e": "pnpm --filter @epiphany/shared-contracts build && pnpm --filter @epiphany/core-logic build && pnpm --filter @epiphany/database db:generate && jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
     "@epiphany/core-logic": "workspace:*",
