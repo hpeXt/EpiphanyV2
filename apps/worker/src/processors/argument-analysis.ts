@@ -30,6 +30,7 @@ export interface ProcessArgumentAnalysisParams {
 export interface ProcessResult {
   success: boolean;
   shortCircuited?: boolean;
+  topicId?: string;
   error?: string;
 }
 
@@ -65,7 +66,7 @@ export async function processArgumentAnalysis(
   // Step 2: Idempotency check - short circuit if already ready
   if (argument.analysisStatus === 'ready') {
     console.log(`[argument-analysis] Short circuit: ${argumentId} already ready`);
-    return { success: true, shortCircuited: true };
+    return { success: true, shortCircuited: true, topicId: argument.topicId };
   }
 
   const topicId = argument.topicId;
@@ -110,7 +111,7 @@ export async function processArgumentAnalysis(
     await publishArgumentUpdatedEvent(redis, topicId, argumentId);
 
     console.log(`[argument-analysis] Success: ${argumentId}`);
-    return { success: true };
+    return { success: true, topicId };
   } catch (error) {
     // Handle failure: write failed status and still publish event
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -118,7 +119,14 @@ export async function processArgumentAnalysis(
     console.error(`[argument-analysis] Failed: ${argumentId}`, errorMessage);
 
     try {
-      // Write failure state to DB (use raw SQL to clear embedding pgvector field)
+      const metadata = {
+        error: {
+          message: errorMessage,
+          timestamp: new Date().toISOString(),
+        },
+      };
+
+      // Write failure state to DB (embedding is an Unsupported pgvector field; use raw SQL)
       await prisma.$executeRaw`
         UPDATE arguments
         SET
@@ -126,7 +134,7 @@ export async function processArgumentAnalysis(
           stance_score = NULL,
           embedding = NULL,
           embedding_model = NULL,
-          metadata = ${JSON.stringify({ error: { message: errorMessage, timestamp: new Date().toISOString() } })}::jsonb,
+          metadata = ${JSON.stringify(metadata)}::jsonb,
           updated_at = NOW()
         WHERE id = ${argumentId}::uuid AND topic_id = ${topicId}::uuid
       `;
@@ -137,7 +145,7 @@ export async function processArgumentAnalysis(
       console.error(`[argument-analysis] Failed to write failure state:`, writeError);
     }
 
-    return { success: false, error: errorMessage };
+    return { success: false, error: errorMessage, topicId };
   }
 }
 
@@ -166,7 +174,7 @@ async function publishArgumentUpdatedEvent(
   redis: Redis,
   topicId: string,
   argumentId: string
-): Promise<string | null> {
+): Promise<string> {
   const streamKey = `topic:events:${topicId}`;
   const envelope = {
     event: 'argument_updated',

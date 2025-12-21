@@ -17,7 +17,7 @@
 ## 范围（本 step 做/不做）
 
 - 做：
-  - BullMQ 队列：`ai:argument-analysis`（`jobId="arg:"+argumentId`）
+  - BullMQ 队列：`ai:argument-analysis`（`jobId="arg_"+argumentId`；BullMQ 自定义 jobId 不能包含 `:`）
   - 幂等：`analysis_status=ready` 直接短路
   - 成功/失败都发 `argument_updated(reason="analysis_done")`
 - 不做：

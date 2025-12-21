@@ -9,6 +9,8 @@ import { Queue } from 'bullmq';
 
 // Queue name per docs/ai-worker.md (using underscore instead of colon for BullMQ compatibility)
 const QUEUE_ARGUMENT_ANALYSIS = 'ai_argument-analysis';
+const QUEUE_TOPIC_CLUSTER = 'ai_topic-cluster';
+const TOPIC_CLUSTER_DEBOUNCE_MS = 5 * 60 * 1000;
 
 /**
  * Parse Redis URL to BullMQ connection options
@@ -35,14 +37,17 @@ function getRedisConnection() {
 @Injectable()
 export class QueueService implements OnModuleDestroy {
   private readonly argumentAnalysisQueue: Queue;
+  private readonly topicClusterQueue: Queue;
 
   constructor() {
     const connection = getRedisConnection();
     this.argumentAnalysisQueue = new Queue(QUEUE_ARGUMENT_ANALYSIS, { connection });
+    this.topicClusterQueue = new Queue(QUEUE_TOPIC_CLUSTER, { connection });
   }
 
   async onModuleDestroy() {
     await this.argumentAnalysisQueue.close();
+    await this.topicClusterQueue.close();
   }
 
   /**
@@ -67,6 +72,38 @@ export class QueueService implements OnModuleDestroy {
 
     console.log(`[queue] Enqueued argument-analysis job=${job.id} argumentId=${argumentId}`);
     return job.id ?? argumentId;
+  }
+
+  /**
+   * Enqueue a topic clustering job (UMAP + HDBSCAN) with debounce (delay=5min).
+   *
+   * Job is idempotent via jobId="cluster:{topicId}".
+   * Repeated enqueues for the same topic will be deduplicated by BullMQ.
+   */
+  async enqueueTopicCluster(topicId: string): Promise<string> {
+    // BullMQ custom jobId cannot contain ":" (see Job.validateOptions).
+    const jobId = `cluster_${topicId}`;
+    try {
+      const job = await this.topicClusterQueue.add(
+        'cluster',
+        { topicId },
+        {
+          jobId,
+          delay: TOPIC_CLUSTER_DEBOUNCE_MS,
+          removeOnComplete: 100,
+          removeOnFail: 100,
+        },
+      );
+
+      console.log(`[queue] Enqueued topic-cluster job=${job.id} topicId=${topicId}`);
+      return job.id ?? jobId;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('already exists')) {
+        return jobId;
+      }
+      throw err;
+    }
   }
 }
 

@@ -65,6 +65,15 @@ export class TopicController {
   }
 
   /**
+   * GET /v1/topics/:topicId/cluster-map - God View data (public read)
+   * @see docs/api-contract.md#3.11
+   */
+  @Get(':topicId/cluster-map')
+  async getClusterMap(@Param('topicId') topicId: string) {
+    return this.topicService.getClusterMap(topicId);
+  }
+
+  /**
    * POST /v1/topics/:topicId/commands - Execute topic command
    */
   @Post(':topicId/commands')

@@ -4,7 +4,7 @@
 
 实现 God View 所需数据闭环：
 
-- Worker：`ai:topic-cluster`（`jobId="cluster:"+topicId`，delay=5min debounce）
+- Worker：`ai:topic-cluster`（`jobId="cluster_"+topicId`，delay=5min debounce；BullMQ 自定义 jobId 不能包含 `:`）
 - 阈值：`new_arguments>=5` 或 `total_votes_change>=20%`（过滤 pruned）
 - 落库：覆盖写 `camps/cluster_data` + 更新 `topics.last_cluster_*`
 - API：`GET /v1/topics/:topicId/cluster-map`（公共读，坐标归一化 [-1,1]）

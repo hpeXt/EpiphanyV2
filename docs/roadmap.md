@@ -143,7 +143,7 @@
 **目标**：完成“写入先落地、AI 异步回填”的最小 AI 闭环，并驱动 UI 立场着色。
 
 **交付物（对齐 `docs/ai-worker.md`）**
-- BullMQ：`ai:argument-analysis`（`jobId="arg:"+argumentId`）+ 重试/退避。
+- BullMQ：`ai:argument-analysis`（`jobId="arg_"+argumentId`）+ 重试/退避。
 - Worker 执行：
   - stance（相对 parent，[-1,1]）
   - embedding（4096 维，写入 pgvector）
@@ -164,7 +164,7 @@
 **目标**：实现 PRD v1.0 的“语义地图（讨论热区）”，并把聚类计算从前端移到 Worker。
 
 **交付物**
-- BullMQ：`ai:topic-cluster`（`jobId="cluster:"+topicId`，delay=5min debounce）
+- BullMQ：`ai:topic-cluster`（`jobId="cluster_"+topicId`，delay=5min debounce）
 - 阈值与口径：`new_arguments>=5` 或 `total_votes_change>=20%`（过滤 pruned，见 `docs/ai-worker.md`）
 - 计算引擎：
   - Node 侧实现或接入可选 Python AI Worker（`CLUSTER_ENGINE=node|python`）
@@ -216,4 +216,3 @@
 
 - 旭日图等宏观树结构总览（PRD 标注后置）
 - 更丰富的材质/动效库与组件体系沉淀（对齐 `docs/design.md`）
-

@@ -77,9 +77,9 @@ flowchart LR
 
 BullMQ 层：
 
-- `argument-analysis`：`jobId = "arg:" + argumentId`
-- `topic-cluster`：`jobId = "cluster:" + topicId`（用于 debounce：同一 topic 5 分钟内最多一个 pending job）
-- `consensus-report`：`jobId = "report:" + reportId`
+- `argument-analysis`：`jobId = "arg_" + argumentId`（BullMQ 自定义 jobId 不能包含 `:`）
+- `topic-cluster`：`jobId = "cluster_" + topicId`（debounce：同一 topic 5 分钟内最多一个 pending job）
+- `consensus-report`：`jobId = "report_" + reportId`
 
 DB 层（最终幂等）：
 
@@ -132,7 +132,7 @@ DB 层（最终幂等）：
 6. 生产 SSE invalidation：
    - `XADD topic:events:{topicId}` 写入 `argument_updated`，`reason="analysis_done"`（成功/失败都用同一 reason；前端拉取后根据 `analysisStatus` 渲染）。
 7. 触发聚类 debounce（建议）：
-   - enqueue `ai:topic-cluster`（delay=5min，`jobId="cluster:"+topicId`；重复 enqueue 忽略）。
+   - enqueue `ai:topic-cluster`（delay=5min，`jobId="cluster_"+topicId`；重复 enqueue 忽略）。
 
 ### 4.4 失败语义
 
@@ -155,7 +155,7 @@ DB 层（最终幂等）：
 
 节流规则（v1.0，来自 `docs/architecture.md`）：
 
-- **Debounce**：5 分钟内最多跑一次（通过 BullMQ `jobId="cluster:"+topicId` + delay 实现）
+- **Debounce**：5 分钟内最多跑一次（通过 BullMQ `jobId="cluster_"+topicId` + delay 实现）
 - **阈值**：满足其一才真正执行计算
   - `new_arguments >= 5`（过滤 pruned，且要求 embedding ready）
   - `total_votes_change >= 20%`（过滤 pruned）

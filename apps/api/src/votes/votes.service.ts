@@ -16,6 +16,7 @@ import { zSetVotesResponse, type SetVotesResponse, type LedgerMe } from '@epipha
 import { PrismaService } from '../infrastructure/prisma.module.js';
 import { RedisService } from '../infrastructure/redis.module.js';
 import { TopicEventsPublisher } from '../sse/topic-events.publisher.js';
+import { QueueService } from '../infrastructure/queue.module.js';
 
 const IDEMPOTENCY_TTL_SECONDS = 300; // 5 minutes
 
@@ -25,6 +26,7 @@ export class VotesService {
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
     private readonly topicEvents: TopicEventsPublisher,
+    private readonly queue: QueueService,
   ) {}
 
   private getIdempotencyKey(pubkey: string, nonce: string): string {
@@ -313,6 +315,11 @@ export class VotesService {
     } catch {
       // Best-effort; voting should not fail due to SSE stream issues
     }
+
+    // Trigger topic clustering debounce (Step 19) after a vote change.
+    this.queue.enqueueTopicCluster(result.topicId).catch(() => {
+      // Best-effort; voting should not fail due to queue issues
+    });
 
     return result.response;
   }
