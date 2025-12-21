@@ -9,6 +9,7 @@ export type ChildrenOrderBy = "totalVotes_desc" | "createdAt_desc";
 export type DialogueItem = {
   id: string;
   label: string;
+  prunedAt: string | null;
 };
 
 type UseChildrenState =
@@ -91,8 +92,8 @@ export function useChildren(input: {
       return;
     }
 
-    let cancelled = false;
     const parentArgumentId = input.parentArgumentId;
+    let cancelled = false;
 
     setState({
       status: "loading",
@@ -128,6 +129,7 @@ export function useChildren(input: {
         items: result.data.items.map((item) => ({
           id: item.id,
           label: toLabel(item),
+          prunedAt: item.prunedAt,
         })),
         nextBeforeId: result.data.nextBeforeId,
         isLoadingMore: false,
@@ -147,44 +149,50 @@ export function useChildren(input: {
     if (state.isLoadingMore) return;
     if (state.status !== "success") return;
 
-    const parentArgumentId = input.parentArgumentId;
     const beforeId = state.nextBeforeId;
 
-    setState((prev) => ({
-      ...prev,
-      isLoadingMore: true,
-    } as UseChildrenState));
+    setState((prev) => {
+      if (prev.status !== "success") return prev;
+      return { ...prev, isLoadingMore: true };
+    });
 
     const result = await apiClient.getArgumentChildren({
-      argumentId: parentArgumentId,
+      argumentId: input.parentArgumentId,
       orderBy: input.orderBy,
       limit,
       beforeId,
     });
 
     if (!result.ok) {
-      setState((prev) => ({
-        ...prev,
-        status: "error",
-        errorMessage: result.error.message,
-        isLoadingMore: false,
-      } as UseChildrenState));
+      setState((prev) => {
+        if (prev.status !== "success") return prev;
+        return {
+          ...prev,
+          status: "error",
+          errorMessage: result.error.message,
+          isLoadingMore: false,
+        };
+      });
       return;
     }
 
     const incoming = result.data.items.map((item) => ({
       id: item.id,
       label: toLabel(item),
+      prunedAt: item.prunedAt,
     }));
 
-    setState((prev) => ({
-      ...prev,
-      status: "success",
-      errorMessage: "",
-      items: dedupeAppend(prev.items, incoming),
-      nextBeforeId: result.data.nextBeforeId,
-      isLoadingMore: false,
-    } as UseChildrenState));
+    setState((prev) => {
+      if (prev.status !== "success") return prev;
+      return {
+        ...prev,
+        status: "success",
+        errorMessage: "",
+        items: dedupeAppend(prev.items, incoming),
+        nextBeforeId: result.data.nextBeforeId,
+        isLoadingMore: false,
+      };
+    });
   }, [
     input.parentArgumentId,
     input.orderBy,
@@ -196,11 +204,12 @@ export function useChildren(input: {
 
   const prependItem = useCallback((item: DialogueItem) => {
     setState((prev) => {
+      if (prev.status === "idle") return prev;
       if (prev.items.some((existing) => existing.id === item.id)) return prev;
       return {
         ...prev,
         items: [item, ...prev.items],
-      } as UseChildrenState;
+      };
     });
   }, []);
 

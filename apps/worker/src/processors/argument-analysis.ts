@@ -176,7 +176,7 @@ async function publishArgumentUpdatedEvent(
     },
   };
 
-  return redis.xadd(
+  const id = await redis.xadd(
     streamKey,
     'MAXLEN',
     '~',
@@ -185,4 +185,10 @@ async function publishArgumentUpdatedEvent(
     'data',
     JSON.stringify(envelope)
   );
+
+  if (!id) {
+    throw new Error(`Failed to publish event to stream ${streamKey}`);
+  }
+
+  return id;
 }

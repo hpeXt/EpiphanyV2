@@ -14,6 +14,9 @@ export type TopicHeader = {
   id: string;
   title: string;
   rootArgumentId: string;
+  status: "active" | "frozen" | "archived";
+  ownerPubkey: string | null;
+  rootBody: string;
 };
 
 type UseTopicTreeState =
@@ -81,6 +84,12 @@ export function useTopicTree(
           id: result.data.topic.id,
           title: result.data.topic.title,
           rootArgumentId: result.data.topic.rootArgumentId,
+          status: result.data.topic.status,
+          ownerPubkey: result.data.topic.ownerPubkey,
+          rootBody:
+            result.data.arguments.find(
+              (arg) => arg.id === result.data.topic.rootArgumentId,
+            )?.body ?? "",
         },
         nodes: result.data.arguments.map((arg) => ({
           id: arg.id,

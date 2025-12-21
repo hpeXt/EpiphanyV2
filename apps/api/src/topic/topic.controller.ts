@@ -103,16 +103,16 @@ export class TopicController {
       }
 
       case 'SET_STATUS':
+        return { topic: await this.topicService.setStatus(topicId, command.payload.status, pubkey) };
+
       case 'EDIT_ROOT':
+        return { topic: await this.topicService.editRoot(topicId, command.payload, pubkey) };
+
       case 'PRUNE_ARGUMENT':
+        return { topic: await this.topicService.pruneArgument(topicId, command.payload, pubkey) };
+
       case 'UNPRUNE_ARGUMENT':
-        // These will be implemented in Step 21
-        throw new BadRequestException({
-          error: {
-            code: 'BAD_REQUEST',
-            message: `Command ${command.type} not yet implemented`,
-          },
-        });
+        return { topic: await this.topicService.unpruneArgument(topicId, command.payload, pubkey) };
 
       default:
         throw new BadRequestException({

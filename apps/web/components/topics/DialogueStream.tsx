@@ -10,6 +10,7 @@ import { apiClient, type ApiError } from "@/lib/apiClient";
 type Props = {
   topicId: string;
   parentArgumentId: string | null;
+  topicStatus: "active" | "frozen" | "archived";
   refreshToken: number;
   onInvalidate: () => void;
   canWrite: boolean;
@@ -48,6 +49,8 @@ function formatDelta(value: number): string {
 function VoteControl(props: {
   topicId: string;
   argumentId: string;
+  topicStatus: "active" | "frozen" | "archived";
+  argumentPrunedAt: string | null;
   onLedgerUpdated: (ledger: LedgerMe) => void;
 }) {
   const [currentVotes, setCurrentVotes] = useState(0);
@@ -58,6 +61,10 @@ function VoteControl(props: {
   const currentCost = currentVotes * currentVotes;
   const targetCost = targetVotes * targetVotes;
   const deltaCost = targetCost - currentCost;
+  const isIncrease = targetVotes > currentVotes;
+  const increaseForbidden =
+    props.topicStatus !== "active" || Boolean(props.argumentPrunedAt);
+  const disableSubmit = isSubmitting || (increaseForbidden && isIncrease);
 
   async function submitVotes() {
     setSubmitError("");
@@ -96,6 +103,13 @@ function VoteControl(props: {
         onChange={(event) => setTargetVotes(Number(event.target.value))}
         className="w-full"
       />
+      {increaseForbidden ? (
+        <p className="text-xs text-zinc-500">
+          {props.argumentPrunedAt
+            ? "This node is pruned: you can only withdraw."
+            : "Topic is read-only: you can only withdraw."}
+        </p>
+      ) : null}
       <p className="text-xs text-zinc-600">
         Cost: {targetCost} (ΔCost: {formatDelta(deltaCost)})
       </p>
@@ -109,7 +123,7 @@ function VoteControl(props: {
       <button
         type="button"
         onClick={submitVotes}
-        disabled={isSubmitting}
+        disabled={disableSubmit}
         className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-medium text-zinc-900 hover:bg-zinc-100 disabled:opacity-60"
       >
         {isSubmitting ? "Saving…" : "Save"}
@@ -121,6 +135,7 @@ function VoteControl(props: {
 export function DialogueStream({
   topicId,
   parentArgumentId,
+  topicStatus,
   refreshToken,
   canWrite,
   ledger,
@@ -148,10 +163,12 @@ export function DialogueStream({
     () => Boolean(parentArgumentId && replyBody.trim()),
     [parentArgumentId, replyBody],
   );
+  const canCreateArgument = canWrite && topicStatus === "active";
 
   async function onSubmitReply(event: FormEvent) {
     event.preventDefault();
     if (!parentArgumentId) return;
+    if (!canCreateArgument) return;
     setReplyError("");
 
     const body = replyBody.trim();
@@ -179,6 +196,7 @@ export function DialogueStream({
     children.prependItem({
       id: result.data.argument.id,
       label: toLabel(result.data.argument),
+      prunedAt: result.data.argument.prunedAt,
     });
     setReplyBody("");
   }
@@ -245,6 +263,11 @@ export function DialogueStream({
         <div className="space-y-3">
           {canWrite ? (
             <form onSubmit={onSubmitReply} className="space-y-2">
+              {topicStatus !== "active" ? (
+                <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">
+                  Topic is read-only ({topicStatus}). You can still withdraw votes.
+                </div>
+              ) : null}
               <div className="space-y-1">
                 <label
                   htmlFor="reply"
@@ -258,6 +281,7 @@ export function DialogueStream({
                   value={replyBody}
                   onChange={(event) => setReplyBody(event.target.value)}
                   rows={3}
+                  disabled={!canCreateArgument}
                   className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
                 />
               </div>
@@ -279,7 +303,7 @@ export function DialogueStream({
 
               <button
                 type="submit"
-                disabled={!canPost || isSubmittingReply}
+                disabled={!canPost || isSubmittingReply || !canCreateArgument}
                 className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
               >
                 {isSubmittingReply ? "Posting…" : "Post"}
@@ -302,6 +326,8 @@ export function DialogueStream({
                     <VoteControl
                       topicId={topicId}
                       argumentId={item.id}
+                      topicStatus={topicStatus}
+                      argumentPrunedAt={item.prunedAt}
                       onLedgerUpdated={onLedgerUpdated}
                     />
                   ) : null}
