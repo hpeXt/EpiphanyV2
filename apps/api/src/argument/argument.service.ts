@@ -178,7 +178,7 @@ export class ArgumentService {
     parentId: string | null;
     title: string | null;
     body: string;
-    authorPubkey: Buffer;
+    authorPubkey: Uint8Array;
     analysisStatus: string;
     stanceScore: number | null;
     totalVotes: number;
