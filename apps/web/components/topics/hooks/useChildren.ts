@@ -92,6 +92,7 @@ export function useChildren(input: {
       return;
     }
 
+    const parentArgumentId = input.parentArgumentId;
     let cancelled = false;
 
     setState({
@@ -104,7 +105,7 @@ export function useChildren(input: {
 
     (async () => {
       const result = await apiClient.getArgumentChildren({
-        argumentId: input.parentArgumentId,
+        argumentId: parentArgumentId,
         orderBy: input.orderBy,
         limit,
       });
@@ -148,25 +149,30 @@ export function useChildren(input: {
     if (state.isLoadingMore) return;
     if (state.status !== "success") return;
 
-    setState((prev) => ({
-      ...prev,
-      isLoadingMore: true,
-    }));
+    const beforeId = state.nextBeforeId;
+
+    setState((prev) => {
+      if (prev.status !== "success") return prev;
+      return { ...prev, isLoadingMore: true };
+    });
 
     const result = await apiClient.getArgumentChildren({
       argumentId: input.parentArgumentId,
       orderBy: input.orderBy,
       limit,
-      beforeId: state.nextBeforeId,
+      beforeId,
     });
 
     if (!result.ok) {
-      setState((prev) => ({
-        ...prev,
-        status: "error",
-        errorMessage: result.error.message,
-        isLoadingMore: false,
-      }));
+      setState((prev) => {
+        if (prev.status !== "success") return prev;
+        return {
+          ...prev,
+          status: "error",
+          errorMessage: result.error.message,
+          isLoadingMore: false,
+        };
+      });
       return;
     }
 
@@ -176,14 +182,17 @@ export function useChildren(input: {
       prunedAt: item.prunedAt,
     }));
 
-    setState((prev) => ({
-      ...prev,
-      status: "success",
-      errorMessage: "",
-      items: dedupeAppend(prev.items, incoming),
-      nextBeforeId: result.data.nextBeforeId,
-      isLoadingMore: false,
-    }));
+    setState((prev) => {
+      if (prev.status !== "success") return prev;
+      return {
+        ...prev,
+        status: "success",
+        errorMessage: "",
+        items: dedupeAppend(prev.items, incoming),
+        nextBeforeId: result.data.nextBeforeId,
+        isLoadingMore: false,
+      };
+    });
   }, [
     input.parentArgumentId,
     input.orderBy,
@@ -195,6 +204,7 @@ export function useChildren(input: {
 
   const prependItem = useCallback((item: DialogueItem) => {
     setState((prev) => {
+      if (prev.status === "idle") return prev;
       if (prev.items.some((existing) => existing.id === item.id)) return prev;
       return {
         ...prev,
