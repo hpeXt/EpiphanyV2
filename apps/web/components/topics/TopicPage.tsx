@@ -1,20 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { LedgerMe } from "@epiphany/shared-contracts";
 
+import { IdentityOnboarding } from "@/components/identity/IdentityOnboarding";
 import { FocusView } from "@/components/topics/FocusView";
 import { DialogueStream } from "@/components/topics/DialogueStream";
 import { useTopicTree } from "@/components/topics/hooks/useTopicTree";
 import { useTopicSse } from "@/components/topics/hooks/useTopicSse";
+import { deriveTopicKeypairFromMasterSeedHex } from "@/lib/identity";
 import { apiClient } from "@/lib/apiClient";
+import { createLocalStorageKeyStore } from "@/lib/signing";
 
 type Props = {
   topicId: string;
 };
 
 export function TopicPage({ topicId }: Props) {
+  const keyStore = useMemo(() => createLocalStorageKeyStore(), []);
+  const [hasIdentity, setHasIdentity] = useState<boolean | null>(null);
+  const [identityFingerprint, setIdentityFingerprint] = useState<string | null>(null);
+
   const [refreshToken, setRefreshToken] = useState(0);
   const invalidate = useCallback(() => setRefreshToken((prev) => prev + 1), []);
   const [reloadRequired, setReloadRequired] = useState(false);
@@ -35,6 +42,36 @@ export function TopicPage({ topicId }: Props) {
   const [ledgerError, setLedgerError] = useState("");
 
   useEffect(() => {
+    try {
+      setHasIdentity(Boolean(keyStore.getMasterSeedHex()));
+    } catch {
+      setHasIdentity(false);
+    }
+  }, [keyStore]);
+
+  useEffect(() => {
+    if (!hasIdentity) {
+      setIdentityFingerprint(null);
+      return;
+    }
+
+    const masterSeedHex = keyStore.getMasterSeedHex();
+    if (!masterSeedHex) {
+      setIdentityFingerprint(null);
+      return;
+    }
+
+    const { pubkeyHex } = deriveTopicKeypairFromMasterSeedHex(masterSeedHex, topicId);
+    setIdentityFingerprint(`${pubkeyHex.slice(0, 6)}…${pubkeyHex.slice(-6)}`);
+  }, [hasIdentity, keyStore, topicId]);
+
+  useEffect(() => {
+    if (!hasIdentity) {
+      setLedger(null);
+      setLedgerError("");
+      return;
+    }
+
     let cancelled = false;
     setLedger(null);
     setLedgerError("");
@@ -54,7 +91,7 @@ export function TopicPage({ topicId }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [topicId]);
+  }, [hasIdentity, topicId]);
 
   if (tree.status === "loading") {
     return <p className="text-sm text-zinc-600">Loading topic…</p>;
@@ -73,6 +110,9 @@ export function TopicPage({ topicId }: Props) {
 
   return (
     <div className="space-y-6">
+      {hasIdentity === false ? (
+        <IdentityOnboarding onComplete={() => setHasIdentity(true)} />
+      ) : null}
       {reloadRequired ? (
         <div
           role="alert"
@@ -95,6 +135,11 @@ export function TopicPage({ topicId }: Props) {
         <p className="text-sm text-zinc-600">
           TopicId: <code className="font-mono">{tree.topic.id}</code>
         </p>
+        {identityFingerprint ? (
+          <p className="text-sm text-zinc-600">
+            Identity: <span className="font-mono">{identityFingerprint}</span>
+          </p>
+        ) : null}
         {ledger ? (
           <p className="text-sm text-zinc-600">
             Balance: <span className="font-mono">{ledger.balance}</span>
@@ -116,6 +161,7 @@ export function TopicPage({ topicId }: Props) {
           parentArgumentId={selectedArgumentId}
           refreshToken={refreshToken}
           onInvalidate={invalidate}
+          canWrite={hasIdentity === true}
           ledger={ledger}
           onLedgerUpdated={setLedger}
         />

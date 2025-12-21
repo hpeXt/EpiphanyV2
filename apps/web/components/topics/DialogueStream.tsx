@@ -12,6 +12,7 @@ type Props = {
   parentArgumentId: string | null;
   refreshToken: number;
   onInvalidate: () => void;
+  canWrite: boolean;
   ledger: LedgerMe | null;
   onLedgerUpdated: (ledger: LedgerMe) => void;
 };
@@ -121,6 +122,7 @@ export function DialogueStream({
   topicId,
   parentArgumentId,
   refreshToken,
+  canWrite,
   ledger,
   onLedgerUpdated,
 }: Props) {
@@ -241,44 +243,53 @@ export function DialogueStream({
 
       {parentArgumentId && children.status === "success" ? (
         <div className="space-y-3">
-          <form onSubmit={onSubmitReply} className="space-y-2">
-            <div className="space-y-1">
-              <label htmlFor="reply" className="text-sm font-medium text-zinc-700">
-                Reply
-              </label>
-              <textarea
-                id="reply"
-                name="reply"
-                value={replyBody}
-                onChange={(event) => setReplyBody(event.target.value)}
-                rows={3}
-                className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
-              />
-            </div>
-
-            {ledger ? (
-              <p className="text-xs text-zinc-600">
-                Balance: <span className="font-mono">{ledger.balance}</span>
-              </p>
-            ) : null}
-
-            {replyError ? (
-              <div
-                role="alert"
-                className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800"
-              >
-                {replyError}
+          {canWrite ? (
+            <form onSubmit={onSubmitReply} className="space-y-2">
+              <div className="space-y-1">
+                <label
+                  htmlFor="reply"
+                  className="text-sm font-medium text-zinc-700"
+                >
+                  Reply
+                </label>
+                <textarea
+                  id="reply"
+                  name="reply"
+                  value={replyBody}
+                  onChange={(event) => setReplyBody(event.target.value)}
+                  rows={3}
+                  className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
+                />
               </div>
-            ) : null}
 
-            <button
-              type="submit"
-              disabled={!canPost || isSubmittingReply}
-              className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-            >
-              {isSubmittingReply ? "Posting…" : "Post"}
-            </button>
-          </form>
+              {ledger ? (
+                <p className="text-xs text-zinc-600">
+                  Balance: <span className="font-mono">{ledger.balance}</span>
+                </p>
+              ) : null}
+
+              {replyError ? (
+                <div
+                  role="alert"
+                  className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800"
+                >
+                  {replyError}
+                </div>
+              ) : null}
+
+              <button
+                type="submit"
+                disabled={!canPost || isSubmittingReply}
+                className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+              >
+                {isSubmittingReply ? "Posting…" : "Post"}
+              </button>
+            </form>
+          ) : (
+            <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">
+              Read-only mode. Set up your identity to reply or vote.
+            </div>
+          )}
 
           {children.items.length === 0 ? (
             <p className="text-sm text-zinc-600">No replies yet.</p>
@@ -287,11 +298,13 @@ export function DialogueStream({
               {children.items.map((item) => (
                 <li key={item.id} className="p-3">
                   <p className="text-sm text-zinc-800">{item.label}</p>
-                  <VoteControl
-                    topicId={topicId}
-                    argumentId={item.id}
-                    onLedgerUpdated={onLedgerUpdated}
-                  />
+                  {canWrite ? (
+                    <VoteControl
+                      topicId={topicId}
+                      argumentId={item.id}
+                      onLedgerUpdated={onLedgerUpdated}
+                    />
+                  ) : null}
                 </li>
               ))}
             </ul>
