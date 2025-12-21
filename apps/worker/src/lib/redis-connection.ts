@@ -1,8 +1,17 @@
-import process from 'node:process';
-import { Queue } from 'bullmq';
+/**
+ * @file redis-connection.ts
+ * @description Redis connection helper for BullMQ
+ */
 
-function getRedisConnection() {
-  const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379';
+import type { RedisOptions } from 'ioredis';
+
+export function getRedisConnection(): RedisOptions {
+  const redisUrl = process.env.REDIS_URL;
+  if (!redisUrl) {
+    console.error('[worker] REDIS_URL is required');
+    process.exit(1);
+  }
+
   const url = new URL(redisUrl);
   if (url.protocol !== 'redis:' && url.protocol !== 'rediss:') {
     throw new Error(`Unsupported REDIS_URL protocol: ${url.protocol}`);
@@ -20,12 +29,6 @@ function getRedisConnection() {
     username,
     password,
     tls: url.protocol === 'rediss:' ? {} : undefined,
+    maxRetriesPerRequest: null, // Required for BullMQ
   };
 }
-
-const queueName = process.env.WORKER_QUEUE_NAME ?? 'dev-ping';
-const queue = new Queue(queueName, { connection: getRedisConnection() });
-
-const job = await queue.add('ping', { hello: 'world' }, { removeOnComplete: 100 });
-console.log(`[enqueue] queued ${queueName} jobId=${job.id}`);
-await queue.close();
