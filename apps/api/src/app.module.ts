@@ -10,6 +10,7 @@ import { TopicModule } from './topic/topic.module.js';
 import { ArgumentModule } from './argument/argument.module.js';
 import { FocusViewModule } from './focus-view/focus-view.module.js';
 import { VotesModule } from './votes/votes.module.js';
+import { UserModule } from './user/user.module.js';
 
 loadEnv();
 
@@ -23,6 +24,7 @@ loadEnv();
     ArgumentModule,
     FocusViewModule,
     VotesModule,
+    UserModule,
   ],
   controllers: [AppController],
   providers: [AppService],
