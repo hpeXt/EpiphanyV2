@@ -72,6 +72,6 @@ export async function authorIdFromPubkeyHex(pubkeyHex: string): Promise<string> 
   }
 
   const bytes = hexToBytes(pubkeyHex);
-  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes as unknown as ArrayBuffer);
   return bytesToHexLower(new Uint8Array(digest)).slice(0, 16);
 }

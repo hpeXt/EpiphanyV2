@@ -14,7 +14,7 @@
  */
 
 import type { PrismaClient } from '@epiphany/database';
-import type Redis from 'ioredis';
+import type { Redis } from 'ioredis';
 import { type AIProvider, isValidStanceScore, isValidEmbedding } from '../providers/ai-provider.js';
 
 const EMBEDDING_DIMENSIONS = 4096;
@@ -118,22 +118,18 @@ export async function processArgumentAnalysis(
     console.error(`[argument-analysis] Failed: ${argumentId}`, errorMessage);
 
     try {
-      // Write failure state to DB
-      await prisma.argument.update({
-        where: { topicId_id: { topicId, id: argumentId } },
-        data: {
-          analysisStatus: 'failed',
-          stanceScore: null,
-          embedding: undefined,
-          embeddingModel: null,
-          metadata: {
-            error: {
-              message: errorMessage,
-              timestamp: new Date().toISOString(),
-            },
-          },
-        },
-      });
+      // Write failure state to DB (use raw SQL to clear embedding pgvector field)
+      await prisma.$executeRaw`
+        UPDATE arguments
+        SET
+          analysis_status = 'failed',
+          stance_score = NULL,
+          embedding = NULL,
+          embedding_model = NULL,
+          metadata = ${JSON.stringify({ error: { message: errorMessage, timestamp: new Date().toISOString() } })}::jsonb,
+          updated_at = NOW()
+        WHERE id = ${argumentId}::uuid AND topic_id = ${topicId}::uuid
+      `;
 
       // Still publish event so frontend knows to update from pending -> failed
       await publishArgumentUpdatedEvent(redis, topicId, argumentId);
@@ -170,7 +166,7 @@ async function publishArgumentUpdatedEvent(
   redis: Redis,
   topicId: string,
   argumentId: string
-): Promise<string> {
+): Promise<string | null> {
   const streamKey = `topic:events:${topicId}`;
   const envelope = {
     event: 'argument_updated',

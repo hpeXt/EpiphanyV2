@@ -92,6 +92,7 @@ export function useChildren(input: {
     }
 
     let cancelled = false;
+    const parentArgumentId = input.parentArgumentId;
 
     setState({
       status: "loading",
@@ -103,7 +104,7 @@ export function useChildren(input: {
 
     (async () => {
       const result = await apiClient.getArgumentChildren({
-        argumentId: input.parentArgumentId,
+        argumentId: parentArgumentId,
         orderBy: input.orderBy,
         limit,
       });
@@ -146,16 +147,19 @@ export function useChildren(input: {
     if (state.isLoadingMore) return;
     if (state.status !== "success") return;
 
+    const parentArgumentId = input.parentArgumentId;
+    const beforeId = state.nextBeforeId;
+
     setState((prev) => ({
       ...prev,
       isLoadingMore: true,
-    }));
+    } as UseChildrenState));
 
     const result = await apiClient.getArgumentChildren({
-      argumentId: input.parentArgumentId,
+      argumentId: parentArgumentId,
       orderBy: input.orderBy,
       limit,
-      beforeId: state.nextBeforeId,
+      beforeId,
     });
 
     if (!result.ok) {
@@ -164,7 +168,7 @@ export function useChildren(input: {
         status: "error",
         errorMessage: result.error.message,
         isLoadingMore: false,
-      }));
+      } as UseChildrenState));
       return;
     }
 
@@ -180,7 +184,7 @@ export function useChildren(input: {
       items: dedupeAppend(prev.items, incoming),
       nextBeforeId: result.data.nextBeforeId,
       isLoadingMore: false,
-    }));
+    } as UseChildrenState));
   }, [
     input.parentArgumentId,
     input.orderBy,
@@ -196,7 +200,7 @@ export function useChildren(input: {
       return {
         ...prev,
         items: [item, ...prev.items],
-      };
+      } as UseChildrenState;
     });
   }, []);
 

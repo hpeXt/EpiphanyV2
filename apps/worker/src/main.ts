@@ -12,7 +12,7 @@
 import process from 'node:process';
 import http from 'node:http';
 import { Worker, Queue, type Job } from 'bullmq';
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 import { getPrisma } from '@epiphany/database';
 
 import { getRedisConnection } from './lib/redis-connection.js';
