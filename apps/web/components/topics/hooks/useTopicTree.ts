@@ -28,7 +28,11 @@ function toLabel(input: { title: string | null; body: string; id: string }): str
   return input.id;
 }
 
-export function useTopicTree(topicId: string, depth = 3): UseTopicTreeState {
+export function useTopicTree(
+  topicId: string,
+  depth = 3,
+  refreshToken = 0,
+): UseTopicTreeState {
   const [state, setState] = useState<UseTopicTreeState>({
     status: "loading",
     errorMessage: "",
@@ -39,11 +43,16 @@ export function useTopicTree(topicId: string, depth = 3): UseTopicTreeState {
   useEffect(() => {
     let cancelled = false;
 
-    setState({
-      status: "loading",
-      errorMessage: "",
-      topic: null,
-      nodes: [],
+    setState((prev) => {
+      if (prev.status === "success" && prev.topic.id === topicId) {
+        return prev;
+      }
+      return {
+        status: "loading",
+        errorMessage: "",
+        topic: null,
+        nodes: [],
+      };
     });
 
     (async () => {
@@ -51,11 +60,16 @@ export function useTopicTree(topicId: string, depth = 3): UseTopicTreeState {
       if (cancelled) return;
 
       if (!result.ok) {
-        setState({
-          status: "error",
-          errorMessage: result.error.message,
-          topic: null,
-          nodes: [],
+        setState((prev) => {
+          if (prev.status === "success" && prev.topic.id === topicId) {
+            return prev;
+          }
+          return {
+            status: "error",
+            errorMessage: result.error.message,
+            topic: null,
+            nodes: [],
+          };
         });
         return;
       }
@@ -79,8 +93,7 @@ export function useTopicTree(topicId: string, depth = 3): UseTopicTreeState {
     return () => {
       cancelled = true;
     };
-  }, [topicId, depth]);
+  }, [topicId, depth, refreshToken]);
 
   return state;
 }
-

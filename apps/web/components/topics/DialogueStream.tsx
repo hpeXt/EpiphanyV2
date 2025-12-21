@@ -1,29 +1,185 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+
+import type { LedgerMe } from "@epiphany/shared-contracts";
 
 import { useChildren, type ChildrenOrderBy } from "@/components/topics/hooks/useChildren";
+import { apiClient, type ApiError } from "@/lib/apiClient";
 
 type Props = {
+  topicId: string;
   parentArgumentId: string | null;
+  refreshToken: number;
+  onInvalidate: () => void;
+  ledger: LedgerMe | null;
+  onLedgerUpdated: (ledger: LedgerMe) => void;
 };
 
 function toToggleLabel(orderBy: ChildrenOrderBy) {
   return orderBy === "totalVotes_desc" ? "最热" : "最新";
 }
 
-export function DialogueStream({ parentArgumentId }: Props) {
+function toLabel(input: { title: string | null; body: string; id: string }): string {
+  if (input.title) return input.title;
+  const trimmed = input.body.trim();
+  if (trimmed) return trimmed.length > 80 ? `${trimmed.slice(0, 77)}…` : trimmed;
+  return input.id;
+}
+
+function toFriendlyMessage(error: ApiError): string {
+  if (error.kind === "http") {
+    if (error.status === 402 || error.code === "INSUFFICIENT_BALANCE") {
+      return "余额不足";
+    }
+    if (error.status === 401 && error.code === "INVALID_SIGNATURE") {
+      return "签名验证失败，请刷新页面重试";
+    }
+  }
+  return error.message;
+}
+
+function formatDelta(value: number): string {
+  if (value > 0) return `+${value}`;
+  return String(value);
+}
+
+function VoteControl(props: {
+  topicId: string;
+  argumentId: string;
+  onLedgerUpdated: (ledger: LedgerMe) => void;
+}) {
+  const [currentVotes, setCurrentVotes] = useState(0);
+  const [targetVotes, setTargetVotes] = useState(0);
+  const [submitError, setSubmitError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const currentCost = currentVotes * currentVotes;
+  const targetCost = targetVotes * targetVotes;
+  const deltaCost = targetCost - currentCost;
+
+  async function submitVotes() {
+    setSubmitError("");
+    setIsSubmitting(true);
+    const result = await apiClient.setVotes(props.topicId, props.argumentId, {
+      targetVotes,
+    });
+    setIsSubmitting(false);
+
+    if (!result.ok) {
+      setSubmitError(toFriendlyMessage(result.error));
+      return;
+    }
+
+    setCurrentVotes(result.data.targetVotes);
+    setTargetVotes(result.data.targetVotes);
+    props.onLedgerUpdated(result.data.ledger);
+  }
+
+  return (
+    <div className="space-y-2 pt-2">
+      <label
+        htmlFor={`votes-${props.argumentId}`}
+        className="text-xs font-medium text-zinc-700"
+      >
+        Votes
+      </label>
+      <input
+        id={`votes-${props.argumentId}`}
+        aria-label="Votes"
+        type="range"
+        min={0}
+        max={10}
+        step={1}
+        value={targetVotes}
+        onChange={(event) => setTargetVotes(Number(event.target.value))}
+        className="w-full"
+      />
+      <p className="text-xs text-zinc-600">
+        Cost: {targetCost} (ΔCost: {formatDelta(deltaCost)})
+      </p>
+
+      {submitError ? (
+        <p role="alert" className="text-xs text-red-700">
+          {submitError}
+        </p>
+      ) : null}
+
+      <button
+        type="button"
+        onClick={submitVotes}
+        disabled={isSubmitting}
+        className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-medium text-zinc-900 hover:bg-zinc-100 disabled:opacity-60"
+      >
+        {isSubmitting ? "Saving…" : "Save"}
+      </button>
+    </div>
+  );
+}
+
+export function DialogueStream({
+  topicId,
+  parentArgumentId,
+  refreshToken,
+  ledger,
+  onLedgerUpdated,
+}: Props) {
   const [orderBy, setOrderBy] = useState<ChildrenOrderBy>("totalVotes_desc");
+  const [replyBody, setReplyBody] = useState("");
+  const [replyError, setReplyError] = useState("");
+  const [isSubmittingReply, setIsSubmittingReply] = useState(false);
 
   useEffect(() => {
     setOrderBy("totalVotes_desc");
+    setReplyBody("");
+    setReplyError("");
   }, [parentArgumentId]);
 
   const children = useChildren({
     parentArgumentId,
     orderBy,
     limit: 30,
+    refreshToken,
   });
+
+  const canPost = useMemo(
+    () => Boolean(parentArgumentId && replyBody.trim()),
+    [parentArgumentId, replyBody],
+  );
+
+  async function onSubmitReply(event: FormEvent) {
+    event.preventDefault();
+    if (!parentArgumentId) return;
+    setReplyError("");
+
+    const body = replyBody.trim();
+    if (!body) {
+      setReplyError("Reply is required");
+      return;
+    }
+
+    setIsSubmittingReply(true);
+    const result = await apiClient.createArgument(topicId, {
+      parentId: parentArgumentId,
+      title: null,
+      body,
+      initialVotes: 0,
+    });
+    setIsSubmittingReply(false);
+
+    if (!result.ok) {
+      setReplyError(toFriendlyMessage(result.error));
+      setReplyBody("");
+      return;
+    }
+
+    onLedgerUpdated(result.data.ledger);
+    children.prependItem({
+      id: result.data.argument.id,
+      label: toLabel(result.data.argument),
+    });
+    setReplyBody("");
+  }
 
   return (
     <section className="space-y-3">
@@ -85,13 +241,57 @@ export function DialogueStream({ parentArgumentId }: Props) {
 
       {parentArgumentId && children.status === "success" ? (
         <div className="space-y-3">
+          <form onSubmit={onSubmitReply} className="space-y-2">
+            <div className="space-y-1">
+              <label htmlFor="reply" className="text-sm font-medium text-zinc-700">
+                Reply
+              </label>
+              <textarea
+                id="reply"
+                name="reply"
+                value={replyBody}
+                onChange={(event) => setReplyBody(event.target.value)}
+                rows={3}
+                className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
+              />
+            </div>
+
+            {ledger ? (
+              <p className="text-xs text-zinc-600">
+                Balance: <span className="font-mono">{ledger.balance}</span>
+              </p>
+            ) : null}
+
+            {replyError ? (
+              <div
+                role="alert"
+                className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800"
+              >
+                {replyError}
+              </div>
+            ) : null}
+
+            <button
+              type="submit"
+              disabled={!canPost || isSubmittingReply}
+              className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+            >
+              {isSubmittingReply ? "Posting…" : "Post"}
+            </button>
+          </form>
+
           {children.items.length === 0 ? (
             <p className="text-sm text-zinc-600">No replies yet.</p>
           ) : (
             <ul className="divide-y divide-zinc-200 rounded-md border border-zinc-200 bg-white">
               {children.items.map((item) => (
-                <li key={item.id} className="p-3 text-sm text-zinc-800">
-                  {item.label}
+                <li key={item.id} className="p-3">
+                  <p className="text-sm text-zinc-800">{item.label}</p>
+                  <VoteControl
+                    topicId={topicId}
+                    argumentId={item.id}
+                    onLedgerUpdated={onLedgerUpdated}
+                  />
                 </li>
               ))}
             </ul>
@@ -112,4 +312,3 @@ export function DialogueStream({ parentArgumentId }: Props) {
     </section>
   );
 }
-
