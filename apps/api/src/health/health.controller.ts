@@ -1,4 +1,5 @@
-import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
+import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { HealthService } from './health.service';
 
 @Controller()
@@ -6,10 +7,9 @@ export class HealthController {
   constructor(private readonly healthService: HealthService) {}
 
   @Get('health')
-  async getHealth() {
+  async getHealth(@Res({ passthrough: true }) res: Response) {
     const result = await this.healthService.check();
-    if (!result.ok) throw new ServiceUnavailableException(result);
+    res.status(result.ok ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE);
     return result;
   }
 }
-

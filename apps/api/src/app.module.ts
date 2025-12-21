@@ -7,11 +7,19 @@ import { PrismaModule } from './infrastructure/prisma.module.js';
 import { RedisModule } from './infrastructure/redis.module.js';
 import { CommonModule } from './common/common.module.js';
 import { TopicModule } from './topic/topic.module.js';
+import { ArgumentModule } from './argument/argument.module.js';
 
 loadEnv();
 
 @Module({
-  imports: [PrismaModule, RedisModule, CommonModule, HealthModule, TopicModule],
+  imports: [
+    PrismaModule,
+    RedisModule,
+    CommonModule,
+    HealthModule,
+    TopicModule,
+    ArgumentModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

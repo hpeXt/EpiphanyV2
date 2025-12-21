@@ -34,19 +34,27 @@ export class RedisService extends Redis implements OnModuleDestroy {
    */
   async consumeClaimToken(topicId: string, token: string): Promise<'valid' | 'invalid' | 'expired'> {
     const key = `claim:${topicId}`;
+    const consumedKey = `claim:consumed:${topicId}`;
     const storedToken = await this.get(key);
 
     if (storedToken === null) {
       // Token either expired or never existed
-      return 'expired';
+      const wasConsumed = await this.get(consumedKey);
+      return wasConsumed ? 'invalid' : 'expired';
     }
 
     if (storedToken !== token) {
       return 'invalid';
     }
 
-    // Delete the token (consume it)
-    await this.del(key);
+    const ttl = await this.ttl(key);
+    const consumedTtlSeconds = ttl > 0 ? ttl : 600;
+
+    // Consume token and mark as used (so reuse is INVALID, not EXPIRED).
+    await this.multi()
+      .del(key)
+      .set(consumedKey, '1', 'EX', consumedTtlSeconds)
+      .exec();
     return 'valid';
   }
 
