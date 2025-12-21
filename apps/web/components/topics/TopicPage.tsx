@@ -12,6 +12,7 @@ import { useTopicSse } from "@/components/topics/hooks/useTopicSse";
 import { deriveTopicKeypairFromMasterSeedHex } from "@/lib/identity";
 import { apiClient } from "@/lib/apiClient";
 import { createLocalStorageKeyStore } from "@/lib/signing";
+import { createLocalStorageVisitedTopicsStore } from "@/lib/visitedTopicsStore";
 
 type Props = {
   topicId: string;
@@ -19,6 +20,7 @@ type Props = {
 
 export function TopicPage({ topicId }: Props) {
   const keyStore = useMemo(() => createLocalStorageKeyStore(), []);
+  const visitedStore = useMemo(() => createLocalStorageVisitedTopicsStore(), []);
   const [hasIdentity, setHasIdentity] = useState<boolean | null>(null);
   const [identityFingerprint, setIdentityFingerprint] = useState<string | null>(null);
 
@@ -48,6 +50,11 @@ export function TopicPage({ topicId }: Props) {
       setHasIdentity(false);
     }
   }, [keyStore]);
+
+  // Record this topic as visited (Step 17: My Activity aggregation)
+  useEffect(() => {
+    visitedStore.addTopic(topicId);
+  }, [topicId, visitedStore]);
 
   useEffect(() => {
     if (!hasIdentity) {

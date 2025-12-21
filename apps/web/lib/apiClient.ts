@@ -1,19 +1,22 @@
 import {
   zCreateTopicResponse,
   zArgumentChildrenResponse,
+  zBatchBalanceResponse,
   zCreateArgumentResponse,
   zErrorResponse,
   zLedgerMe,
   zListTopicsResponse,
   zSetVotesResponse,
+  zStakesMeResponse,
   zTopicTreeResponse,
+  type BatchBalanceRequestItem,
   type CreateArgumentRequest,
   type CreateTopicRequest,
   type SetVotesRequest,
 } from "@epiphany/shared-contracts";
 import type { z } from "zod";
 
-import { createLocalStorageKeyStore, createV1Signer, type Signer } from "@/lib/signing";
+import { createLocalStorageKeyStore, createV1Signer, type Signer, type SignedHeadersV1 } from "@/lib/signing";
 
 export type ApiError =
   | { kind: "config"; message: string }
@@ -107,7 +110,45 @@ async function requestJson<T>(
   return { ok: true, data: parsed.data };
 }
 
-const defaultSigner = createV1Signer(createLocalStorageKeyStore());
+const defaultKeyStore = createLocalStorageKeyStore();
+const defaultSigner = createV1Signer(defaultKeyStore);
+
+/**
+ * Build batch-balance request items with per-topic signatures
+ * Each item is signed with the keypair derived for that specific topic
+ *
+ * @see docs/api-contract.md#3.10
+ */
+export async function buildBatchBalanceItems(
+  topicIds: string[],
+  signer: Signer = defaultSigner,
+): Promise<BatchBalanceRequestItem[]> {
+  if (topicIds.length === 0) return [];
+
+  const items: BatchBalanceRequestItem[] = [];
+
+  for (const topicId of topicIds) {
+    const encodedTopicId = encodeURIComponent(topicId);
+    const path = `/v1/topics/${encodedTopicId}/ledger/me`;
+
+    // Sign as if it were a GET request to ledger/me (empty body)
+    const headers: SignedHeadersV1 = await signer.signV1(topicId, {
+      method: "GET",
+      path,
+      rawBody: null,
+    });
+
+    items.push({
+      topicId,
+      pubkey: headers["X-Pubkey"],
+      timestamp: Number(headers["X-Timestamp"]),
+      nonce: headers["X-Nonce"],
+      signature: headers["X-Signature"],
+    });
+  }
+
+  return items;
+}
 
 async function requestJsonSigned<T>(
   signer: Signer,
@@ -120,7 +161,7 @@ async function requestJsonSigned<T>(
   const rawBody = typeof init.body === "string" ? init.body : null;
   const pathWithoutQuery = path.split("?")[0];
 
-  let signedHeaders: Record<string, string>;
+  let signedHeaders: SignedHeadersV1;
   try {
     signedHeaders = await signer.signV1(topicId, { method, path: pathWithoutQuery, rawBody });
   } catch (error) {
@@ -230,6 +271,43 @@ export function createApiClient(deps?: { signer?: Signer }) {
           body,
         },
         zSetVotesResponse,
+      );
+    },
+    /**
+     * Get stakes for current identity in a topic
+     * @see docs/api-contract.md#3.9
+     */
+    getStakesMe(topicId: string) {
+      const encodedTopicId = encodeURIComponent(topicId);
+      return requestJsonSigned(
+        signer,
+        topicId,
+        `/v1/topics/${encodedTopicId}/stakes/me`,
+        { method: "GET" },
+        zStakesMeResponse,
+      );
+    },
+    /**
+     * Batch query balances for multiple topics
+     * Uses item-level signing (no auth headers on request itself)
+     * @see docs/api-contract.md#3.10
+     */
+    async batchBalance(topicIds: string[]) {
+      if (topicIds.length === 0) {
+        return { ok: true as const, data: { results: [] } };
+      }
+
+      const items = await buildBatchBalanceItems(topicIds, signer);
+      const body = JSON.stringify({ items });
+
+      return requestJson(
+        "/v1/user/batch-balance",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body,
+        },
+        zBatchBalanceResponse,
       );
     },
   };
