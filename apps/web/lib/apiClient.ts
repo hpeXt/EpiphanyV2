@@ -4,6 +4,7 @@ import {
   zBatchBalanceResponse,
   zCreateArgumentResponse,
   zErrorResponse,
+  zClusterMap,
   zLedgerMe,
   zListTopicsResponse,
   zSetVotesResponse,
@@ -214,6 +215,18 @@ export function createApiClient(deps?: { signer?: Signer }) {
         `/v1/topics/${encodedTopicId}/tree?${params.toString()}`,
         { method: "GET" },
         zTopicTreeResponse,
+      );
+    },
+    /**
+     * God View semantic map (public read)
+     * @see docs/api-contract.md#3.11
+     */
+    getClusterMap(topicId: string) {
+      const encodedTopicId = encodeURIComponent(topicId);
+      return requestJson(
+        `/v1/topics/${encodedTopicId}/cluster-map`,
+        { method: "GET" },
+        zClusterMap,
       );
     },
     getArgumentChildren(input: {
