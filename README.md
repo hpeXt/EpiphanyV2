@@ -13,6 +13,7 @@
 - Worker：`docs/ai-worker.md`
 - 设计系统：`docs/design.md`
 - Roadmap：`docs/roadmap.md`
+- 安全审计方案：`docs/security-audit-plan.md`
 - Coolify 部署（拆分 Web/API）：`docs/deploy-coolify.md`
 
 **本地开发**
