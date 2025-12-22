@@ -255,6 +255,126 @@ describe('Risk Control (Step 23) (e2e)', () => {
     }
   });
 
+  it('blacklisted pubkey is rejected on setVotes with TOPIC_PUBKEY_BLACKLISTED', async () => {
+    const { topicId, rootArgumentId, claimToken } = await createTopic();
+
+    const owner = generateEd25519Keypair();
+    await claimOwner({
+      topicId,
+      claimToken,
+      ownerPrivateKey: owner.privateKey,
+      ownerPubkeyHex: owner.pubkeyHex,
+    });
+
+    const blacklisted = generateEd25519Keypair();
+    const commandsPath = `/v1/topics/${topicId}/commands`;
+    const blacklistBody = {
+      type: 'BLACKLIST_PUBKEY',
+      payload: { pubkey: blacklisted.pubkeyHex, reason: 'spam' },
+    };
+    const blacklistHeaders = makeSignedHeaders({
+      method: 'POST',
+      path: commandsPath,
+      body: blacklistBody,
+      privateKey: owner.privateKey,
+      pubkeyHex: owner.pubkeyHex,
+    });
+    await request(app.getHttpServer())
+      .post(commandsPath)
+      .set(blacklistHeaders)
+      .send(blacklistBody)
+      .expect(200);
+
+    const votesPath = `/v1/arguments/${rootArgumentId}/votes`;
+    const votesBody = { targetVotes: 1 };
+    const votesHeaders = makeSignedHeaders({
+      method: 'POST',
+      path: votesPath,
+      body: votesBody,
+      privateKey: blacklisted.privateKey,
+      pubkeyHex: blacklisted.pubkeyHex,
+    });
+
+    const res = await request(app.getHttpServer())
+      .post(votesPath)
+      .set(votesHeaders)
+      .send(votesBody)
+      .expect(403);
+
+    const parsed = zErrorResponse.safeParse(res.body);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.error.code).toBe('TOPIC_PUBKEY_BLACKLISTED');
+    }
+  });
+
+  it('setVotes nonce replay returns cached success even if later blacklisted', async () => {
+    const { topicId, rootArgumentId, claimToken } = await createTopic();
+
+    const owner = generateEd25519Keypair();
+    await claimOwner({
+      topicId,
+      claimToken,
+      ownerPrivateKey: owner.privateKey,
+      ownerPubkeyHex: owner.pubkeyHex,
+    });
+
+    const voter = generateEd25519Keypair();
+    const votesPath = `/v1/arguments/${rootArgumentId}/votes`;
+    const votesBody = { targetVotes: 1 };
+    const fixedNonce = `${voter.pubkeyHex.slice(0, 16)}-replay`;
+
+    const headers1 = makeSignedHeaders({
+      method: 'POST',
+      path: votesPath,
+      body: votesBody,
+      privateKey: voter.privateKey,
+      pubkeyHex: voter.pubkeyHex,
+      nonce: fixedNonce,
+    });
+
+    const res1 = await request(app.getHttpServer())
+      .post(votesPath)
+      .set(headers1)
+      .send(votesBody)
+      .expect(200);
+
+    const commandsPath = `/v1/topics/${topicId}/commands`;
+    const blacklistBody = {
+      type: 'BLACKLIST_PUBKEY',
+      payload: { pubkey: voter.pubkeyHex, reason: 'replay-test' },
+    };
+    const blacklistHeaders = makeSignedHeaders({
+      method: 'POST',
+      path: commandsPath,
+      body: blacklistBody,
+      privateKey: owner.privateKey,
+      pubkeyHex: owner.pubkeyHex,
+    });
+    await request(app.getHttpServer())
+      .post(commandsPath)
+      .set(blacklistHeaders)
+      .send(blacklistBody)
+      .expect(200);
+
+    const headers2 = makeSignedHeaders({
+      method: 'POST',
+      path: votesPath,
+      body: votesBody,
+      privateKey: voter.privateKey,
+      pubkeyHex: voter.pubkeyHex,
+      nonce: fixedNonce, // same nonce -> nonceReplay=true
+    });
+
+    const res2 = await request(app.getHttpServer())
+      .post(votesPath)
+      .set(headers2)
+      .send(votesBody)
+      .expect(200);
+
+    expect(res2.body).toEqual(res1.body);
+  });
+
   it('setVotes is rate-limited and returns 429 RATE_LIMITED', async () => {
     const { rootArgumentId } = await createTopic();
     const { privateKey, pubkeyHex } = generateEd25519Keypair();
@@ -293,4 +413,3 @@ describe('Risk Control (Step 23) (e2e)', () => {
     }
   });
 });
-

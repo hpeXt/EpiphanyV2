@@ -42,14 +42,16 @@ export class RiskControlInterceptor implements NestInterceptor {
 
     if (!topicId) return next.handle();
 
+    // Preserve strong idempotency: allow setVotes retries (nonce replay) to reach VotesService cache.
+    // This must run before any other risk control checks (including blacklist), otherwise retries could
+    // be blocked and break the "same (pubkey, nonce) replay returns identical success response" rule.
+    if (options.endpoint === 'setVotes' && req.nonceReplay) {
+      return next.handle();
+    }
+
     // Topic blacklist affects only user write endpoints (createArgument/setVotes).
     if (options.endpoint !== 'topicCommands') {
       await this.risk.assertNotBlacklisted(topicId, pubkeyHex);
-    }
-
-    // Preserve strong idempotency: allow setVotes retries (nonce replay) to reach VotesService cache.
-    if (options.endpoint === 'setVotes' && req.nonceReplay) {
-      return next.handle();
     }
 
     const ip = this.risk.getClientIp(req);
@@ -89,4 +91,3 @@ export class RiskControlInterceptor implements NestInterceptor {
     return next.handle();
   }
 }
-
