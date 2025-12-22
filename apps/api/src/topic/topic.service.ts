@@ -236,8 +236,8 @@ export class TopicService {
         contentMd: null,
         model: null,
         promptVersion: null,
-        params: null,
-        metadata: null,
+        params: Prisma.DbNull,
+        metadata: Prisma.DbNull,
         computedAt: null,
       },
     });

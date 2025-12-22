@@ -14,7 +14,7 @@
  * @see docs/steps/step22.md
  */
 
-import type { PrismaClient } from '@epiphany/database';
+import { Prisma, type PrismaClient } from '@epiphany/database';
 import type { Redis } from 'ioredis';
 
 const TOPIC_EVENTS_MAXLEN = 1000;
@@ -131,6 +131,8 @@ export async function processConsensusReport(
       selectedArgumentIds,
     };
 
+    const paramsJson = paramsSnapshot as unknown as Prisma.InputJsonValue;
+
     const { contentMd, model } = await provider.generate({
       topicId,
       topicTitle,
@@ -150,8 +152,8 @@ export async function processConsensusReport(
         contentMd,
         model,
         promptVersion,
-        params: paramsSnapshot,
-        metadata: null,
+        params: paramsJson,
+        metadata: Prisma.DbNull,
         computedAt: startedAt,
       },
     });
@@ -180,13 +182,15 @@ export async function processConsensusReport(
         selectedArgumentIds: [],
       };
 
+      const paramsJson = (paramsSnapshot ?? fallbackParams) as unknown as Prisma.InputJsonValue;
+
       await prisma.consensusReport.update({
         where: { id: reportId },
         data: {
           status: 'failed',
           contentMd: null,
           promptVersion,
-          params: paramsSnapshot ?? fallbackParams,
+          params: paramsJson,
           metadata,
           computedAt: startedAt,
         },
