@@ -102,3 +102,9 @@ yarn.lock
 
 # Docker
 docker-compose.override.yml
+
+# Nested pnpm files (monorepo uses root-level only)
+apps/*/pnpm-lock.yaml
+apps/*/pnpm-workspace.yaml
+packages/*/pnpm-lock.yaml
+packages/*/pnpm-workspace.yaml
