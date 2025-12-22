@@ -14,6 +14,7 @@ import { apiClient } from "@/lib/apiClient";
 import { createLocalStorageKeyStore } from "@/lib/signing";
 import { TopicManagePanel } from "@/components/topics/TopicManagePanel";
 import { createLocalStorageVisitedTopicsStore } from "@/lib/visitedTopicsStore";
+import { ConsensusReportModal } from "@/components/topics/ConsensusReportModal";
 
 type Props = {
   topicId: string;
@@ -26,6 +27,7 @@ export function TopicPage({ topicId }: Props) {
   const [identityFingerprint, setIdentityFingerprint] = useState<string | null>(null);
   const [identityPubkeyHex, setIdentityPubkeyHex] = useState<string | null>(null);
   const [isManageOpen, setIsManageOpen] = useState(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
 
   const [refreshToken, setRefreshToken] = useState(0);
   const invalidate = useCallback(() => setRefreshToken((prev) => prev + 1), []);
@@ -152,15 +154,24 @@ export function TopicPage({ topicId }: Props) {
       <header className="space-y-1">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-xl font-semibold">{tree.topic.title}</h1>
-          {isOwner ? (
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => setIsManageOpen((prev) => !prev)}
+              onClick={() => setIsReportOpen(true)}
               className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100"
             >
-              Manage
+              Report
             </button>
-          ) : null}
+            {isOwner ? (
+              <button
+                type="button"
+                onClick={() => setIsManageOpen((prev) => !prev)}
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100"
+              >
+                Manage
+              </button>
+            ) : null}
+          </div>
         </div>
         <p className="text-sm text-zinc-600">
           TopicId: <code className="font-mono">{tree.topic.id}</code>
@@ -190,6 +201,16 @@ export function TopicPage({ topicId }: Props) {
           rootBody={tree.topic.rootBody}
           onInvalidate={invalidate}
           onClose={() => setIsManageOpen(false)}
+        />
+      ) : null}
+
+      {isReportOpen ? (
+        <ConsensusReportModal
+          topicId={topicId}
+          isOwner={isOwner}
+          refreshToken={refreshToken}
+          onInvalidate={invalidate}
+          onClose={() => setIsReportOpen(false)}
         />
       ) : null}
 

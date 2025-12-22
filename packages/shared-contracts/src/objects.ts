@@ -12,6 +12,9 @@ export type TopicStatus = z.infer<typeof zTopicStatus>;
 export const zArgumentAnalysisStatus = z.enum(['pending_analysis', 'ready', 'failed']);
 export type ArgumentAnalysisStatus = z.infer<typeof zArgumentAnalysisStatus>;
 
+export const zReportStatus = z.enum(['generating', 'ready', 'failed']);
+export type ReportStatus = z.infer<typeof zReportStatus>;
+
 export const zStance = z.union([z.literal(-1), z.literal(0), z.literal(1)]);
 export type Stance = z.infer<typeof zStance>;
 
@@ -126,3 +129,45 @@ export const zClusterMap = z.object({
 });
 
 export type ClusterMap = z.infer<typeof zClusterMap>;
+
+/**
+ * ConsensusReport - Generated consensus report for a topic
+ * @see docs/api-contract.md#2.8
+ */
+const zJsonObject = z.record(z.unknown());
+
+const zConsensusReportBase = z.object({
+  id: zUuid,
+  topicId: zUuid,
+  model: z.string().nullable(),
+  promptVersion: z.string().nullable(),
+  params: zJsonObject.nullable(),
+  metadata: zJsonObject.nullable(),
+  createdAt: zIsoDateTime,
+});
+
+const zConsensusReportGenerating = zConsensusReportBase.extend({
+  status: z.literal('generating'),
+  contentMd: z.null(),
+  computedAt: z.null(),
+});
+
+const zConsensusReportReady = zConsensusReportBase.extend({
+  status: z.literal('ready'),
+  contentMd: z.string(),
+  computedAt: zIsoDateTime,
+});
+
+const zConsensusReportFailed = zConsensusReportBase.extend({
+  status: z.literal('failed'),
+  contentMd: z.null(),
+  computedAt: zIsoDateTime,
+});
+
+export const zConsensusReport = z.discriminatedUnion('status', [
+  zConsensusReportGenerating,
+  zConsensusReportReady,
+  zConsensusReportFailed,
+]);
+
+export type ConsensusReport = z.infer<typeof zConsensusReport>;

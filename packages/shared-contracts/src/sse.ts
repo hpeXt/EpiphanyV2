@@ -1,7 +1,7 @@
 /**
  * @file sse.ts
  * @description SSE event envelope schema (discriminated union)
- * @see docs/api-contract.md#2.8
+ * @see docs/api-contract.md#2.9
  */
 import { z } from 'zod';
 
@@ -37,6 +37,14 @@ const zSseClusterUpdated = z.object({
   }),
 });
 
+const zSseReportUpdated = z.object({
+  event: z.literal('report_updated'),
+  data: z.object({
+    topicId: z.string(),
+    reportId: z.string(),
+  }),
+});
+
 const zSseReloadRequired = z.object({
   event: z.literal('reload_required'),
   data: z.object({
@@ -51,6 +59,7 @@ export const zSseEnvelope = z.discriminatedUnion('event', [
   zSseArgumentUpdated,
   zSseTopicUpdated,
   zSseClusterUpdated,
+  zSseReportUpdated,
   zSseReloadRequired,
 ]);
 
@@ -61,5 +70,6 @@ export {
   zSseArgumentUpdated,
   zSseTopicUpdated,
   zSseClusterUpdated,
+  zSseReportUpdated,
   zSseReloadRequired,
 };

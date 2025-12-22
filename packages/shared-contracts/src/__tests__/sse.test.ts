@@ -165,6 +165,33 @@ describe('SseEnvelope', () => {
     });
   });
 
+  describe('report_updated', () => {
+    it('should parse report_updated', () => {
+      const fixture: SseEnvelope = {
+        event: 'report_updated',
+        data: {
+          topicId: '0193e3a6-0b7d-7a8d-9f2c-1234567890ab',
+          reportId: '0193e3a6-0b7d-7a8d-9f2c-abcdef123456',
+        },
+      };
+
+      const result = zSseEnvelope.safeParse(fixture);
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject report_updated missing reportId', () => {
+      const fixture = {
+        event: 'report_updated',
+        data: {
+          topicId: '0193e3a6-0b7d-7a8d-9f2c-1234567890ab',
+        },
+      };
+
+      const result = zSseEnvelope.safeParse(fixture);
+      expect(result.success).toBe(false);
+    });
+  });
+
   describe('reload_required', () => {
     it('should parse reload_required with reason: trimmed', () => {
       const fixture: SseEnvelope = {

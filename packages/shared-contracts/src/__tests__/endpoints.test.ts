@@ -24,6 +24,10 @@ import {
   zBatchBalanceResponse,
   // GET /v1/topics/:topicId/cluster-map
   zClusterMap,
+  // GET /v1/topics/:topicId/consensus-report/latest
+  zConsensusReportLatestResponse,
+  // POST /v1/topics/:topicId/commands
+  zTopicCommand,
   type CreateTopicResponse,
   type ListTopicsResponse,
   type TopicTreeResponse,
@@ -32,6 +36,7 @@ import {
   type SetVotesResponse,
   type StakesMeResponse,
   type BatchBalanceResponse,
+  type ConsensusReportLatestResponse,
 } from '../index.js';
 
 describe('POST /v1/topics response', () => {
@@ -535,5 +540,44 @@ describe('GET /v1/topics/:topicId/cluster-map response', () => {
     };
 
     expect(zClusterMap.safeParse(validFixture).success).toBe(true);
+  });
+});
+
+describe('GET /v1/topics/:topicId/consensus-report/latest response', () => {
+  it('should parse null when no report exists yet', () => {
+    const fixture: ConsensusReportLatestResponse = {
+      report: null,
+    };
+
+    const result = zConsensusReportLatestResponse.safeParse(fixture);
+    expect(result.success).toBe(true);
+  });
+
+  it('should parse ready report when present', () => {
+    const fixture: ConsensusReportLatestResponse = {
+      report: {
+        id: '0193e3a6-0b7d-7a8d-9f2c-abcdef123456',
+        topicId: '0193e3a6-0b7d-7a8d-9f2c-topic0123456',
+        status: 'ready',
+        contentMd: '# Report\\n\\nHello',
+        model: 'mock-report-model',
+        promptVersion: 'v1',
+        params: { maxArguments: 30 },
+        metadata: null,
+        computedAt: '2025-12-19T12:35:56.789Z',
+        createdAt: '2025-12-19T12:34:56.789Z',
+      },
+    };
+
+    const result = zConsensusReportLatestResponse.safeParse(fixture);
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('POST /v1/topics/:topicId/commands request', () => {
+  it('should accept GENERATE_CONSENSUS_REPORT', () => {
+    const fixture = { type: 'GENERATE_CONSENSUS_REPORT', payload: {} };
+    const result = zTopicCommand.safeParse(fixture);
+    expect(result.success).toBe(true);
   });
 });

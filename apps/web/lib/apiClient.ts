@@ -3,6 +3,7 @@ import {
   zArgumentChildrenResponse,
   zBatchBalanceResponse,
   zCreateArgumentResponse,
+  zConsensusReportLatestResponse,
   zErrorResponse,
   zLedgerMe,
   zListTopicsResponse,
@@ -233,6 +234,14 @@ export function createApiClient(deps?: { signer?: Signer }) {
         `/v1/arguments/${encodedArgumentId}/children?${params.toString()}`,
         { method: "GET" },
         zArgumentChildrenResponse,
+      );
+    },
+    getLatestConsensusReport(topicId: string) {
+      const encodedTopicId = encodeURIComponent(topicId);
+      return requestJson(
+        `/v1/topics/${encodedTopicId}/consensus-report/latest`,
+        { method: "GET" },
+        zConsensusReportLatestResponse,
       );
     },
     getLedgerMe(topicId: string) {

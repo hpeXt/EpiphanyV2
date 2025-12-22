@@ -10,6 +10,7 @@ import { Queue } from 'bullmq';
 // Queue name per docs/ai-worker.md (using underscore instead of colon for BullMQ compatibility)
 const QUEUE_ARGUMENT_ANALYSIS = 'ai_argument-analysis';
 const QUEUE_TOPIC_CLUSTER = 'ai_topic-cluster';
+const QUEUE_CONSENSUS_REPORT = 'ai_consensus-report';
 const TOPIC_CLUSTER_DEBOUNCE_MS = 5 * 60 * 1000;
 
 /**
@@ -38,16 +39,19 @@ function getRedisConnection() {
 export class QueueService implements OnModuleDestroy {
   private readonly argumentAnalysisQueue: Queue;
   private readonly topicClusterQueue: Queue;
+  private readonly consensusReportQueue: Queue;
 
   constructor() {
     const connection = getRedisConnection();
     this.argumentAnalysisQueue = new Queue(QUEUE_ARGUMENT_ANALYSIS, { connection });
     this.topicClusterQueue = new Queue(QUEUE_TOPIC_CLUSTER, { connection });
+    this.consensusReportQueue = new Queue(QUEUE_CONSENSUS_REPORT, { connection });
   }
 
   async onModuleDestroy() {
     await this.argumentAnalysisQueue.close();
     await this.topicClusterQueue.close();
+    await this.consensusReportQueue.close();
   }
 
   /**
@@ -104,6 +108,32 @@ export class QueueService implements OnModuleDestroy {
       }
       throw err;
     }
+  }
+
+  /**
+   * Enqueue a consensus report generation job (Step 22).
+   *
+   * Job is idempotent via jobId="report_{reportId}".
+   */
+  async enqueueConsensusReport(params: {
+    topicId: string;
+    reportId: string;
+    trigger: 'auto' | 'host';
+  }): Promise<string> {
+    const job = await this.consensusReportQueue.add(
+      'report',
+      { topicId: params.topicId, reportId: params.reportId, trigger: params.trigger },
+      {
+        jobId: `report_${params.reportId}`,
+        removeOnComplete: 100,
+        removeOnFail: 100,
+      },
+    );
+
+    console.log(
+      `[queue] Enqueued consensus-report job=${job.id} topicId=${params.topicId} reportId=${params.reportId}`,
+    );
+    return job.id ?? params.reportId;
   }
 }
 
