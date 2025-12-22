@@ -43,11 +43,24 @@ model Topic {
   camps            Camp[]
   clusterData      ClusterData[]
   consensusReports ConsensusReport[]
+  pubkeyBlacklist  TopicPubkeyBlacklist[]
 
   rootArgument Argument? @relation("TopicRootArgument", fields: [id, rootArgumentId], references: [topicId, id])
 
   @@unique([id, rootArgumentId])
   @@map("topics")
+}
+
+model TopicPubkeyBlacklist {
+  topicId    String   @map("topic_id") @db.Uuid
+  pubkey     Bytes    @db.ByteA
+  reason     String?  @db.Text
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  topic Topic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@id([topicId, pubkey])
+  @@map("topic_pubkey_blacklist")
 }
 
 model Argument {

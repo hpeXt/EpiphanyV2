@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import { zSetVotesRequest } from '@epiphany/shared-contracts';
 import { RequireSignature, AllowNonceReplay } from '../common/auth.guard.js';
+import { RiskControl } from '../risk-control/risk-control.decorator.js';
 import { VotesService } from './votes.service.js';
 import type { Request } from 'express';
 
@@ -28,6 +29,7 @@ export class VotesController {
   @Post(':argumentId/votes')
   @RequireSignature()
   @AllowNonceReplay()
+  @RiskControl({ endpoint: 'setVotes', topicResolver: { kind: 'argumentIdParam', paramName: 'argumentId' } })
   @HttpCode(HttpStatus.OK)
   async setVotes(
     @Param('argumentId') argumentId: string,
@@ -57,4 +59,3 @@ export class VotesController {
     });
   }
 }
-

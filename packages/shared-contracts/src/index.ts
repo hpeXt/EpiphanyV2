@@ -105,6 +105,8 @@ export {
   zTopicCommandEditRoot,
   zTopicCommandPruneArgument,
   zTopicCommandUnpruneArgument,
+  zTopicCommandBlacklistPubkey,
+  zTopicCommandUnblacklistPubkey,
   zTopicCommandGenerateConsensusReport,
   zTopicCommandResponse,
   zConsensusReportLatestResponse,

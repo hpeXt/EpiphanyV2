@@ -130,6 +130,7 @@ v1|METHOD|PATH|TIMESTAMP|NONCE|BODY_HASH
 - `TIMESTAMP_OUT_OF_RANGE`
 - `NONCE_REPLAY`
 - `NOT_TOPIC_OWNER`
+- `TOPIC_PUBKEY_BLACKLISTED`
 - `TOPIC_NOT_FOUND`
 - `ARGUMENT_NOT_FOUND`
 - `TOPIC_STATUS_DISALLOWS_WRITE`
@@ -365,6 +366,8 @@ type TopicCommand =
   | { type: "EDIT_ROOT"; payload: { title: string; body: string } }
   | { type: "PRUNE_ARGUMENT"; payload: { argumentId: string; reason: string | null } }
   | { type: "UNPRUNE_ARGUMENT"; payload: { argumentId: string } }
+  | { type: "BLACKLIST_PUBKEY"; payload: { pubkey: string; reason?: string | null } }
+  | { type: "UNBLACKLIST_PUBKEY"; payload: { pubkey: string } }
   | { type: "GENERATE_CONSENSUS_REPORT"; payload: {} };
 ```
 
