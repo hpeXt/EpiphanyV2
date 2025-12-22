@@ -78,6 +78,8 @@ export class TopicService {
         | 'EDIT_ROOT'
         | 'PRUNE_ARGUMENT'
         | 'UNPRUNE_ARGUMENT'
+        | 'BLACKLIST_PUBKEY'
+        | 'UNBLACKLIST_PUBKEY'
         | 'GENERATE_CONSENSUS_REPORT';
       payload: unknown;
     };
@@ -112,6 +114,11 @@ export class TopicService {
     if (typeof value !== 'object') return null;
     if (Array.isArray(value)) return null;
     return value as Record<string, unknown>;
+  }
+
+  private isValidHex(str: string, expectedLength: number): boolean {
+    if (str.length !== expectedLength) return false;
+    return /^[0-9a-f]+$/i.test(str);
   }
 
   async getLatestConsensusReport(topicId: string): Promise<ConsensusReportLatestResponse> {
@@ -786,6 +793,139 @@ export class TopicService {
       });
     } catch {
       // ignore
+    }
+
+    const updatedTopic = await this.getTopicById(topicId);
+    if (!updatedTopic) {
+      throw new NotFoundException({
+        error: { code: 'TOPIC_NOT_FOUND', message: 'Topic not found' },
+      });
+    }
+    return updatedTopic;
+  }
+
+  /**
+   * BLACKLIST_PUBKEY host command (requires owner)
+   * Step 23 - Topic-local pubkey blacklist (no cross-topic linkage).
+   */
+  async blacklistPubkey(
+    topicId: string,
+    input: { pubkey: string; reason?: string | null },
+    ownerPubkeyHex: string,
+  ): Promise<TopicSummary> {
+    const topic = await this.prisma.topic.findUnique({
+      where: { id: topicId },
+      select: {
+        id: true,
+        status: true,
+        ownerPubkey: true,
+      },
+    });
+
+    if (!topic) {
+      throw new NotFoundException({
+        error: { code: 'TOPIC_NOT_FOUND', message: 'Topic not found' },
+      });
+    }
+
+    this.assertIsTopicOwner(topic, ownerPubkeyHex);
+    this.assertTopicStatusAllowsHostCommand({
+      currentStatus: topic.status,
+      command: { type: 'BLACKLIST_PUBKEY', payload: input },
+    });
+
+    const targetPubkeyHex = input.pubkey.toLowerCase();
+    if (!this.isValidHex(targetPubkeyHex, 64)) {
+      throw new BadRequestException({
+        error: { code: 'BAD_REQUEST', message: 'Invalid pubkey format' },
+      });
+    }
+
+    const ownerHex = topic.ownerPubkey ? Buffer.from(topic.ownerPubkey).toString('hex') : null;
+    if (ownerHex && ownerHex === targetPubkeyHex) {
+      throw new BadRequestException({
+        error: { code: 'BAD_REQUEST', message: 'Cannot blacklist topic owner' },
+      });
+    }
+
+    const pubkeyBytes = Buffer.from(targetPubkeyHex, 'hex');
+
+    try {
+      await this.prisma.topicPubkeyBlacklist.create({
+        data: {
+          topicId,
+          pubkey: pubkeyBytes,
+          reason: input.reason ?? null,
+        },
+      });
+    } catch (err) {
+      // Already blacklisted -> idempotent success
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        // ignore
+      } else {
+        throw err;
+      }
+    }
+
+    const updatedTopic = await this.getTopicById(topicId);
+    if (!updatedTopic) {
+      throw new NotFoundException({
+        error: { code: 'TOPIC_NOT_FOUND', message: 'Topic not found' },
+      });
+    }
+    return updatedTopic;
+  }
+
+  /**
+   * UNBLACKLIST_PUBKEY host command (requires owner)
+   * Step 23 - Topic-local pubkey blacklist removal.
+   */
+  async unblacklistPubkey(
+    topicId: string,
+    input: { pubkey: string },
+    ownerPubkeyHex: string,
+  ): Promise<TopicSummary> {
+    const topic = await this.prisma.topic.findUnique({
+      where: { id: topicId },
+      select: {
+        id: true,
+        status: true,
+        ownerPubkey: true,
+      },
+    });
+
+    if (!topic) {
+      throw new NotFoundException({
+        error: { code: 'TOPIC_NOT_FOUND', message: 'Topic not found' },
+      });
+    }
+
+    this.assertIsTopicOwner(topic, ownerPubkeyHex);
+    this.assertTopicStatusAllowsHostCommand({
+      currentStatus: topic.status,
+      command: { type: 'UNBLACKLIST_PUBKEY', payload: input },
+    });
+
+    const targetPubkeyHex = input.pubkey.toLowerCase();
+    if (!this.isValidHex(targetPubkeyHex, 64)) {
+      throw new BadRequestException({
+        error: { code: 'BAD_REQUEST', message: 'Invalid pubkey format' },
+      });
+    }
+
+    const pubkeyBytes = Buffer.from(targetPubkeyHex, 'hex');
+
+    try {
+      await this.prisma.topicPubkeyBlacklist.delete({
+        where: { topicId_pubkey: { topicId, pubkey: pubkeyBytes } },
+      });
+    } catch (err) {
+      // Not found -> idempotent success
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+        // ignore
+      } else {
+        throw err;
+      }
     }
 
     const updatedTopic = await this.getTopicById(topicId);

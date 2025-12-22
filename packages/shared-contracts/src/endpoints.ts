@@ -214,6 +214,21 @@ export const zTopicCommandUnpruneArgument = z.object({
   }),
 });
 
+export const zTopicCommandBlacklistPubkey = z.object({
+  type: z.literal('BLACKLIST_PUBKEY'),
+  payload: z.object({
+    pubkey: z.string(),
+    reason: z.string().nullable().optional(),
+  }),
+});
+
+export const zTopicCommandUnblacklistPubkey = z.object({
+  type: z.literal('UNBLACKLIST_PUBKEY'),
+  payload: z.object({
+    pubkey: z.string(),
+  }),
+});
+
 export const zTopicCommandGenerateConsensusReport = z.object({
   type: z.literal('GENERATE_CONSENSUS_REPORT'),
   payload: z.object({}),
@@ -225,6 +240,8 @@ export const zTopicCommand = z.discriminatedUnion('type', [
   zTopicCommandEditRoot,
   zTopicCommandPruneArgument,
   zTopicCommandUnpruneArgument,
+  zTopicCommandBlacklistPubkey,
+  zTopicCommandUnblacklistPubkey,
   zTopicCommandGenerateConsensusReport,
 ]);
 

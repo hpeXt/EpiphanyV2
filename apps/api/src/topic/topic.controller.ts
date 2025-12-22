@@ -16,6 +16,7 @@ import {
 } from '@nestjs/common';
 import { TopicService } from './topic.service.js';
 import { RequireSignature } from '../common/auth.guard.js';
+import { RiskControl } from '../risk-control/risk-control.decorator.js';
 import {
   zCreateTopicRequest,
   zTopicCommand,
@@ -87,6 +88,7 @@ export class TopicController {
    */
   @Post(':topicId/commands')
   @RequireSignature()
+  @RiskControl({ endpoint: 'topicCommands', topicResolver: { kind: 'param', paramName: 'topicId' } })
   @HttpCode(HttpStatus.OK)
   async executeCommand(
     @Param('topicId') topicId: string,
@@ -131,6 +133,12 @@ export class TopicController {
 
       case 'UNPRUNE_ARGUMENT':
         return { topic: await this.topicService.unpruneArgument(topicId, command.payload, pubkey) };
+
+      case 'BLACKLIST_PUBKEY':
+        return { topic: await this.topicService.blacklistPubkey(topicId, command.payload, pubkey) };
+
+      case 'UNBLACKLIST_PUBKEY':
+        return { topic: await this.topicService.unblacklistPubkey(topicId, command.payload, pubkey) };
 
       case 'GENERATE_CONSENSUS_REPORT':
         return { topic: await this.topicService.generateConsensusReport(topicId, pubkey) };

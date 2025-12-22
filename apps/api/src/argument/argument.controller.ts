@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { zCreateArgumentRequest } from '@epiphany/shared-contracts';
 import { RequireSignature } from '../common/auth.guard.js';
+import { RiskControl } from '../risk-control/risk-control.decorator.js';
 import { ArgumentService } from './argument.service.js';
 
 @Controller('v1/topics')
@@ -25,6 +26,7 @@ export class ArgumentController {
    */
   @Post(':topicId/arguments')
   @RequireSignature()
+  @RiskControl({ endpoint: 'createArgument', topicResolver: { kind: 'param', paramName: 'topicId' } })
   @HttpCode(HttpStatus.OK)
   async createArgument(
     @Param('topicId') topicId: string,
@@ -60,4 +62,3 @@ export class ArgumentController {
     });
   }
 }
-
