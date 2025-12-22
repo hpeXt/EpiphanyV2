@@ -6,6 +6,7 @@ import type { LedgerMe } from "@epiphany/shared-contracts";
 
 import { IdentityOnboarding } from "@/components/identity/IdentityOnboarding";
 import { FocusView } from "@/components/topics/FocusView";
+import { GodView } from "@/components/topics/GodView";
 import { DialogueStream } from "@/components/topics/DialogueStream";
 import { useTopicTree } from "@/components/topics/hooks/useTopicTree";
 import { useTopicSse } from "@/components/topics/hooks/useTopicSse";
@@ -43,6 +44,7 @@ export function TopicPage({ topicId }: Props) {
   const [selectedArgumentId, setSelectedArgumentId] = useState<string | null>(
     null,
   );
+  const [viewMode, setViewMode] = useState<"focus" | "god">("focus");
   const [ledger, setLedger] = useState<LedgerMe | null>(null);
   const [ledgerError, setLedgerError] = useState("");
 
@@ -152,15 +154,42 @@ export function TopicPage({ topicId }: Props) {
       <header className="space-y-1">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-xl font-semibold">{tree.topic.title}</h1>
-          {isOwner ? (
-            <button
-              type="button"
-              onClick={() => setIsManageOpen((prev) => !prev)}
-              className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100"
-            >
-              Manage
-            </button>
-          ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-md border border-zinc-200 bg-white p-0.5 text-sm">
+              <button
+                type="button"
+                onClick={() => setViewMode("focus")}
+                aria-pressed={viewMode === "focus"}
+                className={[
+                  "rounded-md px-2.5 py-1 font-medium",
+                  viewMode === "focus" ? "bg-zinc-900 text-white" : "text-zinc-900 hover:bg-zinc-100",
+                ].join(" ")}
+              >
+                Focus
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("god")}
+                aria-pressed={viewMode === "god"}
+                className={[
+                  "rounded-md px-2.5 py-1 font-medium",
+                  viewMode === "god" ? "bg-zinc-900 text-white" : "text-zinc-900 hover:bg-zinc-100",
+                ].join(" ")}
+              >
+                God View
+              </button>
+            </div>
+
+            {isOwner ? (
+              <button
+                type="button"
+                onClick={() => setIsManageOpen((prev) => !prev)}
+                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100"
+              >
+                Manage
+              </button>
+            ) : null}
+          </div>
         </div>
         <p className="text-sm text-zinc-600">
           TopicId: <code className="font-mono">{tree.topic.id}</code>
@@ -194,12 +223,16 @@ export function TopicPage({ topicId }: Props) {
       ) : null}
 
       <div className="grid gap-8 lg:grid-cols-[1fr_1.25fr]">
-        <FocusView
-          rootId={tree.topic.rootArgumentId}
-          nodes={tree.nodes}
-          selectedId={selectedArgumentId}
-          onSelect={setSelectedArgumentId}
-        />
+        {viewMode === "god" ? (
+          <GodView topicId={topicId} refreshToken={refreshToken} />
+        ) : (
+          <FocusView
+            rootId={tree.topic.rootArgumentId}
+            nodes={tree.nodes}
+            selectedId={selectedArgumentId}
+            onSelect={setSelectedArgumentId}
+          />
+        )}
         <DialogueStream
           topicId={topicId}
           parentArgumentId={selectedArgumentId}
