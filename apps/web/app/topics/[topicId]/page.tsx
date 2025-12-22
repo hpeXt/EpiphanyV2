@@ -2,11 +2,15 @@ import Link from "next/link";
 
 import { TopicPage } from "@/components/topics/TopicPage";
 
-export default function TopicDetailPage({
+type Params = { topicId: string };
+
+export default async function TopicDetailPage({
   params,
 }: {
-  params: { topicId: string };
+  params: Params | Promise<Params>;
 }) {
+  const { topicId } = await params;
+
   return (
     <div className="mx-auto max-w-5xl space-y-6 px-6 py-10">
       <header className="flex items-center justify-between">
@@ -14,7 +18,7 @@ export default function TopicDetailPage({
           Back to list
         </Link>
       </header>
-      <TopicPage topicId={params.topicId} />
+      <TopicPage topicId={topicId} />
     </div>
   );
 }
