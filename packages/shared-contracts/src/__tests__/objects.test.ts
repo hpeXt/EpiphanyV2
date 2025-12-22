@@ -1,7 +1,7 @@
 /**
  * @file objects.test.ts
  * @description Tests for core DTO schemas: TopicSummary, Argument, LedgerMe, StakeMeItem
- * @see docs/api-contract.md#2.3-2.6
+ * @see docs/stage01/api-contract.md#2.3-2.6
  */
 import {
   zTopicSummary,
@@ -100,6 +100,38 @@ describe('Argument', () => {
 
     const result = zArgument.safeParse(fixture);
     expect(result.success).toBe(true);
+  });
+
+  it('should preserve bodyRich (TipTap/ProseMirror JSON) when provided', () => {
+    const fixture = {
+      id: '0193e3a6-0b7d-7a8d-9f2c-1234567890ab',
+      topicId: '0193e3a6-0b7d-7a8d-9f2c-abcdef123456',
+      parentId: null,
+      title: 'Root argument title',
+      body: 'Hello world',
+      bodyRich: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: 'Hello world' }],
+          },
+        ],
+      },
+      authorId: 'abcd1234abcd1234',
+      analysisStatus: 'pending_analysis',
+      stanceScore: null,
+      totalVotes: 0,
+      totalCost: 0,
+      prunedAt: null,
+      createdAt: '2025-12-19T12:34:56.789Z',
+      updatedAt: '2025-12-19T12:34:56.789Z',
+    };
+
+    const result = zArgument.safeParse(fixture);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect((result.data as any).bodyRich).toEqual(fixture.bodyRich);
   });
 
   it('should require authorId to be 16 hex chars lowercase', () => {

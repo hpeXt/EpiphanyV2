@@ -2,7 +2,7 @@
  * @file consensus-report.test.ts
  * @description TDD tests for consensus report worker (Step 22)
  *
- * Test cases per docs/steps/step22.md:
+ * Test cases per docs/stage01/steps/step22.md:
  * - Job idempotency: same reportId rerun short-circuits (no duplicate generation)
  * - Failure semantics: status=failed and error written to metadata
  * - Success semantics: status=ready and contentMd present

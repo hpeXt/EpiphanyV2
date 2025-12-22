@@ -2,18 +2,18 @@
 
 本文档目标：提供一份**相对稳定**的“模块/变量/功能命名与边界”说明，让前端在做 UX/UI 视觉重构时，知道**哪些能随意改**、哪些属于**稳定契约（不能随便动）**。
 
-> 约定：若本文与更底层的契约冲突，以 `docs/api-contract.md` 与 `packages/shared-contracts` 为准。
+> 约定：若本文与更底层的契约冲突，以 `docs/stage01/api-contract.md` 与 `packages/shared-contracts` 为准。
 
 ---
 
 ## 1) Single Source of Truth（不要绕开）
 
-- **API 契约（HTTP + SSE）**：`docs/api-contract.md`
-- **数据模型语义与不变量**：`docs/database.md`
-- **签名/派生算法（Ed25519 v1）**：`docs/crypto.md`（实现：`packages/crypto`）
-- **系统架构与决策清单**：`docs/architecture.md`
-- **视觉规范（Persona5 tokens/语法）**：`docs/design.md`
-- **Roadmap 与 Step 过程文档**：`docs/roadmap.md`、`docs/steps/*`
+- **API 契约（HTTP + SSE）**：`docs/stage01/api-contract.md`
+- **数据模型语义与不变量**：`docs/stage01/database.md`
+- **签名/派生算法（Ed25519 v1）**：`docs/stage01/crypto.md`（实现：`packages/crypto`）
+- **系统架构与决策清单**：`docs/stage01/architecture.md`
+- **视觉规范（Persona5 tokens/语法）**：`docs/stage01/design.md`
+- **Roadmap 与 Step 过程文档**：`docs/stage01/roadmap.md`、`docs/stage01/steps/*`
 
 ---
 
@@ -51,7 +51,7 @@
 
 ## 4) 环境变量（“变量名 → 目的 → 影响范围”）
 
-> 注意：`NEXT_PUBLIC_*` 属于 **构建期注入**（Next.js）；部署时改值不生效通常需要重新 build（见 `docs/deploy-coolify.md`）。
+> 注意：`NEXT_PUBLIC_*` 属于 **构建期注入**（Next.js）；部署时改值不生效通常需要重新 build（见 `docs/stage01/deploy-coolify.md`）。
 
 ### 必需/常用
 
@@ -135,7 +135,7 @@
 UI 设计建议：
 
 - 不要在“请求发送前”对 body 做额外格式化（例如 pretty-print JSON）导致 body hash 不一致
-- 不要改掉签名逻辑所在文件：`apps/web/lib/signing.ts`（除非同时更新 `docs/crypto.md` 并回归所有签名相关测试）
+- 不要改掉签名逻辑所在文件：`apps/web/lib/signing.ts`（除非同时更新 `docs/stage01/crypto.md` 并回归所有签名相关测试）
 
 ### 6.4 SSE（只做 invalidation，不做数据下发）
 
@@ -149,7 +149,7 @@ UI 设计建议：
 
 ## 7) API 端点与代码对应（方便改 UI 时定位）
 
-> 完整字段/响应以 `docs/api-contract.md` 与 `@epiphany/shared-contracts` 为准；这里只给“定位地图”。
+> 完整字段/响应以 `docs/stage01/api-contract.md` 与 `@epiphany/shared-contracts` 为准；这里只给“定位地图”。
 
 ### Public read（不签名）
 
@@ -203,6 +203,7 @@ UI 设计建议：
 
 - Master seed：`tm:master-seed:v1`（`apps/web/lib/signing.ts`）
 - Visited topics：`tm:visited-topics:v1`（`apps/web/lib/visitedTopicsStore.ts`）
+- Topic claim tokens：`tm:claim-tokens:v1`（`apps/web/lib/claimTokenStore.ts`；用于创建 topic 后 5 分钟内 `CLAIM_OWNER`）
 
 > 若需要变更 storage 结构：请当作“破坏性变更”，必须提供迁移/兼容逻辑并更新本文档。
 
@@ -254,8 +255,7 @@ UI 设计建议：
 
 ## 10) 给“纯视觉改造”的落地建议（不破坏功能）
 
-1. 先只做“皮肤层”：基于 `docs/design.md` 的 tokens 在 `apps/web/app/globals.css`/组件 class 上落地（不动请求与状态机）
+1. 先只做“皮肤层”：基于 `docs/stage01/design.md` 的 tokens 在 `apps/web/app/globals.css`/组件 class 上落地（不动请求与状态机）
 2. 抽 UI primitives：Button/Card/Panel/Tag/Modal/Toast（集中处理描边/投影/字体/动效）
 3. 保留交互语义：不要为了改样式删掉 disabled/aria-* / error alert
 4. 每次改动后跑 Web 测试：`pnpm -C apps/web test`
-

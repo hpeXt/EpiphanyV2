@@ -55,6 +55,42 @@ function createFetchMock(fixtures: {
       });
     }
 
+    if (url.pathname === "/v1/arguments/arg-1") {
+      return jsonResponse({
+        ok: true,
+        status: 200,
+        json: {
+          argument: {
+            id: "arg-1",
+            topicId: "topic-1",
+            parentId: "arg-root",
+            title: null,
+            body: "Hello world",
+            bodyRich: {
+              type: "doc",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [
+                    { type: "text", text: "Hello " },
+                    { type: "text", text: "world", marks: [{ type: "bold" }] },
+                  ],
+                },
+              ],
+            },
+            authorId: "0123456789abcdef",
+            analysisStatus: "pending_analysis",
+            stanceScore: null,
+            totalVotes: 0,
+            totalCost: 0,
+            prunedAt: null,
+            createdAt: "2025-12-19T12:34:56.789Z",
+            updatedAt: "2025-12-19T12:34:56.789Z",
+          },
+        },
+      });
+    }
+
     throw new Error(`Unhandled request: ${url.toString()}`);
   });
 }
@@ -163,12 +199,19 @@ describe("GodView (Step 20)", () => {
 
     fireEvent.pointerMove(canvas, { clientX: 400, clientY: 300 });
 
+    await waitFor(() => {
+      const paths = fetchMock.mock.calls.map((call) => new URL(call[0] as string).pathname);
+      expect(paths).toContain("/v1/arguments/arg-1");
+    });
+
     const card = await screen.findByTestId("godview-calling-card");
     expect(card).toBeInTheDocument();
     expect(screen.getByTestId("godview-calling-card-title")).toHaveTextContent("arg-1");
     expect(screen.getByTestId("godview-calling-card-meta-cluster")).toHaveTextContent("c-1");
     expect(screen.getByTestId("godview-calling-card-meta-stance")).toHaveTextContent(/con|反对/i);
     expect(screen.getByTestId("godview-calling-card-meta-votes")).toHaveTextContent("5");
+
+    expect(screen.getByText("Hello")).toBeInTheDocument();
+    expect(screen.getByText("world").tagName.toLowerCase()).toBe("strong");
   });
 });
-

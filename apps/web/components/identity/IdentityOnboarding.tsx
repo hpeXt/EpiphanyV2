@@ -4,6 +4,11 @@ import { useMemo, useState } from "react";
 
 import { generateMnemonic, mnemonicToMasterSeedHex, validateMnemonic } from "@/lib/identity";
 import { createLocalStorageKeyStore } from "@/lib/signing";
+import { P5Alert } from "@/components/ui/P5Alert";
+import { P5Button } from "@/components/ui/P5Button";
+import { P5Panel } from "@/components/ui/P5Panel";
+import { P5Tabs } from "@/components/ui/P5Tabs";
+import { P5Textarea } from "@/components/ui/P5Textarea";
 
 function normalizeMnemonicInput(input: string): string {
   return input.trim().split(/\s+/).join(" ");
@@ -29,103 +34,85 @@ export function IdentityOnboarding(props: { onComplete: () => void }) {
   }
 
   return (
-    <section className="space-y-3 rounded-md border border-zinc-200 bg-white p-4">
-      <header className="space-y-1">
-        <h2 className="text-sm font-semibold text-zinc-900">Set up your identity</h2>
-        <p className="text-xs text-zinc-600">
-          This device stores your master seed locally. Back up the mnemonic before continuing.
-        </p>
-      </header>
-
-      <div className="inline-flex rounded-md border border-zinc-200 bg-white p-0.5 text-sm">
-        <button
-          type="button"
-          onClick={() => {
-            setMode("generate");
-            setError("");
-          }}
-          aria-pressed={mode === "generate"}
-          className={[
-            "rounded-md px-2 py-1",
-            mode === "generate" ? "bg-zinc-900 text-white" : "text-zinc-700 hover:bg-zinc-100",
-          ].join(" ")}
-        >
-          Generate
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setMode("import");
-            setError("");
-          }}
-          aria-pressed={mode === "import"}
-          className={[
-            "rounded-md px-2 py-1",
-            mode === "import" ? "bg-zinc-900 text-white" : "text-zinc-700 hover:bg-zinc-100",
-          ].join(" ")}
-        >
-          Import
-        </button>
-      </div>
+    <P5Panel
+      header={
+        <div className="bg-[color:var(--ink)] px-4 py-3 text-[color:var(--paper)]">
+          <h2 className="font-mono text-sm font-semibold uppercase tracking-wide">
+            Set up your identity
+          </h2>
+          <p className="mt-1 text-xs text-white/80">
+            This device stores your master seed locally. Back up the mnemonic before continuing.
+          </p>
+        </div>
+      }
+      bodyClassName="space-y-3"
+    >
+      <P5Tabs
+        ariaLabel="Identity mode"
+        value={mode}
+        onValueChange={(next) => {
+          setMode(next);
+          setError("");
+        }}
+        tabs={[
+          { value: "generate", label: "Generate" },
+          { value: "import", label: "Import" },
+        ]}
+      />
 
       {mode === "generate" ? (
         <div className="space-y-2">
-          <button
+          <P5Button
             type="button"
             onClick={() => {
               setGeneratedMnemonic(generateMnemonic(12));
               setError("");
             }}
-            className="rounded-md bg-black px-3 py-2 text-sm font-medium text-white"
+            variant="primary"
           >
             Generate 12-word mnemonic
-          </button>
+          </P5Button>
 
           {generatedMnemonic ? (
             <div className="space-y-2">
-              <textarea
+              <P5Textarea
                 aria-label="Generated mnemonic"
                 readOnly
                 value={generatedMnemonic}
                 rows={3}
-                className="w-full rounded-md border border-zinc-300 bg-zinc-50 px-3 py-2 font-mono text-xs"
+                className="bg-[color:var(--concrete-200)] font-mono text-xs"
               />
-              <button
+              <P5Button
                 type="button"
                 onClick={() => saveMnemonic(generatedMnemonic)}
-                className="rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-100"
+                variant="ghost"
               >
                 I have backed it up
-              </button>
+              </P5Button>
             </div>
           ) : null}
         </div>
       ) : (
         <div className="space-y-2">
-          <textarea
+          <P5Textarea
             aria-label="Mnemonic"
             value={importMnemonic}
             onChange={(event) => setImportMnemonic(event.target.value)}
             rows={3}
-            className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-xs"
+            className="font-mono text-xs"
             placeholder="Paste your 12/24-word mnemonic"
           />
-          <button
-            type="button"
-            onClick={() => saveMnemonic(importMnemonic)}
-            className="rounded-md bg-black px-3 py-2 text-sm font-medium text-white"
-          >
+          <P5Button type="button" onClick={() => saveMnemonic(importMnemonic)} variant="primary">
             Import mnemonic
-          </button>
+          </P5Button>
         </div>
       )}
 
       {error ? (
-        <p role="alert" className="text-sm text-red-700">
+        <P5Alert role="alert" variant="error" title="error">
           {error}
-        </p>
+        </P5Alert>
       ) : null}
-    </section>
+    </P5Panel>
   );
 }
-

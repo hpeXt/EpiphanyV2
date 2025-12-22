@@ -2,7 +2,7 @@
  * @file cluster-map.e2e-spec.ts
  * @description Step 19 - GET /v1/topics/:topicId/cluster-map e2e tests
  *
- * Assertions per docs/steps/step19.md:
+ * Assertions per docs/stage01/steps/step19.md:
  * - x/y normalized to [-1,1] (and pruned points do not affect normalization)
  * - clusterId: DB NULL => "-1"
  * - weight = log(totalVotes + 1)

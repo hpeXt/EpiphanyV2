@@ -4,8 +4,8 @@
  * MyActivity - My Activity page component
  * Step 17: Pure client-side aggregation for visited topics
  *
- * @see docs/steps/step17.md
- * @see docs/core-flows.md#5
+ * @see docs/stage01/steps/step17.md
+ * @see docs/stage01/core-flows.md#5
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -23,6 +23,10 @@ import {
   type WithdrawProgress,
   type WithdrawResult,
 } from "@/lib/withdrawAll";
+import { P5Alert } from "@/components/ui/P5Alert";
+import { P5Badge } from "@/components/ui/P5Badge";
+import { P5Button } from "@/components/ui/P5Button";
+import { P5Panel } from "@/components/ui/P5Panel";
 
 type TopicBalance = {
   topicId: string;
@@ -254,9 +258,9 @@ export function MyActivity() {
 
   if (!hasIdentity) {
     return (
-      <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+      <P5Alert role="alert" variant="warn" title="identity">
         Please set up your identity first to view your activity.
-      </div>
+      </P5Alert>
     );
   }
 
@@ -264,9 +268,9 @@ export function MyActivity() {
 
   if (visitedTopicIds.length === 0) {
     return (
-      <div className="rounded-md border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
+      <P5Alert role="status" variant="info" title="my activity">
         No topics visited yet. Visit some topics to see your activity here.
-      </div>
+      </P5Alert>
     );
   }
 
@@ -274,19 +278,39 @@ export function MyActivity() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">My Activity</h1>
+      <h1 className="font-mono text-xl font-semibold uppercase tracking-wide text-[color:var(--ink)]">
+        My Activity
+      </h1>
 
       {/* Topic List */}
-      <div className="space-y-2">
-        <h2 className="text-sm font-medium text-zinc-700">Visited Topics</h2>
-        <div className="divide-y divide-zinc-200 rounded-md border border-zinc-200">
+      <P5Panel
+        header={
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-[color:var(--ink)] px-4 py-3 text-[color:var(--paper)]">
+            <h2 className="font-mono text-sm font-semibold uppercase tracking-wide">
+              Visited Topics
+            </h2>
+            <div className="text-xs text-white/80">Local-only aggregation</div>
+          </div>
+        }
+        bodyClassName="space-y-2"
+      >
+        <div
+          className="divide-y-[3px] divide-[color:var(--ink)] border-[var(--p5-border-width)] border-[color:var(--ink)] bg-[color:var(--paper)] shadow-[var(--p5-shadow-ink)]"
+          style={{
+            clipPath:
+              "polygon(0 0, calc(100% - var(--p5-cut)) 0, 100% var(--p5-cut), 100% 100%, 0 100%)",
+          }}
+        >
           {topicBalances.map((tb) => (
-            <div
+            <button
               key={tb.topicId}
               data-topic-row
-              className={`cursor-pointer p-3 transition-colors hover:bg-zinc-50 ${
-                selectedTopicId === tb.topicId ? "bg-zinc-100" : ""
-              }`}
+              type="button"
+              className={[
+                "w-full p-3 text-left transition-colors",
+                "hover:bg-[color:var(--concrete-200)]",
+                selectedTopicId === tb.topicId ? "bg-[color:var(--ink)] text-[color:var(--paper)]" : "",
+              ].join(" ")}
               onClick={() => {
                 const nextSelectedTopicId =
                   selectedTopicId === tb.topicId ? null : tb.topicId;
@@ -297,13 +321,13 @@ export function MyActivity() {
               <div className="flex items-center justify-between">
                 <span className="font-mono text-sm">{tb.topicId}</span>
                 {tb.status === "loading" ? (
-                  <span className="text-xs text-zinc-500">Loading...</span>
+                  <span className="text-xs opacity-80">Loading...</span>
                 ) : tb.status === "ok" ? (
                   <span className="text-sm">
                     Balance: <span className="font-mono">{tb.balance}</span>
                   </span>
                 ) : (
-                  <span className="text-xs text-red-600">
+                  <span className="text-xs text-[color:var(--rebel-red)]">
                     {tb.errorCode === "TOPIC_NOT_FOUND"
                       ? "Topic not found"
                       : tb.errorCode === "INVALID_SIGNATURE"
@@ -312,72 +336,79 @@ export function MyActivity() {
                   </span>
                 )}
               </div>
-            </div>
+            </button>
           ))}
         </div>
-      </div>
+      </P5Panel>
 
       {/* Selected Topic Stakes */}
       {selectedTopicId && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-medium text-zinc-700">
-              Stakes in {selectedTopicId.slice(0, 8)}...
-            </h2>
-            {stakesWithVotes.length > 0 && withdrawState.status !== "withdrawing" && (
-              <button
-                type="button"
-                onClick={handleWithdrawAll}
-                className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800"
-              >
-                Withdraw All
-              </button>
-            )}
-          </div>
+        <P5Panel
+          header={
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-[color:var(--ink)] px-4 py-3 text-[color:var(--paper)]">
+              <h2 className="font-mono text-sm font-semibold uppercase tracking-wide">
+                Stakes in {selectedTopicId.slice(0, 8)}...
+              </h2>
+              {stakesWithVotes.length > 0 && withdrawState.status !== "withdrawing" ? (
+                <P5Button type="button" onClick={handleWithdrawAll} variant="primary" size="sm">
+                  Withdraw All
+                </P5Button>
+              ) : null}
+            </div>
+          }
+          bodyClassName="space-y-4"
+        >
 
           {/* Withdraw Progress */}
           {withdrawState.status === "withdrawing" && withdrawState.progress && (
-            <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+            <P5Alert role="status" variant="info" title="withdrawing">
               Withdrawing... {withdrawState.progress.completed} /{" "}
               {withdrawState.progress.total}
-            </div>
+            </P5Alert>
           )}
 
           {/* Withdraw Result */}
           {withdrawState.status === "done" && withdrawState.result && (
             <div className="space-y-2">
               {withdrawState.result.successful.length > 0 && (
-                <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-900">
+                <P5Alert role="status" variant="info" title="success">
                   Successfully withdrawn {withdrawState.result.successful.length}{" "}
                   stake(s)
-                </div>
+                </P5Alert>
               )}
               {withdrawState.result.failed.length > 0 && (
-                <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+                <P5Alert role="alert" variant="error" title="failed">
                   <p className="mb-2">
                     Failed to withdraw {withdrawState.result.failed.length} stake(s)
                   </p>
-                  <button
+                  <P5Button
                     type="button"
                     onClick={handleRetryFailed}
-                    className="rounded-md bg-red-700 px-3 py-1 text-sm font-medium text-white hover:bg-red-600"
+                    variant="danger"
+                    size="sm"
                   >
                     Retry Failed
-                  </button>
-                </div>
+                  </P5Button>
+                </P5Alert>
               )}
             </div>
           )}
 
           {/* Stakes List */}
           {stakes.status === "loading" ? (
-            <p className="text-sm text-zinc-500">Loading stakes...</p>
+            <p className="text-sm text-[color:var(--ink)]/80">Loading stakes...</p>
           ) : stakes.status === "error" ? (
-            <p className="text-sm text-red-600">{stakes.errorMessage}</p>
+            <p className="text-sm text-[color:var(--rebel-red)]">{stakes.errorMessage}</p>
           ) : stakes.items.length === 0 ? (
-            <p className="text-sm text-zinc-500">No stakes in this topic</p>
+            <p className="text-sm text-[color:var(--ink)]/80">No stakes in this topic</p>
           ) : (
-            <div className="divide-y divide-zinc-200 rounded-md border border-zinc-200">
+            <div
+              className="divide-y-[3px] divide-[color:var(--ink)] border-[var(--p5-border-width)] border-[color:var(--ink)] bg-[color:var(--paper)] shadow-[var(--p5-shadow-ink)]"
+              style={{
+                clipPath:
+                  "polygon(0 0, calc(100% - var(--p5-cut)) 0, 100% var(--p5-cut), 100% 100%, 0 100%)",
+              }}
+            >
               {stakes.items.map((stake) => (
                 <div key={stake.argumentId} className="p-3">
                   <div className="flex items-start justify-between gap-3">
@@ -386,21 +417,19 @@ export function MyActivity() {
                         {stake.argumentTitle ?? stake.argumentExcerpt ?? "Untitled"}
                       </p>
                       {stake.argumentExcerpt && stake.argumentTitle && (
-                        <p className="mt-0.5 truncate text-xs text-zinc-500">
+                        <p className="mt-0.5 truncate text-xs text-[color:var(--ink)]/70">
                           {stake.argumentExcerpt}
                         </p>
                       )}
                     </div>
                     <div className="flex items-center gap-2 text-sm">
                       {stake.argumentPrunedAt && (
-                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800">
-                          Pruned
-                        </span>
+                        <P5Badge variant="acid">Pruned</P5Badge>
                       )}
                       <span>
                         Votes: <span className="font-mono">{stake.votes}</span>
                       </span>
-                      <span className="text-zinc-400">
+                      <span className="text-[color:var(--ink)]/70">
                         Cost: <span className="font-mono">{stake.cost}</span>
                       </span>
                     </div>
@@ -409,7 +438,7 @@ export function MyActivity() {
               ))}
             </div>
           )}
-        </div>
+        </P5Panel>
       )}
     </div>
   );

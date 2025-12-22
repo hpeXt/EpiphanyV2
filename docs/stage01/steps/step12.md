@@ -8,7 +8,7 @@
 - 续传：支持 `Last-Event-ID`
 - 过旧：发送 `reload_required`
 
-来源：`docs/api-contract.md` 3.12、`docs/roadmap.md` 0.2（SSE 只推 invalidation）。
+来源：`docs/stage01/api-contract.md` 3.12、`docs/stage01/roadmap.md` 0.2（SSE 只推 invalidation）。
 
 ## 依赖
 
@@ -25,7 +25,7 @@
 
 ## 1) Red：先写测试
 
-对照全量规划：`docs/test-plan.md`（SSE 专项测试清单 + Suite A/C/D/E/F/G 的事件部分）。
+对照全量规划：`docs/stage01/test-plan.md`（SSE 专项测试清单 + Suite A/C/D/E/F/G 的事件部分）。
 
 建议把 SSE “读取 Redis Stream → 生成 SSE chunk” 抽成纯函数/service，优先做可测单元测试，再补少量集成测试。
 
@@ -55,7 +55,7 @@
 
 ## 4) 验收
 
-> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+> 前置：先按 `docs/stage01/coolify-target.md` export 环境变量（通用手册：`docs/stage01/coolify-acceptance.md`）。
 
 ### 服务器验收（推荐）
 

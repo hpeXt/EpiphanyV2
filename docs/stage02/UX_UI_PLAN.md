@@ -1,6 +1,6 @@
 # EpiphanyV2 — 强 Persona5 风格 UX/UI 规划（Web）
 
-目标：把现有 `apps/web` 的“功能已通、视觉偏中性”升级为 **强 Persona5（P5）** 的统一体验；同时严格遵守 `docs/api-contract.md` / `packages/shared-contracts` / `PROJECT_REFERENCE.md` 的稳定边界，避免 UI 重构破坏签名、幂等、SSE 与资金不变量。
+目标：把现有 `apps/web` 的“功能已通、视觉偏中性”升级为 **强 Persona5（P5）** 的统一体验；同时严格遵守 `docs/stage01/api-contract.md` / `packages/shared-contracts` / `PROJECT_REFERENCE.md` 的稳定边界，避免 UI 重构破坏签名、幂等、SSE 与资金不变量。
 
 适用范围：仅 Web（`apps/web`）。API/Worker 行为以契约为准，不在本规划里改动。
 
@@ -8,7 +8,7 @@
 
 ## 0) 设计北极星（Persona5 强风格）
 
-来源：`docs/design.md`（必须遵守）
+来源：`docs/stage01/design.md`（必须遵守）
 
 **核心语法（必须一直成立）**
 
@@ -285,4 +285,3 @@
 
 - `pnpm -C apps/web test`
 - 手动回归：创建 topic → 进入 → 发言 → 投票/撤回 → SSE 刷新 → My withdraw all
-

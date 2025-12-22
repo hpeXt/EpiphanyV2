@@ -8,7 +8,7 @@
 - 可选：Hashcash/PoW（L1）
 - Topic 内黑名单（L4，Host 管理）
 
-来源：`docs/roadmap.md` v1.2、`docs/architecture.md` 6.1。
+来源：`docs/stage01/roadmap.md` v1.2、`docs/stage01/architecture.md` 6.1。
 
 ## 依赖
 
@@ -41,7 +41,7 @@
 
 ## 4) 验收
 
-> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+> 前置：先按 `docs/stage01/coolify-target.md` export 环境变量（通用手册：`docs/stage01/coolify-acceptance.md`）。
 
 ### 服务器验收（推荐）
 

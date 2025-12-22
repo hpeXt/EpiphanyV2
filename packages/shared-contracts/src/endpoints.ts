@@ -1,11 +1,12 @@
 /**
  * @file endpoints.ts
  * @description API endpoint request/response schemas
- * @see docs/api-contract.md#3.x
+ * @see docs/stage01/api-contract.md#3.x
  */
 import { z } from 'zod';
 import {
   zTopicSummary,
+  zTiptapDoc,
   zArgument,
   zLedgerMe,
   zStakeMeItem,
@@ -70,6 +71,16 @@ export const zArgumentChildrenResponse = z.object({
 export type ArgumentChildrenResponse = z.infer<typeof zArgumentChildrenResponse>;
 
 // ============================================================================
+// GET /v1/arguments/:argumentId - Argument Detail
+// ============================================================================
+
+export const zArgumentResponse = z.object({
+  argument: zArgument,
+});
+
+export type ArgumentResponse = z.infer<typeof zArgumentResponse>;
+
+// ============================================================================
 // POST /v1/topics/:topicId/arguments - Create Argument
 // ============================================================================
 
@@ -77,6 +88,7 @@ export const zCreateArgumentRequest = z.object({
   parentId: z.string(),
   title: z.string().nullable().optional(),
   body: z.string(),
+  bodyRich: zTiptapDoc.nullable().optional(),
   initialVotes: z.number().int().min(0).optional(),
 });
 

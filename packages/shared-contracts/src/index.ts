@@ -29,6 +29,7 @@ export {
   type Stance,
   // Objects
   zTopicSummary,
+  zTiptapDoc,
   zArgument,
   zLedgerMe,
   zStakeMeItem,
@@ -37,6 +38,7 @@ export {
   zClusterMap,
   zConsensusReport,
   type TopicSummary,
+  type TiptapDoc,
   type Argument,
   type LedgerMe,
   type StakeMeItem,
@@ -76,6 +78,9 @@ export {
   // GET /v1/arguments/:argumentId/children
   zArgumentChildrenResponse,
   type ArgumentChildrenResponse,
+  // GET /v1/arguments/:argumentId
+  zArgumentResponse,
+  type ArgumentResponse,
   // POST /v1/topics/:topicId/arguments
   zCreateArgumentRequest,
   zCreateArgumentResponse,

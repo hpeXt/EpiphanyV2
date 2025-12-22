@@ -1,13 +1,13 @@
 /**
  * @file queue.module.ts
  * @description BullMQ queue module for enqueueing AI jobs (Step 18)
- * @see docs/ai-worker.md#3
+ * @see docs/stage01/ai-worker.md#3
  */
 
 import { Global, Module, OnModuleDestroy, Injectable } from '@nestjs/common';
 import { Queue } from 'bullmq';
 
-// Queue name per docs/ai-worker.md (using underscore instead of colon for BullMQ compatibility)
+// Queue name per docs/stage01/ai-worker.md (using underscore instead of colon for BullMQ compatibility)
 const QUEUE_ARGUMENT_ANALYSIS = 'ai_argument-analysis';
 const QUEUE_TOPIC_CLUSTER = 'ai_topic-cluster';
 const QUEUE_CONSENSUS_REPORT = 'ai_consensus-report';

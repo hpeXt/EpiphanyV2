@@ -4,9 +4,17 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import { apiClient } from "@/lib/apiClient";
+import { createLocalStorageClaimTokenStore } from "@/lib/claimTokenStore";
+import { P5Alert } from "@/components/ui/P5Alert";
+import { P5Button } from "@/components/ui/P5Button";
+import { P5Input } from "@/components/ui/P5Input";
+import { P5Textarea } from "@/components/ui/P5Textarea";
+import { useP5Toast } from "@/components/ui/P5ToastProvider";
 
 export function CreateTopicForm() {
   const router = useRouter();
+  const claimStore = useState(() => createLocalStorageClaimTokenStore())[0];
+  const { toast } = useP5Toast();
 
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -41,64 +49,74 @@ export function CreateTopicForm() {
       return;
     }
 
+    try {
+      claimStore.set(result.data.topicId, {
+        claimToken: result.data.claimToken,
+        expiresAt: result.data.expiresAt,
+      });
+    } catch {
+      // ignore localStorage errors
+    }
+
+    toast({
+      variant: "success",
+      title: "created",
+      message: "Topic created. Claim token saved locally for 5 minutes.",
+    });
+
     router.push(`/topics/${result.data.topicId}`);
   }
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <div className="space-y-1">
-        <label htmlFor="title" className="text-sm font-medium">
+        <label htmlFor="title" className="font-mono text-xs font-semibold uppercase tracking-wide">
           Title
         </label>
-        <input
+        <P5Input
           id="title"
           name="title"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
         />
         {errors.title ? (
-          <p role="alert" className="text-sm text-red-700">
+          <p role="alert" className="text-sm text-[color:var(--rebel-red)]">
             {errors.title}
           </p>
         ) : null}
       </div>
 
       <div className="space-y-1">
-        <label htmlFor="body" className="text-sm font-medium">
+        <label htmlFor="body" className="font-mono text-xs font-semibold uppercase tracking-wide">
           Body
         </label>
-        <textarea
+        <P5Textarea
           id="body"
           name="body"
           value={body}
           onChange={(e) => setBody(e.target.value)}
           rows={6}
-          className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
         />
         {errors.body ? (
-          <p role="alert" className="text-sm text-red-700">
+          <p role="alert" className="text-sm text-[color:var(--rebel-red)]">
             {errors.body}
           </p>
         ) : null}
       </div>
 
       {submitError ? (
-        <div
-          role="alert"
-          className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800"
-        >
+        <P5Alert variant="error" title="Error">
           {submitError}
-        </div>
+        </P5Alert>
       ) : null}
 
-      <button
+      <P5Button
         type="submit"
         disabled={isSubmitting}
-        className="inline-flex items-center justify-center rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+        variant="primary"
       >
         {isSubmitting ? "Creating…" : "Create"}
-      </button>
+      </P5Button>
     </form>
   );
 }

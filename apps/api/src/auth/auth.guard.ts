@@ -1,7 +1,7 @@
 /**
  * @file auth.guard.ts
  * @description AuthGuard for Ed25519 signature verification
- * @see docs/api-contract.md#1
+ * @see docs/stage01/api-contract.md#1
  */
 import {
   Injectable,

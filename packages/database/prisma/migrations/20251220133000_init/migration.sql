@@ -175,7 +175,7 @@ CREATE INDEX "arguments_analysis_status_idx" ON "arguments"("analysis_status");
 CREATE INDEX "arguments_topic_parent_idx" ON "arguments"("topic_id", "parent_id");
 CREATE INDEX "arguments_topic_pruned_at_idx" ON "arguments"("topic_id", "pruned_at");
 
--- Read-path indexes (docs/database.md §5)
+-- Read-path indexes (docs/stage01/database.md §5)
 CREATE INDEX "arguments_children_hot_idx" ON "arguments"("topic_id", "parent_id", "total_votes" DESC);
 CREATE INDEX "arguments_children_new_idx" ON "arguments"("topic_id", "parent_id", "created_at" DESC, "id" DESC);
 

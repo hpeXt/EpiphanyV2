@@ -479,5 +479,59 @@ describe('Argument API (e2e)', () => {
       expect(stake.cost).toBe(9);
     });
   });
-});
 
+  describe('GET /v1/arguments/:argumentId (public read)', () => {
+    it('should return bodyRich when present', async () => {
+      const { topicId, rootArgumentId } = await createTopic();
+
+      const createPath = `/v1/topics/${topicId}/arguments`;
+      const bodyRich = {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'Hello ' },
+              { type: 'text', text: 'world', marks: [{ type: 'bold' }] },
+            ],
+          },
+        ],
+      };
+
+      const createBody = {
+        parentId: rootArgumentId,
+        title: null,
+        body: 'Hello world',
+        bodyRich,
+        initialVotes: 0,
+      };
+
+      const headers = makeSignedHeaders({
+        method: 'POST',
+        path: createPath,
+        body: createBody,
+        privateKey,
+        pubkeyHex,
+      });
+
+      const created = await request(app.getHttpServer())
+        .post(createPath)
+        .set(headers)
+        .send(createBody)
+        .expect(200);
+
+      const parsedCreate = zCreateArgumentResponse.safeParse(created.body);
+      expect(parsedCreate.success).toBe(true);
+      if (!parsedCreate.success) return;
+
+      const argumentId = parsedCreate.data.argument.id;
+
+      const res = await request(app.getHttpServer())
+        .get(`/v1/arguments/${argumentId}`)
+        .expect(200);
+
+      expect(res.body.argument.id).toBe(argumentId);
+      expect(res.body.argument.bodyRich).toEqual(bodyRich);
+    });
+  });
+});

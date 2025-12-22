@@ -32,11 +32,11 @@
 - `apps/worker`：BullMQ 任务、AI provider、聚类/报告、写回与事件、重试与幂等。
 - `apps/web`：签名客户端、身份/存储、XSS/CSRF、SSE 订阅与刷新策略。
 - `packages/*`：契约（`shared-contracts`）、业务逻辑（`core-logic`）、签名派生（`crypto`）、DB 客户端与迁移（`database`）。
-- 部署与运行：`Dockerfile`、`docker-compose.yml`、`docs/deploy-coolify.md`、脚本 `scripts/*`。
+- 部署与运行：`Dockerfile`、`docker-compose.yml`、`docs/stage01/deploy-coolify.md`、脚本 `scripts/*`。
 
 ### 1.2 关键安全目标（本项目的“必须一直成立”）
 
-审计应以 `docs/roadmap.md` 的 0.x 硬约束为依据（包括但不限于）：
+审计应以 `docs/stage01/roadmap.md` 的 0.x 硬约束为依据（包括但不限于）：
 
 - 签名 v1：canonical message 规则、时间窗、nonce 去重、防重放。
 - 幂等：`setVotes` 强幂等（重放返回一致成功响应）、写路径不可被风控误伤导致破坏幂等语义。
@@ -67,7 +67,7 @@
   - `pnpm -C apps/web test`
 - 构建命令：`pnpm build`（turbo）。
 
-### 2.3 Staging 环境信息（建议集中在 `docs/coolify-target.md`）
+### 2.3 Staging 环境信息（建议集中在 `docs/stage01/coolify-target.md`）
 
 - Web/API/Worker 对外地址（只要 URL，不要 token）。
 - 若提供 Coolify 访问：建议只读（或受限）账号 + 审计期间临时 token；到期自动撤销。
@@ -98,7 +98,7 @@ pnpm -C apps/web test
 
 ### 3.2 Staging 冒烟（黑盒）
 
-以 `docs/coolify-target.md` 给出的 `API_BASE_URL/WEB_BASE_URL/WORKER_BASE_URL` 为准：
+以 `docs/stage01/coolify-target.md` 给出的 `API_BASE_URL/WEB_BASE_URL/WORKER_BASE_URL` 为准：
 
 ```bash
 curl -fsS "$API_BASE_URL/health"
@@ -206,11 +206,10 @@ curl -sS -D - -o /dev/null --max-time 2 -H 'Accept: text/event-stream' "$API_BAS
 
 ## 6. 附录：项目内参考文档
 
-- 架构与硬约束：`docs/architecture.md`、`docs/roadmap.md`
-- API 契约：`docs/api-contract.md`
-- DB 语义：`docs/database.md`
-- 签名规则：`docs/crypto.md`
-- Worker：`docs/ai-worker.md`
-- Coolify 目标环境：`docs/coolify-target.md`
-- Coolify 验收手册：`docs/coolify-acceptance.md`
-
+- 架构与硬约束：`docs/stage01/architecture.md`、`docs/stage01/roadmap.md`
+- API 契约：`docs/stage01/api-contract.md`
+- DB 语义：`docs/stage01/database.md`
+- 签名规则：`docs/stage01/crypto.md`
+- Worker：`docs/stage01/ai-worker.md`
+- Coolify 目标环境：`docs/stage01/coolify-target.md`
+- Coolify 验收手册：`docs/stage01/coolify-acceptance.md`

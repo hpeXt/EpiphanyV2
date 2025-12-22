@@ -8,7 +8,7 @@
 - 投票/撤回：`POST /v1/arguments/:argumentId/votes`
 - SSE：订阅 `/v1/sse/:topicId`，收到 invalidation 后做 query invalidate（去抖 3s）
 
-来源：`docs/roadmap.md` M3、`docs/core-flows.md#2/#3/#4`。
+来源：`docs/stage01/roadmap.md` M3、`docs/stage01/core-flows.md#2/#3/#4`。
 
 ## 依赖
 
@@ -17,7 +17,7 @@
 ## 范围（本 step 做/不做）
 
 - 做：
-  - 发言输入（可先用简单 textarea；TipTap 可后置）
+  - 发言输入：TipTap 富文本（写入 `body_rich`）+ 纯文本回退（写入 `body`）
   - 投票 slider（step=1，0..10）+ QV cost 提示 + 余额展示
   - SSE 订阅与去抖刷新
   - 最小签名：为当前 topic 生成/缓存一个 Ed25519 keypair，并对写请求/私密读按 v1 规则签名（不要求助记词恢复）
@@ -26,7 +26,7 @@
 
 ## 1) Red：先写测试
 
-对照全量规划：`docs/test-plan.md`（Suite W — Web 端到端验收：W3，及 Suite D/E/SSE 相关项）。
+对照全量规划：`docs/stage01/test-plan.md`（Suite W — Web 端到端验收：W3，及 Suite D/E/SSE 相关项）。
 
 - [ ] 发言：
   - 提交成功后，UI 将新节点插入（或触发刷新）
@@ -47,7 +47,7 @@
 ## 2) Green：最小实现（让测试通过）
 
 - `apps/web`：
-  - 发言：调用 createArgument，成功后更新本地 cache（或简单 re-fetch）
+  - 发言：调用 createArgument，提交 `{ body, bodyRich }`；成功后更新本地 cache（或简单 re-fetch）
   - 投票：调用 setVotes，使用响应中的 ledger 更新 UI
   - SSE：EventSource + Last-Event-ID（浏览器自动）+ debounce invalidate
   - 最小签名：topic 维度的临时 keypair（例如 `localStorage` 存 seed32），统一由 API client 注入签名 headers（createTopic 除外）
@@ -60,7 +60,7 @@
 
 ## 4) 验收
 
-> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+> 前置：先按 `docs/stage01/coolify-target.md` export 环境变量（通用手册：`docs/stage01/coolify-acceptance.md`）。
 
 ### 服务器验收（推荐）
 
@@ -75,7 +75,7 @@ coolify app logs "$WEB_APP_UUID" -n 200
 
 - [ ] 两窗口打开同一 topic（使用 `$WEB_BASE_URL`）
 - [ ] 在一个窗口发言/投票
-- [ ] 另一个窗口通过 SSE 秒级同步更新（对照 `docs/test-plan.md` Suite W3）
+- [ ] 另一个窗口通过 SSE 秒级同步更新（对照 `docs/stage01/test-plan.md` Suite W3）
 
 验收点：
 

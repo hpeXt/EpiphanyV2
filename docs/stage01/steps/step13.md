@@ -8,7 +8,7 @@
 - 创建 Topic（`POST /v1/topics`，创建阶段不签名）
 - 跳转到 Topic 详情页（路由打通）
 
-来源：`docs/roadmap.md` M3、`docs/api-contract.md` 3.3/3.1。
+来源：`docs/stage01/roadmap.md` M3、`docs/stage01/api-contract.md` 3.3/3.1。
 
 ## 依赖
 
@@ -25,7 +25,7 @@
 
 ## 1) Red：先写测试
 
-对照全量规划：`docs/test-plan.md`（Suite W — Web 端到端验收：W1）。
+对照全量规划：`docs/stage01/test-plan.md`（Suite W — Web 端到端验收：W1）。
 
 由于当前 `apps/web` 未配置测试框架，先以 “能测试组件/数据流” 为目标建立最小测试基建：
 
@@ -52,7 +52,7 @@
 
 ## 4) 验收
 
-> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+> 前置：先按 `docs/stage01/coolify-target.md` export 环境变量（通用手册：`docs/stage01/coolify-acceptance.md`）。
 
 ### 服务器验收（推荐）
 

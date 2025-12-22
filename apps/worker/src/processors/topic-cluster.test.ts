@@ -2,7 +2,7 @@
  * @file topic-cluster.test.ts
  * @description TDD tests for topic clustering worker (Step 19)
  *
- * Test cases per docs/steps/step19.md:
+ * Test cases per docs/stage01/steps/step19.md:
  * - Threshold stats: filters pruned + only ready & embedding!=NULL
  * - Threshold formula: new_arguments>=5 OR total_votes_change_ratio>=20%
  * - Debounce: same topic enqueue within 5min is deduped via jobId

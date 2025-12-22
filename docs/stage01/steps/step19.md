@@ -9,7 +9,7 @@
 - 落库：覆盖写 `camps/cluster_data` + 更新 `topics.last_cluster_*`
 - API：`GET /v1/topics/:topicId/cluster-map`（公共读，坐标归一化 [-1,1]）
 
-来源：`docs/ai-worker.md#5`、`docs/core-flows.md#6`、`docs/api-contract.md` 3.11。
+来源：`docs/stage01/ai-worker.md#5`、`docs/stage01/core-flows.md#6`、`docs/stage01/api-contract.md` 3.11。
 
 ## 依赖
 
@@ -26,7 +26,7 @@
 
 ## 1) Red：先写测试
 
-对照全量规划：`docs/test-plan.md`（Suite G — Flow 6：聚类 + cluster-map + SSE）。
+对照全量规划：`docs/stage01/test-plan.md`（Suite G — Flow 6：聚类 + cluster-map + SSE）。
 
 - [ ] 阈值逻辑单测：
   - 过滤 pruned，且只统计 `analysis_status=ready & embedding != NULL`
@@ -60,7 +60,7 @@
 
 ## 4) 验收
 
-> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+> 前置：先按 `docs/stage01/coolify-target.md` export 环境变量（通用手册：`docs/stage01/coolify-acceptance.md`）。
 
 ### 服务器验收（推荐）
 

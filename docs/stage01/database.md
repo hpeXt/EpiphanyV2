@@ -1,8 +1,8 @@
 # 数据库设计文档（PostgreSQL + pgvector，v1.0）
 
-本文档基于 `docs/prd.md`（v3.1）与 `docs/architecture.md`（v1.0 决策清单）整理，目标是为 MVP 提供**可实现且可演进**的数据库模型与一致性约束。
+本文档基于 `docs/stage01/prd.md`（v3.1）与 `docs/stage01/architecture.md`（v1.0 决策清单）整理，目标是为 MVP 提供**可实现且可演进**的数据库模型与一致性约束。
 
-API 接口与契约以 `docs/api-contract.md` 为准。
+API 接口与契约以 `docs/stage01/api-contract.md` 为准。
 
 ## 0. 设计原则（与匿名性边界）
 
@@ -62,7 +62,8 @@ API 接口与契约以 `docs/api-contract.md` 为准。
 | `topic_id` | `uuid` | FK → `topics.id`；index | 所属 Topic |
 | `parent_id` | `uuid` | nullable；index | 父节点；Root 为 NULL |
 | `title` | `text` | nullable | Root 必填；非 Root 可空 |
-| `body` | `text` |  | 原文 |
+| `body` | `text` |  | 原文（纯文本；用于列表/搜索/AI 分析等） |
+| `body_rich` | `jsonb` | nullable | 原文（富文本，TipTap/ProseMirror JSON；用于 UI 排版渲染） |
 | `author_pubkey` | `bytea` | index | Topic 内派生身份 |
 | `analysis_status` | `argument_analysis_status` | index | `pending_analysis / ready / failed` |
 | `stance_score` | `double precision` | check `[-1,1]` | 相对 parent 的立场分（ready 才可信） |

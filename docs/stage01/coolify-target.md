@@ -2,7 +2,7 @@
 
 > 本文件固化“本仓库默认围绕哪台 Coolify 服务器做验收”。不包含 token/密码等敏感信息。
 >
-> 操作手册见：`docs/coolify-acceptance.md`。
+> 操作手册见：`docs/stage01/coolify-acceptance.md`。
 
 ## Context
 

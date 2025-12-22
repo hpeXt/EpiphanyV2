@@ -4,8 +4,8 @@
 
 对齐文档：
 
-- `docs/architecture.md`（鉴权、SSE、读写路径与决策清单）
-- `docs/database.md`（字段语义与一致性约束）
+- `docs/stage01/architecture.md`（鉴权、SSE、读写路径与决策清单）
+- `docs/stage01/database.md`（字段语义与一致性约束）
 
 ---
 
@@ -33,7 +33,7 @@
 
 > 目标：后端不建立跨 Topic 的用户关联；身份以 `(topicId, pubkey)` 为最小粒度出现。
 >
-> 密钥派生与签名算法的完整规范见 `docs/crypto.md`；本文档主要冻结 HTTP 层 headers 与 canonical message 格式。
+> 密钥派生与签名算法的完整规范见 `docs/stage01/crypto.md`；本文档主要冻结 HTTP 层 headers 与 canonical message 格式。
 
 ### 1.1 需要签名的请求
 
@@ -167,12 +167,20 @@ type TopicSummary = {
 ### 2.4 Argument
 
 ```ts
+type TiptapDoc = {
+  type: "doc";
+  // TipTap/ProseMirror JSON，允许扩展字段；v1.0 只要求能被客户端渲染为排版文本
+  content?: unknown[];
+  [key: string]: unknown;
+};
+
 type Argument = {
   id: string; // argumentId
   topicId: string;
   parentId: string | null; // Root 为 null
   title: string | null;
   body: string;
+  bodyRich?: TiptapDoc | null; // 可选：用于富文本渲染；为空/缺省则回退 body
   authorId: string; // hex（Topic 内派生身份公钥的稳定短 hash；见下）
 
   analysisStatus: "pending_analysis" | "ready" | "failed";
@@ -246,7 +254,7 @@ type ClusterMap = {
 };
 ```
 
-Stance 映射（v1.0，与 `docs/architecture.md` 一致）：
+Stance 映射（v1.0，与 `docs/stage01/architecture.md` 一致）：
 
 - `stanceScore <= -0.3` → `stance=-1`
 - `-0.3 < stanceScore < 0.3` → `stance=0`
@@ -351,7 +359,7 @@ type SseEnvelope =
 - `type=CLAIM_OWNER` 额外需要 `X-Claim-Token`
 - 除 `CLAIM_OWNER` 外，其余命令要求 `X-Pubkey === topics.ownerPubkey`
 
-Topic 状态限制（v1.0，见 `docs/architecture.md` 决策清单）：
+Topic 状态限制（v1.0，见 `docs/stage01/architecture.md` 决策清单）：
 
 - `active`：允许所有 Host 命令
 - `frozen`：仅允许 `SET_STATUS(active)` 解冻
@@ -492,6 +500,30 @@ type TopicCommand =
 
 ---
 
+### 3.5.1 `GET /v1/arguments/:argumentId`（Argument 详情，公共读）
+
+用途：
+
+- God View / Focus View hover 卡片按需拉取完整观点（含富文本 `bodyRich`）
+
+响应（200）：
+
+```json
+{
+  "argument": { /* Argument */ }
+}
+```
+
+约定：
+
+- v1.0 公共读默认 **不返回** pruned 节点（与 tree/children 一致）；若节点已 pruned 返回 `404 ARGUMENT_NOT_FOUND`
+
+错误：
+
+- `404 ARGUMENT_NOT_FOUND`
+
+---
+
 ### 3.6 `POST /v1/topics/:topicId/arguments`（发言：创建 Argument，需签名）
 
 请求体：
@@ -501,6 +533,7 @@ type TopicCommand =
   "parentId": "uuidv7",
   "title": null,
   "body": "string",
+  "bodyRich": { "type": "doc", "content": [] },
   "initialVotes": 0
 }
 ```
@@ -508,6 +541,7 @@ type TopicCommand =
 约定：
 
 - `parentId` 必填（Root 已由 `POST /v1/topics` 创建）
+- `bodyRich` 可选：TipTap/ProseMirror JSON；用于 UI 排版渲染
 - `initialVotes` 可选；不传等价于 `0`
 - 若携带 `initialVotes`：同一事务内完成扣费与 stake 写入；余额不足则整笔失败、不落库 Argument
 - Topic 状态：

@@ -30,12 +30,42 @@ export class ArgumentService {
     private readonly queueService: QueueService,
   ) {}
 
+  async getArgument(argumentId: string) {
+    const argument = await this.prisma.argument.findFirst({
+      where: { id: argumentId, prunedAt: null },
+      select: {
+        id: true,
+        topicId: true,
+        parentId: true,
+        title: true,
+        body: true,
+        bodyRich: true,
+        authorPubkey: true,
+        analysisStatus: true,
+        stanceScore: true,
+        totalVotes: true,
+        totalCost: true,
+        prunedAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!argument) {
+      throw new NotFoundException({
+        error: { code: 'ARGUMENT_NOT_FOUND', message: 'Argument not found' },
+      });
+    }
+
+    return { argument: this.toArgumentDto(argument) };
+  }
+
   async createArgument(params: CreateArgumentParams) {
     const { topicId, dto, pubkeyHex } = params;
     const pubkeyBytes = Buffer.from(pubkeyHex, 'hex');
     const argumentId = uuidv7();
 
-    const { parentId, title, body } = dto;
+    const { parentId, title, body, bodyRich } = dto;
     const initialVotes = dto.initialVotes ?? 0;
 
     const topic = await this.prisma.topic.findUnique({
@@ -90,6 +120,7 @@ export class ArgumentService {
           parentId,
           title: title ?? null,
           body,
+          bodyRich: (bodyRich ?? null) as any,
           authorPubkey: pubkeyBytes,
           analysisStatus: 'pending_analysis',
           stanceScore: null,
@@ -188,6 +219,7 @@ export class ArgumentService {
     parentId: string | null;
     title: string | null;
     body: string;
+    bodyRich: unknown | null;
     authorPubkey: Uint8Array;
     analysisStatus: string;
     stanceScore: number | null;
@@ -208,6 +240,7 @@ export class ArgumentService {
       parentId: arg.parentId,
       title: arg.title,
       body: arg.body,
+      bodyRich: arg.bodyRich ?? null,
       authorId,
       analysisStatus: arg.analysisStatus as 'pending_analysis' | 'ready' | 'failed',
       stanceScore: arg.stanceScore,

@@ -9,7 +9,7 @@
 
 并落实 pruning 口径：公共读默认不返回 pruned。
 
-来源：`docs/api-contract.md` 3.4/3.5，规则见 `docs/roadmap.md` 0.2/0.2 pruning。
+来源：`docs/stage01/api-contract.md` 3.4/3.5，规则见 `docs/stage01/roadmap.md` 0.2/0.2 pruning。
 
 ## 依赖
 
@@ -26,7 +26,7 @@
 
 ## 1) Red：先写测试
 
-对照全量规划：`docs/test-plan.md`（Suite C — Flow 2：公共读（tree/children）+ pruning 过滤）。
+对照全量规划：`docs/stage01/test-plan.md`（Suite C — Flow 2：公共读（tree/children）+ pruning 过滤）。
 
 ### API e2e（准备种子数据）
 
@@ -51,16 +51,16 @@
 
 - `apps/api`：
   - 查询实现（Repo 层）：`getTopicTree(topicId, depth)`、`getChildren(argumentId, orderBy, beforeId, limit)`
-  - 分页字段与 `docs/api-contract.md` 对齐：请求 `beforeId`，响应 `nextBeforeId`
+  - 分页字段与 `docs/stage01/api-contract.md` 对齐：请求 `beforeId`，响应 `nextBeforeId`
 
 ## 3) Refactor：模块化与收敛
 
 - [ ] 把 “过滤 pruned” 做成统一 query helper（避免漏掉）
-- [ ] 给 children 查询加复合索引（参考 `docs/database.md#5`）
+- [ ] 给 children 查询加复合索引（参考 `docs/stage01/database.md#5`）
 
 ## 4) 验收
 
-> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+> 前置：先按 `docs/stage01/coolify-target.md` export 环境变量（通用手册：`docs/stage01/coolify-acceptance.md`）。
 
 ### 服务器验收（推荐）
 

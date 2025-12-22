@@ -1,7 +1,7 @@
 /**
  * @file errors.test.ts
  * @description Tests for ErrorResponse schema
- * @see docs/api-contract.md#2.2
+ * @see docs/stage01/api-contract.md#2.2
  */
 import {
   zErrorResponse,

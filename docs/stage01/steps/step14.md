@@ -8,7 +8,7 @@
 - 点击节点：右侧 Dialogue Stream 拉 `GET /v1/arguments/:argumentId/children`
 - 支持“最新/最热”切换与分页（`beforeId/nextBeforeId`）
 
-来源：`docs/roadmap.md` M3、`docs/core-flows.md#2`、`docs/api-contract.md` 3.4/3.5。
+来源：`docs/stage01/roadmap.md` M3、`docs/stage01/core-flows.md#2`、`docs/stage01/api-contract.md` 3.4/3.5。
 
 ## 依赖
 
@@ -26,7 +26,7 @@
 
 ## 1) Red：先写测试
 
-对照全量规划：`docs/test-plan.md`（Suite W — Web 端到端验收：W2）。
+对照全量规划：`docs/stage01/test-plan.md`（Suite W — Web 端到端验收：W2）。
 
 - [ ] `TopicPage`：
   - 初次渲染会请求 tree
@@ -53,7 +53,7 @@
 
 ## 4) 验收
 
-> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+> 前置：先按 `docs/stage01/coolify-target.md` export 环境变量（通用手册：`docs/stage01/coolify-acceptance.md`）。
 
 ### 服务器验收（推荐）
 

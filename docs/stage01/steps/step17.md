@@ -9,7 +9,7 @@
 - 单 Topic 质押：`GET /v1/topics/:topicId/stakes/me`（含 pruned）
 - 一键撤回：对每个 stake 调用 `setVotes(0)`
 
-来源：`docs/prd.md#2.5`、`docs/core-flows.md#5`、`docs/api-contract.md` 3.9/3.10/3.7。
+来源：`docs/stage01/prd.md#2.5`、`docs/stage01/core-flows.md#5`、`docs/stage01/api-contract.md` 3.9/3.10/3.7。
 
 ## 依赖
 
@@ -26,7 +26,7 @@
 
 ## 1) Red：先写测试
 
-对照全量规划：`docs/test-plan.md`（Suite W — Web 端到端验收：W5，及 Suite F）。
+对照全量规划：`docs/stage01/test-plan.md`（Suite W — Web 端到端验收：W5，及 Suite F）。
 
 - [ ] 本地 topic 记录：
   - 进入 topic 页面会把 topicId 追加到本地集合（去重）
@@ -56,7 +56,7 @@
 
 ## 4) 验收
 
-> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+> 前置：先按 `docs/stage01/coolify-target.md` export 环境变量（通用手册：`docs/stage01/coolify-acceptance.md`）。
 
 ### 服务器验收（推荐）
 

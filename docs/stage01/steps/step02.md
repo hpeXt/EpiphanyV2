@@ -2,7 +2,7 @@
 
 ## 目标
 
-将 `docs/api-contract.md` 固化成可复用的 Zod schemas / DTO，使 API 与 Web 能在编译期和测试期对齐契约，减少“口径漂移”。
+将 `docs/stage01/api-contract.md` 固化成可复用的 Zod schemas / DTO，使 API 与 Web 能在编译期和测试期对齐契约，减少“口径漂移”。
 
 ## 依赖
 
@@ -18,9 +18,9 @@
 
 ## 1) Red：先写测试
 
-建议写“契约样例解析测试”（输入为 `docs/api-contract.md` 中的示例 JSON 或你补齐的 fixture）。
+建议写“契约样例解析测试”（输入为 `docs/stage01/api-contract.md` 中的示例 JSON 或你补齐的 fixture）。
 
-- [ ] `ErrorResponse`：能 parse；`error.code` 只能取允许值（见 `docs/api-contract.md#2.2`）
+- [ ] `ErrorResponse`：能 parse；`error.code` 只能取允许值（见 `docs/stage01/api-contract.md#2.2`）
 - [ ] `TopicSummary`：能 parse；字段命名/类型与契约一致（camelCase / ISO string）
 - [ ] `Argument`：能 parse；包含 `authorId`（16 hex chars，小写）且 `analysisStatus/stanceScore` 语义正确
 - [ ] `LedgerMe` / `StakeMeItem`：能 parse；数值字段为整数语义（测试用例用整数字面量）
@@ -31,7 +31,7 @@
 
 ### 端点样例（推荐覆盖，防止漂移）
 
-把 `docs/api-contract.md#3.x` 的示例响应落成 fixture，并在测试里逐个 parse：
+把 `docs/stage01/api-contract.md#3.x` 的示例响应落成 fixture，并在测试里逐个 parse：
 
 - [ ] `POST /v1/topics` 响应（含 `claimToken/expiresAt`）
 - [ ] `GET /v1/topics` 响应（含 `nextBeforeId`）
@@ -62,7 +62,7 @@
 
 ## 4) 验收
 
-> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+> 前置：先按 `docs/stage01/coolify-target.md` export 环境变量（通用手册：`docs/stage01/coolify-acceptance.md`）。
 
 ### 服务器验收（推荐）
 

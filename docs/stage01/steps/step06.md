@@ -6,7 +6,7 @@
 
 - 捕获 raw body（用于 `BODY_HASH`）
 - 验签 + timestamp window + nonce 去重（Redis TTL 60s）
-- 统一错误响应结构（对齐 `docs/api-contract.md#2.2`）
+- 统一错误响应结构（对齐 `docs/stage01/api-contract.md#2.2`）
 
 ## 依赖
 
@@ -64,7 +64,7 @@
 
 ## 4) 验收
 
-> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+> 前置：先按 `docs/stage01/coolify-target.md` export 环境变量（通用手册：`docs/stage01/coolify-acceptance.md`）。
 
 ### 服务器验收（推荐）
 

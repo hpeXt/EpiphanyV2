@@ -8,7 +8,7 @@
   --font-geist-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
 
-  /* Persona5-aligned design tokens (docs/design.md) */
+  /* Persona5-aligned design tokens (docs/stage01/design.md) */
   --ink: #1a1a1d;
   --paper: #ffffff;
   --concrete-300: #c9c9c9;
@@ -20,8 +20,10 @@
   --electric: #2563eb;
 
   --p5-border-width: 4px;
+  --p5-cut: 12px;
   --p5-shadow-ink: 4px 4px 0 var(--ink);
   --p5-shadow-rebel: 4px 4px 0 var(--rebel-red), 8px 8px 0 var(--ink);
+  --p5-noise-opacity: 0.09;
 
   --p5-motion-tooltip-snap-duration: 120ms;
   --p5-motion-tooltip-snap-ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -44,7 +46,7 @@
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--concrete-300);
+  color: var(--ink);
+  font-family: var(--font-geist-sans);
 }

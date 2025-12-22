@@ -4,8 +4,8 @@
  * Withdraw All - Batch withdrawal with concurrency control
  * Step 17: One-click withdrawal for all stakes in a topic
  *
- * @see docs/steps/step17.md
- * @see docs/core-flows.md#5
+ * @see docs/stage01/steps/step17.md
+ * @see docs/stage01/core-flows.md#5
  */
 
 import { apiClient } from "@/lib/apiClient";

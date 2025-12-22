@@ -1,7 +1,7 @@
 /**
  * @file sse.test.ts
  * @description Tests for SSE SseEnvelope schema (discriminated union)
- * @see docs/api-contract.md#2.8
+ * @see docs/stage01/api-contract.md#2.8
  */
 import { zSseEnvelope, type SseEnvelope } from '../index.js';
 

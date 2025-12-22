@@ -1,7 +1,7 @@
 /**
  * @file mock-ai-provider.ts
  * @description Mock AI provider for testing and development
- * @see docs/ai-worker.md#4
+ * @see docs/stage01/ai-worker.md#4
  *
  * Uses AI_PROVIDER=mock to avoid network dependencies during development.
  */

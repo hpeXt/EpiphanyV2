@@ -76,6 +76,15 @@
 - **正文（Long-form）**：中文优先 LXGW WenKai（PRD 已提及），避免过度紧缩；长段落避免全大写与过度倾斜。
 - **数据 / 计数器 / 公式（Mono）**：等宽字（如 Courier New）；配合下划线、终端式前缀（例如 `票数_`、`权重_`）增强 Persona5 的“系统 UI”感。
 
+### 5.1 富文本（TipTap / ProseMirror）
+
+用于“观点正文 / hover Calling Card / 详情卡片”的排版文本：
+
+- 存储：服务端持久化 `arguments.body_rich`（JSONB）；同时保留 `arguments.body` 作为纯文本回退与索引口径。
+- 渲染：UI 以 `bodyRich` 为准渲染；若为空则显示 `body`。
+- 安全：禁止直接存/渲染任意 HTML；仅允许通过 TipTap schema 的 nodes/marks 表达格式（链接需做 `href` 白名单与 `rel=noopener`）。
+- 建议允许的最小格式集（v1.0）：段落、粗体、斜体、下划线、列表、引用、链接、标题（h1–h3）；暂不支持图片与任意嵌入。
+
 ---
 
 ## 6. 形状与组件语言

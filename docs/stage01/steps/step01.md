@@ -5,7 +5,7 @@
 把后续迭代需要的“地基”先跑通：本地可一键启动 Postgres（含 pgvector）/Redis，`apps/api`/`apps/web` 能跑起来并读到环境变量；服务器验收环境（Coolify）具备同等最低依赖。
 
 > 重要：本仓库后续所有 step 的“验收/回归/冒烟”默认都围绕 **同一台 Coolify 服务器**进行，本地只作为可选的快速反馈。
-> 默认验收机的 context/uuid/URL 见：`docs/coolify-target.md`（不含任何敏感信息）。
+> 默认验收机的 context/uuid/URL 见：`docs/stage01/coolify-target.md`（不含任何敏感信息）。
 
 ## 依赖
 
@@ -28,7 +28,7 @@
 
 ### 0.1 使用本仓库默认验收机（推荐）
 
-把 `docs/coolify-target.md` 的 export 段复制到你的终端，然后执行：
+把 `docs/stage01/coolify-target.md` 的 export 段复制到你的终端，然后执行：
 
 ```bash
 coolify context verify --context "$COOLIFY_CONTEXT"
@@ -193,7 +193,7 @@ coolify app env create <web_app_uuid> --key NEXT_PUBLIC_API_URL --value "<api_pu
 
 ## 1) Red：先写测试
 
-对照全量规划：`docs/test-plan.md`（Suite A — 基础健康检查）。
+对照全量规划：`docs/stage01/test-plan.md`（Suite A — 基础健康检查）。
 
 ### API（e2e / smoke）
 
@@ -203,9 +203,9 @@ coolify app env create <web_app_uuid> --key NEXT_PUBLIC_API_URL --value "<api_pu
 
 ### 服务器验收（Smoke，黑盒）
 
-通过 Coolify CLI 围绕同一台验收机执行（运行手册：`docs/coolify-acceptance.md`）。
+通过 Coolify CLI 围绕同一台验收机执行（运行手册：`docs/stage01/coolify-acceptance.md`）。
 
-前置：先按 `docs/coolify-target.md` export 环境变量（`COOLIFY_CONTEXT/API_BASE_URL/...`）。
+前置：先按 `docs/stage01/coolify-target.md` export 环境变量（`COOLIFY_CONTEXT/API_BASE_URL/...`）。
 
 - [ ] `coolify context verify --context "$COOLIFY_CONTEXT"`
 - [ ] Postgres/Redis 资源处于可用状态（`coolify database get "$POSTGRES_UUID"` / `coolify database get "$REDIS_UUID"`）

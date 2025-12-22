@@ -7,7 +7,7 @@
 - 旭日图等宏观树结构总览
 - 更丰富的材质/动效库与组件体系沉淀（Persona5 对齐）
 
-来源：`docs/roadmap.md` vNext、`docs/design.md`。
+来源：`docs/stage01/roadmap.md` vNext、`docs/stage01/design.md`。
 
 ## 依赖
 
@@ -29,7 +29,7 @@
 
 ## 4) 验收
 
-> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+> 前置：先按 `docs/stage01/coolify-target.md` export 环境变量（通用手册：`docs/stage01/coolify-acceptance.md`）。
 
 ### 服务器验收（推荐）
 

@@ -8,8 +8,8 @@
  * - Transactionally replace latest camps + cluster_data
  * - Publish SSE invalidation: cluster_updated
  *
- * @see docs/ai-worker.md#5
- * @see docs/steps/step19.md
+ * @see docs/stage01/ai-worker.md#5
+ * @see docs/stage01/steps/step19.md
  */
 
 import { Prisma, type PrismaClient } from '@epiphany/database';
@@ -234,7 +234,7 @@ export async function processTopicCluster(
 
   try {
     await params.prisma.$transaction(async (tx) => {
-      // latest-only overwrite strategy (delete then insert) per docs/database.md
+      // latest-only overwrite strategy (delete then insert) per docs/stage01/database.md
       await tx.clusterData.deleteMany({ where: { topicId: params.topicId } });
       await tx.camp.deleteMany({ where: { topicId: params.topicId } });
 
@@ -316,7 +316,7 @@ export async function enqueueTopicClusterDebounced(
 }
 
 function getDefaultUmapParams(n: number): ClusterEngineUmapParams {
-  // Per docs/ai-worker.md: n_neighbors = min(15, n-1)
+  // Per docs/stage01/ai-worker.md: n_neighbors = min(15, n-1)
   const nNeighbors = Math.max(2, Math.min(15, n - 1));
   return {
     nComponents: 2,

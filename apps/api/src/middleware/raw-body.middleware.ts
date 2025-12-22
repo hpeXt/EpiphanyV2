@@ -1,7 +1,7 @@
 /**
  * @file raw-body.middleware.ts
  * @description Middleware to capture raw body for BODY_HASH verification
- * @see docs/crypto.md#4.4
+ * @see docs/stage01/crypto.md#4.4
  */
 import { json, Request, Response, RequestHandler } from 'express';
 

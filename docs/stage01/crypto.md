@@ -8,9 +8,9 @@
 
 对齐文档：
 
-- `docs/prd.md`：「2.5 身份与隐私」
-- `docs/architecture.md`：「6. 鉴权与匿名性」
-- `docs/api-contract.md`：「1. 鉴权与签名（Ed25519）」与各签名接口
+- `docs/stage01/prd.md`：「2.5 身份与隐私」
+- `docs/stage01/architecture.md`：「6. 鉴权与匿名性」
+- `docs/stage01/api-contract.md`：「1. 鉴权与签名（Ed25519）」与各签名接口
 
 ---
 
@@ -130,11 +130,11 @@ ed25519Keypair = Ed25519.KeypairFromSeed(ed25519Seed)
 
 ### 4.1 需要签名的请求
 
-以 `docs/api-contract.md` 为准（写请求 + 私密读 + batch item 级签名）。
+以 `docs/stage01/api-contract.md` 为准（写请求 + 私密读 + batch item 级签名）。
 
 ### 4.2 Headers（v1.0）
 
-与 `docs/api-contract.md` 对齐：
+与 `docs/stage01/api-contract.md` 对齐：
 
 - `X-Pubkey`：hex（64 chars）
 - `X-Signature`：hex（128 chars）
@@ -202,7 +202,7 @@ crypto 模块只提供“可验签”的能力；防重放/幂等由 API 组合 
 1. `X-Timestamp`：要求 `abs(now - ts) < 60s`
 2. `X-Nonce`：
    - 去重：Redis 记录 nonce（TTL 60s）
-   - 幂等（强写，如 `setVotes`）：Redis 以 `(pubkey, nonce)` 缓存 5 分钟并复用上次成功响应（见 `docs/api-contract.md`）
+   - 幂等（强写，如 `setVotes`）：Redis 以 `(pubkey, nonce)` 缓存 5 分钟并复用上次成功响应（见 `docs/stage01/api-contract.md`）
 
 ---
 
@@ -325,6 +325,6 @@ export function pubkeyFingerprint(pubkeyHex: Hex, length?: number): string; // e
 ## 9. 安全注意事项（必须遵守）
 
 1. **永不记录助记词/seed**：日志、错误上报、analytics 一律禁止包含 `mnemonic/masterSeed/ed25519Seed`。
-2. **助记词展示需二次确认**：与 `docs/prd.md`「备份/恢复」一致；默认不常驻展示。
+2. **助记词展示需二次确认**：与 `docs/stage01/prd.md`「备份/恢复」一致；默认不常驻展示。
 3. **随机性来源**：nonce 必须来自 CSPRNG（浏览器 `crypto.getRandomValues` / Node `crypto.randomBytes`）。
 4. **不要签 query string（v1.0）**：所有需要签名的请求尽量避免依赖 query；如未来必须签 query，需要引入 canonical query 规则并升级版本号（`v2`）。

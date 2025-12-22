@@ -14,7 +14,7 @@
   - frozen/archived：禁止新增节点/加票；允许撤回
   - pruned：公共读不可见；若已知 id 禁止加票，仅允许减票/撤回
 
-来源：`docs/roadmap.md` M7、`docs/prd.md#2.6`、`docs/api-contract.md` 3.2。
+来源：`docs/stage01/roadmap.md` M7、`docs/stage01/prd.md#2.6`、`docs/stage01/api-contract.md` 3.2。
 
 ## 依赖
 
@@ -31,7 +31,7 @@
 
 ## 1) Red：先写测试
 
-对照全量规划：`docs/test-plan.md`（Suite F 的 pruning 找回资金 + 权限/只读语义回归，及 Suite W 的治理 UI）。
+对照全量规划：`docs/stage01/test-plan.md`（Suite F 的 pruning 找回资金 + 权限/只读语义回归，及 Suite W 的治理 UI）。
 
 ### API e2e
 
@@ -82,7 +82,7 @@
 
 ## 4) 验收
 
-> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+> 前置：先按 `docs/stage01/coolify-target.md` export 环境变量（通用手册：`docs/stage01/coolify-acceptance.md`）。
 
 ### 服务器验收（推荐）
 
@@ -102,7 +102,7 @@ coolify app logs "$API_APP_UUID" -n 200
 
 验收点：
 
-- [ ] 与 `docs/prd.md`/`docs/architecture.md` 决策清单一致
+- [ ] 与 `docs/stage01/prd.md`/`docs/stage01/architecture.md` 决策清单一致
 - [ ] 资金找回路径成立（pruned 上的 stake 可撤回）
 
 ### 本地快速反馈（可选）

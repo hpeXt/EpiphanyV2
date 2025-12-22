@@ -8,7 +8,7 @@
 - `POST /v1/topics/:topicId/commands`：先实现 `CLAIM_OWNER`
 - `GET /v1/topics`：列表 `beforeId` 分页（cursor，见契约字段）
 
-来源：`docs/api-contract.md` 3.1/3.2/3.3，时序见 `docs/core-flows.md#1`。
+来源：`docs/stage01/api-contract.md` 3.1/3.2/3.3，时序见 `docs/stage01/core-flows.md#1`。
 
 ## 依赖
 
@@ -25,7 +25,7 @@
 
 ## 1) Red：先写测试
 
-对照全量规划：`docs/test-plan.md`（Suite B — Flow 1：创建 Topic + Host 认领）。
+对照全量规划：`docs/stage01/test-plan.md`（Suite B — Flow 1：创建 Topic + Host 认领）。
 
 ### API e2e
 
@@ -62,7 +62,7 @@
 
 ## 4) 验收
 
-> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+> 前置：先按 `docs/stage01/coolify-target.md` export 环境变量（通用手册：`docs/stage01/coolify-acceptance.md`）。
 
 ### 服务器验收（推荐）
 
@@ -91,7 +91,7 @@ curl -fsS "$API_BASE_URL/v1/topics?limit=20"
 - [ ] 创建 Topic 返回 `topicId/rootArgumentId/claimToken/expiresAt`
 - [ ] CLAIM_OWNER 成功后 `topics.owner_pubkey` 被写入
 - [ ] 列表能看到新建 Topic
-- [ ] 对照 `docs/api-contract.md`：请求/响应字段完全一致
+- [ ] 对照 `docs/stage01/api-contract.md`：请求/响应字段完全一致
 
 ### 本地快速反馈（可选）
 

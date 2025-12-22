@@ -71,3 +71,47 @@ if (!globalThis.crypto.subtle) {
 if (!globalThis.crypto.getRandomValues) {
   globalThis.crypto.getRandomValues = webcrypto.getRandomValues.bind(webcrypto);
 }
+
+// ProseMirror/Tiptap relies on elementFromPoint for selection logic; jsdom doesn't implement it.
+// Patch both the instance and prototype so documents created by libraries still work.
+if (typeof Document !== "undefined" && !Document.prototype.elementFromPoint) {
+  Document.prototype.elementFromPoint = function elementFromPoint() {
+    return this.body;
+  } as unknown as typeof Document.prototype.elementFromPoint;
+}
+if (!document.elementFromPoint) {
+  document.elementFromPoint = () => document.body;
+}
+
+// ProseMirror also expects DOMRect APIs on nodes/ranges for selection/scroll logic.
+function createMockDomRect(): DOMRect {
+  return {
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0,
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    toJSON: () => "",
+  } as DOMRect;
+}
+
+if (typeof Range !== "undefined") {
+  if (!Range.prototype.getClientRects) {
+    Range.prototype.getClientRects = () => [createMockDomRect()] as unknown as DOMRectList;
+  }
+  if (!Range.prototype.getBoundingClientRect) {
+    Range.prototype.getBoundingClientRect = () => createMockDomRect();
+  }
+}
+
+if (typeof Text !== "undefined") {
+  if (!(Text.prototype as any).getClientRects) {
+    (Text.prototype as any).getClientRects = () => [createMockDomRect()];
+  }
+  if (!(Text.prototype as any).getBoundingClientRect) {
+    (Text.prototype as any).getBoundingClientRect = () => createMockDomRect();
+  }
+}

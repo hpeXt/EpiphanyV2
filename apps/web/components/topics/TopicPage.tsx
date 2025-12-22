@@ -13,10 +13,17 @@ import { useTopicTree } from "@/components/topics/hooks/useTopicTree";
 import { useTopicSse } from "@/components/topics/hooks/useTopicSse";
 import { deriveTopicKeypairFromMasterSeedHex } from "@/lib/identity";
 import { apiClient } from "@/lib/apiClient";
+import { createLocalStorageClaimTokenStore } from "@/lib/claimTokenStore";
 import { createLocalStorageKeyStore } from "@/lib/signing";
 import { TopicManagePanel } from "@/components/topics/TopicManagePanel";
 import { createLocalStorageVisitedTopicsStore } from "@/lib/visitedTopicsStore";
 import { ConsensusReportModal } from "@/components/topics/ConsensusReportModal";
+import { P5Alert } from "@/components/ui/P5Alert";
+import { P5Badge } from "@/components/ui/P5Badge";
+import { P5Button } from "@/components/ui/P5Button";
+import { P5Panel } from "@/components/ui/P5Panel";
+import { P5Tabs } from "@/components/ui/P5Tabs";
+import { useP5Toast } from "@/components/ui/P5ToastProvider";
 
 type Props = {
   topicId: string;
@@ -25,11 +32,15 @@ type Props = {
 export function TopicPage({ topicId }: Props) {
   const keyStore = useMemo(() => createLocalStorageKeyStore(), []);
   const visitedStore = useMemo(() => createLocalStorageVisitedTopicsStore(), []);
+  const claimTokenStore = useMemo(() => createLocalStorageClaimTokenStore(), []);
   const [hasIdentity, setHasIdentity] = useState<boolean | null>(null);
   const [identityFingerprint, setIdentityFingerprint] = useState<string | null>(null);
   const [identityPubkeyHex, setIdentityPubkeyHex] = useState<string | null>(null);
   const [isManageOpen, setIsManageOpen] = useState(false);
   const [isReportOpen, setIsReportOpen] = useState(false);
+  const [claimError, setClaimError] = useState("");
+  const [isClaiming, setIsClaiming] = useState(false);
+  const { toast } = useP5Toast();
 
   const [refreshToken, setRefreshToken] = useState(0);
   const invalidate = useCallback(() => setRefreshToken((prev) => prev + 1), []);
@@ -112,17 +123,18 @@ export function TopicPage({ topicId }: Props) {
   }, [hasIdentity, topicId]);
 
   if (tree.status === "loading") {
-    return <p className="text-sm text-zinc-600">Loading topic…</p>;
+    return (
+      <P5Alert role="status" variant="info" title="topic">
+        Loading topic…
+      </P5Alert>
+    );
   }
 
   if (tree.status === "error") {
     return (
-      <div
-        role="alert"
-        className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800"
-      >
+      <P5Alert role="alert" variant="error" title="error">
         {tree.errorMessage}
-      </div>
+      </P5Alert>
     );
   }
 
@@ -132,104 +144,173 @@ export function TopicPage({ topicId }: Props) {
     tree.topic.ownerPubkey !== null &&
     identityPubkeyHex === tree.topic.ownerPubkey;
 
+  const claimInfo =
+    hasIdentity === true && tree.topic.ownerPubkey === null
+      ? (() => {
+          try {
+            return claimTokenStore.get(topicId);
+          } catch {
+            return null;
+          }
+        })()
+      : null;
+
+  async function claimOwner() {
+    if (hasIdentity !== true) return;
+    if (tree.topic.ownerPubkey !== null) return;
+    if (!claimInfo) return;
+
+    setClaimError("");
+    setIsClaiming(true);
+    const result = await apiClient.executeTopicCommand(
+      topicId,
+      { type: "CLAIM_OWNER", payload: {} },
+      { "x-claim-token": claimInfo.claimToken },
+    );
+    setIsClaiming(false);
+
+    if (!result.ok) {
+      setClaimError(result.error.message);
+      toast({
+        variant: "error",
+        title: "claim",
+        message: result.error.message,
+      });
+      if (result.error.kind === "http" && (result.error.code === "CLAIM_TOKEN_EXPIRED" || result.error.code === "CLAIM_TOKEN_INVALID")) {
+        try {
+          claimTokenStore.remove(topicId);
+        } catch {
+          // ignore
+        }
+      }
+      return;
+    }
+
+    try {
+      claimTokenStore.remove(topicId);
+    } catch {
+      // ignore
+    }
+    toast({
+      variant: "success",
+      title: "host",
+      message: "Host claimed for this topic.",
+    });
+    invalidate();
+  }
+
+  const statusBadgeVariant =
+    tree.topic.status === "active"
+      ? "electric"
+      : tree.topic.status === "frozen"
+        ? "acid"
+        : "ink";
+
   return (
     <div className="space-y-6">
       {hasIdentity === false ? (
         <IdentityOnboarding onComplete={() => setHasIdentity(true)} />
       ) : null}
       {reloadRequired ? (
-        <div
-          role="alert"
-          className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
-        >
+        <P5Alert title="reload_required" variant="warn" role="alert">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span>Realtime stream is out of date. Please refresh.</span>
-            <button
+            <P5Button
               type="button"
               onClick={() => window.location.reload()}
-              className="rounded-md bg-amber-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-800"
+              variant="ink"
+              size="sm"
             >
               Refresh
-            </button>
+            </P5Button>
           </div>
-        </div>
+        </P5Alert>
       ) : null}
-      <header className="space-y-1">
-	        <div className="flex flex-wrap items-center justify-between gap-3">
-	          <h1 className="text-xl font-semibold">{tree.topic.title}</h1>
-	          <div className="flex flex-wrap items-center gap-2">
-	            <div className="inline-flex rounded-md border border-zinc-200 bg-white p-0.5 text-sm">
-	              <button
-	                type="button"
-	                onClick={() => setViewMode("focus")}
-	                aria-pressed={viewMode === "focus"}
-                className={[
-                  "rounded-md px-2.5 py-1 font-medium",
-                  viewMode === "focus" ? "bg-zinc-900 text-white" : "text-zinc-900 hover:bg-zinc-100",
-                ].join(" ")}
-              >
-                Focus
-              </button>
-              <button
+
+      <P5Panel
+        header={
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-[color:var(--ink)] px-4 py-3 text-[color:var(--paper)]">
+            <div className="min-w-0">
+              <div className="font-mono text-xs font-semibold uppercase tracking-wide text-white/80">
+                Topic
+              </div>
+              <h1 className="truncate text-xl font-semibold">{tree.topic.title}</h1>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <P5Badge variant={statusBadgeVariant}>{tree.topic.status}</P5Badge>
+              {identityFingerprint ? (
+                <P5Badge variant="paper" className="font-mono normal-case tracking-normal">
+                  {identityFingerprint}
+                </P5Badge>
+              ) : null}
+            </div>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="space-y-1 text-sm text-[color:var(--ink)]">
+            <p>
+              TopicId: <code className="font-mono">{tree.topic.id}</code>
+            </p>
+            <p>
+              Status: <span className="font-mono">{tree.topic.status}</span>
+            </p>
+            {ledger ? (
+              <p>
+                Balance: <span className="font-mono">{ledger.balance}</span>
+              </p>
+            ) : ledgerError ? (
+              <p className="text-[color:var(--rebel-red)]">{ledgerError}</p>
+            ) : null}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-start gap-2 md:justify-end">
+            <P5Tabs
+              ariaLabel="Topic view mode"
+              value={viewMode}
+              onValueChange={setViewMode}
+              tabs={[
+                { value: "focus", label: "Focus" },
+                { value: "sunburst", label: "Overview" },
+                { value: "god", label: "God View" },
+              ]}
+            />
+
+            <P5Button type="button" onClick={() => setIsReportOpen(true)} size="sm">
+              Report
+            </P5Button>
+
+            {claimInfo ? (
+              <P5Button
                 type="button"
-                onClick={() => setViewMode("sunburst")}
-                aria-pressed={viewMode === "sunburst"}
-                className={[
-                  "rounded-md px-2.5 py-1 font-medium",
-                  viewMode === "sunburst" ? "bg-zinc-900 text-white" : "text-zinc-900 hover:bg-zinc-100",
-                ].join(" ")}
+                onClick={claimOwner}
+                size="sm"
+                variant="primary"
+                disabled={isClaiming}
               >
-                Overview
-              </button>
-              <button
+                {isClaiming ? "Claiming…" : "Claim Host"}
+              </P5Button>
+            ) : null}
+
+            {isOwner ? (
+              <P5Button
                 type="button"
-                onClick={() => setViewMode("god")}
-                aria-pressed={viewMode === "god"}
-                className={[
-                  "rounded-md px-2.5 py-1 font-medium",
-                  viewMode === "god" ? "bg-zinc-900 text-white" : "text-zinc-900 hover:bg-zinc-100",
-                ].join(" ")}
-	              >
-	                God View
-	              </button>
-	            </div>
-	            <button
-	              type="button"
-	              onClick={() => setIsReportOpen(true)}
-	              className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100"
-	            >
-	              Report
-	            </button>
-	            {isOwner ? (
-	              <button
-	                type="button"
-	                onClick={() => setIsManageOpen((prev) => !prev)}
-	                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100"
+                onClick={() => setIsManageOpen((prev) => !prev)}
+                size="sm"
               >
                 Manage
-              </button>
+              </P5Button>
             ) : null}
           </div>
         </div>
-        <p className="text-sm text-zinc-600">
-          TopicId: <code className="font-mono">{tree.topic.id}</code>
-        </p>
-        <p className="text-sm text-zinc-600">
-          Status: <span className="font-mono">{tree.topic.status}</span>
-        </p>
-        {identityFingerprint ? (
-          <p className="text-sm text-zinc-600">
-            Identity: <span className="font-mono">{identityFingerprint}</span>
-          </p>
-        ) : null}
-        {ledger ? (
-          <p className="text-sm text-zinc-600">
-            Balance: <span className="font-mono">{ledger.balance}</span>
-          </p>
-        ) : ledgerError ? (
-          <p className="text-sm text-red-700">{ledgerError}</p>
-        ) : null}
-      </header>
+      </P5Panel>
+
+      {claimError ? (
+        <P5Alert role="alert" variant="error" title="claim">
+          {claimError}
+        </P5Alert>
+      ) : null}
 
       {isOwner && isManageOpen ? (
         <TopicManagePanel

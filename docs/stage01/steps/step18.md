@@ -8,7 +8,7 @@
 - Worker 异步回填 `stanceScore/embedding/analysisStatus`
 - 通过 SSE invalidation 触发 Web 刷新并从 pending 变为 ready/failed
 
-来源：`docs/ai-worker.md#4`、`docs/roadmap.md` M5。
+来源：`docs/stage01/ai-worker.md#4`、`docs/stage01/roadmap.md` M5。
 
 ## 依赖
 
@@ -26,7 +26,7 @@
 
 ## 1) Red：先写测试
 
-对照全量规划：`docs/test-plan.md`（Suite D 的 AI 回填部分 + SSE 专项）。
+对照全量规划：`docs/stage01/test-plan.md`（Suite D 的 AI 回填部分 + SSE 专项）。
 
 - [ ] Worker unit/integration：
   - 同一 argument 反复入队：只会写一次（ready 后短路）
@@ -57,7 +57,7 @@
 
 ## 4) 验收
 
-> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+> 前置：先按 `docs/stage01/coolify-target.md` export 环境变量（通用手册：`docs/stage01/coolify-acceptance.md`）。
 
 ### 服务器验收（推荐）
 

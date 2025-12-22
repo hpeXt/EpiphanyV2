@@ -209,7 +209,7 @@ export class TopicService {
 
   /**
    * GENERATE_CONSENSUS_REPORT host command (requires owner)
-   * @see docs/steps/step22.md
+   * @see docs/stage01/steps/step22.md
    */
   async generateConsensusReport(topicId: string, pubkeyHex: string): Promise<TopicSummary> {
     const topic = await this.prisma.topic.findUnique({
@@ -530,7 +530,7 @@ export class TopicService {
 
   /**
    * SET_STATUS host command (requires owner)
-   * @see docs/api-contract.md#3.2
+   * @see docs/stage01/api-contract.md#3.2
    */
   async setStatus(topicId: string, status: 'active' | 'frozen' | 'archived', pubkeyHex: string): Promise<TopicSummary> {
     const topic = await this.prisma.topic.findUnique({
@@ -595,7 +595,7 @@ export class TopicService {
 
   /**
    * EDIT_ROOT host command (requires owner)
-   * @see docs/api-contract.md#3.2
+   * @see docs/stage01/api-contract.md#3.2
    */
   async editRoot(
     topicId: string,
@@ -677,7 +677,7 @@ export class TopicService {
 
   /**
    * PRUNE_ARGUMENT host command (requires owner)
-   * @see docs/api-contract.md#3.2
+   * @see docs/stage01/api-contract.md#3.2
    */
   async pruneArgument(
     topicId: string,
@@ -748,7 +748,7 @@ export class TopicService {
 
   /**
    * UNPRUNE_ARGUMENT host command (requires owner)
-   * @see docs/api-contract.md#3.2
+   * @see docs/stage01/api-contract.md#3.2
    */
   async unpruneArgument(topicId: string, input: { argumentId: string }, pubkeyHex: string): Promise<TopicSummary> {
     const topic = await this.prisma.topic.findUnique({
@@ -939,7 +939,7 @@ export class TopicService {
 
   /**
    * Get ledger for a user in a topic (auto-initializes if not exists)
-   * @see docs/api-contract.md#3.8
+   * @see docs/stage01/api-contract.md#3.8
    */
   async getLedgerMe(topicId: string, pubkeyHex: string): Promise<LedgerMe> {
     // Check if topic exists
@@ -993,7 +993,7 @@ export class TopicService {
 
   /**
    * Get all stakes for a user in a topic (includes pruned arguments)
-   * @see docs/api-contract.md#3.9
+   * @see docs/stage01/api-contract.md#3.9
    */
   async getStakesMe(topicId: string, pubkeyHex: string): Promise<StakesMeResponse> {
     // Check if topic exists
@@ -1056,7 +1056,7 @@ export class TopicService {
 
   /**
    * Get cluster map data for God View (public read)
-   * @see docs/api-contract.md#3.11
+   * @see docs/stage01/api-contract.md#3.11
    */
   async getClusterMap(topicId: string): Promise<ClusterMap> {
     const topic = await this.prisma.topic.findUnique({

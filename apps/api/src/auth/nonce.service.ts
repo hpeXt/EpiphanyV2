@@ -1,7 +1,7 @@
 /**
  * @file nonce.service.ts
  * @description Nonce deduplication service using Redis
- * @see docs/api-contract.md#1.4
+ * @see docs/stage01/api-contract.md#1.4
  */
 import { Injectable, Inject, Optional } from '@nestjs/common';
 import { InjectRedis } from '@nestjs-modules/ioredis';

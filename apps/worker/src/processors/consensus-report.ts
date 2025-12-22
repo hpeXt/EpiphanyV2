@@ -10,8 +10,8 @@
  * 5. Writes ready/failed state + traceability fields (promptVersion/params, error metadata)
  * 6. Publishes SSE invalidation event (report_updated)
  *
- * @see docs/ai-worker.md#7
- * @see docs/steps/step22.md
+ * @see docs/stage01/ai-worker.md#7
+ * @see docs/stage01/steps/step22.md
  */
 
 import { Prisma, type PrismaClient } from '@epiphany/database';

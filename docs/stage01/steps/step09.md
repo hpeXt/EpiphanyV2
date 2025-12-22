@@ -4,7 +4,7 @@
 
 实现 `POST /v1/topics/:topicId/arguments`：创建 Argument，并在同一事务内支持可选 `initialVotes`（余额不足则整笔失败，不产生 Argument）。
 
-来源：`docs/api-contract.md` 3.6，时序见 `docs/core-flows.md#3`。
+来源：`docs/stage01/api-contract.md` 3.6，时序见 `docs/stage01/core-flows.md#3`。
 
 ## 依赖
 
@@ -22,7 +22,7 @@
 
 ## 1) Red：先写测试
 
-对照全量规划：`docs/test-plan.md`（Suite D — Flow 3：发言 + initialVotes）。
+对照全量规划：`docs/stage01/test-plan.md`（Suite D — Flow 3：发言 + initialVotes）。
 
 ### API e2e（supertest）
 
@@ -45,7 +45,7 @@
     - 更新 ledger（balance/totalCostStaked/totalVotesStaked）
     - 更新 argument totals（`totalVotes/totalCost`）
     - `cost == votes^2` 且 `balance + totalCostStaked == 100`
-- [ ] `authorId`：响应中的 `argument.authorId` 必须等于 `sha256(pubkey_bytes).hex().slice(0,16)`（见 `docs/api-contract.md#2.4`）
+- [ ] `authorId`：响应中的 `argument.authorId` 必须等于 `sha256(pubkey_bytes).hex().slice(0,16)`（见 `docs/stage01/api-contract.md#2.4`）
 - [ ] 契约校验：响应能被 `shared-contracts` parse（字段名/类型一致）
 
 可选（推荐）：
@@ -56,7 +56,7 @@
 
 - `apps/api`：
   - `POST /v1/topics/:topicId/arguments` controller/service
-  - DB 事务（参考 `docs/database.md#6.2`）：
+  - DB 事务（参考 `docs/stage01/database.md#6.2`）：
     - insert argument（pending）
     - 若 `initialVotes>0`：
       - 初始化/锁定 ledger（`FOR UPDATE`）
@@ -71,7 +71,7 @@
 
 ## 4) 验收
 
-> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+> 前置：先按 `docs/stage01/coolify-target.md` export 环境变量（通用手册：`docs/stage01/coolify-acceptance.md`）。
 
 ### 服务器验收（推荐）
 

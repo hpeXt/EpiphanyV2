@@ -137,34 +137,40 @@ describe("TopicPage (Step 15)", () => {
 
     const fetchMock = createFetchMock({
       childrenItems: [],
-      createArgument: {
-        ok: true,
-        status: 200,
-        json: {
-          argument: {
-            id: "arg-new",
-            topicId: "topic-1",
-            parentId: "arg-root",
-            title: null,
-            body: "Hello world",
-            authorId: "0123456789abcdef",
-            analysisStatus: "pending_analysis",
-            stanceScore: null,
-            totalVotes: 0,
-            totalCost: 0,
-            prunedAt: null,
-            createdAt: "2025-12-19T12:34:56.789Z",
-            updatedAt: "2025-12-19T12:34:56.789Z",
+      createArgument: (body) => {
+        expect(body.body).toBe("Hello world");
+        expect(body.bodyRich?.type).toBe("doc");
+        expect(JSON.stringify(body.bodyRich)).toContain("Hello world");
+
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            argument: {
+              id: "arg-new",
+              topicId: "topic-1",
+              parentId: "arg-root",
+              title: null,
+              body: "Hello world",
+              authorId: "0123456789abcdef",
+              analysisStatus: "pending_analysis",
+              stanceScore: null,
+              totalVotes: 0,
+              totalCost: 0,
+              prunedAt: null,
+              createdAt: "2025-12-19T12:34:56.789Z",
+              updatedAt: "2025-12-19T12:34:56.789Z",
+            },
+            ledger: {
+              topicId: "topic-1",
+              pubkey: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+              balance: 100,
+              myTotalVotes: 0,
+              myTotalCost: 0,
+              lastInteractionAt: null,
+            },
           },
-          ledger: {
-            topicId: "topic-1",
-            pubkey: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-            balance: 100,
-            myTotalVotes: 0,
-            myTotalCost: 0,
-            lastInteractionAt: null,
-          },
-        },
+        };
       },
     });
     global.fetch = fetchMock as unknown as typeof fetch;

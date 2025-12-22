@@ -67,7 +67,7 @@ export class TopicController {
 
   /**
    * GET /v1/topics/:topicId/cluster-map - God View data (public read)
-   * @see docs/api-contract.md#3.11
+   * @see docs/stage01/api-contract.md#3.11
    */
   @Get(':topicId/cluster-map')
   async getClusterMap(@Param('topicId') topicId: string) {
@@ -76,7 +76,7 @@ export class TopicController {
 
   /**
    * GET /v1/topics/:topicId/consensus-report/latest - Latest consensus report (public read)
-   * @see docs/api-contract.md#3.13
+   * @see docs/stage01/api-contract.md#3.13
    */
   @Get(':topicId/consensus-report/latest')
   async getLatestConsensusReport(@Param('topicId') topicId: string) {
@@ -155,7 +155,7 @@ export class TopicController {
 
   /**
    * GET /v1/topics/:topicId/ledger/me - Get my ledger (signature required)
-   * @see docs/api-contract.md#3.8
+   * @see docs/stage01/api-contract.md#3.8
    */
   @Get(':topicId/ledger/me')
   @RequireSignature()
@@ -168,7 +168,7 @@ export class TopicController {
 
   /**
    * GET /v1/topics/:topicId/stakes/me - Get my stakes (signature required)
-   * @see docs/api-contract.md#3.9
+   * @see docs/stage01/api-contract.md#3.9
    */
   @Get(':topicId/stakes/me')
   @RequireSignature()

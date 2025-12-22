@@ -1,12 +1,12 @@
 # AI Worker 模块设计（v1.0）
 
-> 本文档补齐异步 AI 任务（BullMQ Worker）与可选 Python 计算服务（FastAPI）的实现设计，作为落地 `docs/architecture.md` 的细化说明。
+> 本文档补齐异步 AI 任务（BullMQ Worker）与可选 Python 计算服务（FastAPI）的实现设计，作为落地 `docs/stage01/architecture.md` 的细化说明。
 >
 > 对齐文档：
-> - `docs/prd.md`：AI 治理目标（立场/聚类/共识报告）
-> - `docs/api-contract.md`：SSE 事件与对外数据口径
-> - `docs/database.md`：`arguments/camps/cluster_data/consensus_reports` 等表结构与约束
-> - `docs/core-flows.md`：端到端时序
+> - `docs/stage01/prd.md`：AI 治理目标（立场/聚类/共识报告）
+> - `docs/stage01/api-contract.md`：SSE 事件与对外数据口径
+> - `docs/stage01/database.md`：`arguments/camps/cluster_data/consensus_reports` 等表结构与约束
+> - `docs/stage01/core-flows.md`：端到端时序
 
 本文档术语约定：
 
@@ -53,7 +53,7 @@ flowchart LR
   Worker -. optional .->|HTTP| Py[AI Worker Python/FastAPI]
 ```
 
-事件策略（与 `docs/architecture.md` 一致）：
+事件策略（与 `docs/stage01/architecture.md` 一致）：
 
 - API 与 Worker 都可以作为事件生产者，统一写入 Redis Stream：`topic:events:{topicId}`。
 - SSE 端点由 API 进程提供：读取 Redis Stream，按 `Last-Event-ID` 补发或发送 `reload_required`。
@@ -84,7 +84,7 @@ BullMQ 层：
 DB 层（最终幂等）：
 
 - `arguments.analysis_status` 为 `ready` 时，分析 Job **直接短路返回**（不重复调用 AI Provider）。
-- 聚类 Job 写入采用 **覆盖 latest**（先删后插，见 `docs/database.md` 3.6 写入策略），天然幂等。
+- 聚类 Job 写入采用 **覆盖 latest**（先删后插，见 `docs/stage01/database.md` 3.6 写入策略），天然幂等。
 
 ### 3.3 重试与退避（建议值）
 
@@ -109,7 +109,7 @@ DB 层（最终幂等）：
 { "argumentId": "uuidv7" }
 ```
 
-输出（写回 DB，字段对齐 `docs/database.md`）：
+输出（写回 DB，字段对齐 `docs/stage01/database.md`）：
 
 - `arguments.analysis_status`: `ready | failed`
 - `arguments.stance_score`: `[-1,1]`（失败则 NULL）
@@ -153,7 +153,7 @@ DB 层（最终幂等）：
 - 投票变化（new_vote）
 - pruning（pruned）
 
-节流规则（v1.0，来自 `docs/architecture.md`）：
+节流规则（v1.0，来自 `docs/stage01/architecture.md`）：
 
 - **Debounce**：5 分钟内最多跑一次（通过 BullMQ `jobId="cluster_"+topicId` + delay 实现）
 - **阈值**：满足其一才真正执行计算
@@ -186,7 +186,7 @@ DB 层（最终幂等）：
 
 ### 5.3 输出口径（写回 DB + 对外 API）
 
-写回表（对齐 `docs/database.md` 3.5/3.6）：
+写回表（对齐 `docs/stage01/database.md` 3.5/3.6）：
 
 - `camps`：为 `cluster_id >= 0` 的簇写入一行（噪声点不建 camp）
   - `params`：记录 UMAP/HDBSCAN 参数与版本（例如 `{ umap:{...}, hdbscan:{...}, engine:"python" }`）
@@ -314,7 +314,7 @@ HDBSCAN：
 
 ## 7. （后置）共识报告 Job（Prompt Chaining）
 
-> v1.0 可先不实现，但建议提前冻结落库语义与幂等策略（`docs/database.md` 3.7 已预留）。
+> v1.0 可先不实现，但建议提前冻结落库语义与幂等策略（`docs/stage01/database.md` 3.7 已预留）。
 
 Job：`ai:consensus-report`
 
@@ -324,7 +324,7 @@ Job：`ai:consensus-report`
   - `content_md` 为最终报告（Markdown）
   - `prompt_version` 固化链路版本号（便于回归）
 - 事件：
-  - 引入新事件 `report_updated`（对齐 `docs/api-contract.md`），SSE 仍只做 invalidation（不推流式内容）。
+  - 引入新事件 `report_updated`（对齐 `docs/stage01/api-contract.md`），SSE 仍只做 invalidation（不推流式内容）。
   - 前端收到 `report_updated` 后拉取 `GET /v1/topics/:topicId/consensus-report/latest` 获取最新报告与状态。
 
 ---
@@ -344,7 +344,7 @@ Worker（Node）：
 - `AI_WORKER_URL`（当 `CLUSTER_ENGINE=python` 时必填）
 - `AI_WORKER_TOKEN`（内部鉴权 token）
 
-> **当前状态**：OpenRouter 已配置完成，API Key 验证通过。详见 `docs/coolify-target.md` 外部服务配置状态。
+> **当前状态**：OpenRouter 已配置完成，API Key 验证通过。详见 `docs/stage01/coolify-target.md` 外部服务配置状态。
 
 AI Worker（Python，可选）：
 

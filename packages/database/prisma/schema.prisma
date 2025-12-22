@@ -69,6 +69,7 @@ model Argument {
   parentId      String? @map("parent_id") @db.Uuid
   title         String? @db.Text
   body          String  @db.Text
+  bodyRich      Json?   @map("body_rich") @db.JsonB
   authorPubkey  Bytes   @map("author_pubkey") @db.ByteA
   analysisStatus argument_analysis_status @default(pending_analysis) @map("analysis_status")
   stanceScore   Float?  @map("stance_score") @db.DoublePrecision

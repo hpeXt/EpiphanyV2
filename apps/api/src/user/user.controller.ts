@@ -1,7 +1,7 @@
 /**
  * @file user.controller.ts
  * @description User API controller for batch-balance endpoint
- * @see docs/api-contract.md#3.10
+ * @see docs/stage01/api-contract.md#3.10
  */
 import {
   Controller,
@@ -24,7 +24,7 @@ export class UserController {
    * Note: This endpoint does NOT require request-level signature headers.
    * Signature verification is done at the item level.
    *
-   * @see docs/api-contract.md#3.10
+   * @see docs/stage01/api-contract.md#3.10
    */
   @Post('batch-balance')
   @HttpCode(HttpStatus.OK)

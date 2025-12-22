@@ -2,7 +2,7 @@
 
 ## 目标
 
-按 `docs/crypto.md` 与 `docs/api-contract.md#1` 落地签名 v1：Ed25519 + headers + canonical message，并用测试向量锁死跨端一致性。
+按 `docs/stage01/crypto.md` 与 `docs/stage01/api-contract.md#1` 落地签名 v1：Ed25519 + headers + canonical message，并用测试向量锁死跨端一致性。
 
 ## 依赖
 
@@ -43,7 +43,7 @@
 
 ## 2) Green：最小实现（让测试通过）
 
-按 `docs/crypto.md#6` 建议 API 面实现（可按实际选型调整）：
+按 `docs/stage01/crypto.md#6` 建议 API 面实现（可按实际选型调整）：
 
 - `generateMnemonic/validateMnemonic/mnemonicToMasterSeed`
 - `deriveTopicKeypair(masterSeed, topicId)`
@@ -59,7 +59,7 @@
 
 ## 4) 验收
 
-> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+> 前置：先按 `docs/stage01/coolify-target.md` export 环境变量（通用手册：`docs/stage01/coolify-acceptance.md`）。
 
 ### 服务器验收（推荐）
 

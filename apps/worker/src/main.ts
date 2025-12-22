@@ -5,8 +5,8 @@
  * BullMQ worker that processes:
  * - ai:argument-analysis - Argument stance + embedding analysis
  *
- * @see docs/ai-worker.md
- * @see docs/steps/step18.md
+ * @see docs/stage01/ai-worker.md
+ * @see docs/stage01/steps/step18.md
  */
 
 import process from 'node:process';
@@ -27,7 +27,7 @@ import {
   type GenerateConsensusReportInput,
 } from './processors/consensus-report.js';
 
-// Queue names per docs/ai-worker.md (using underscore instead of colon for BullMQ compatibility)
+// Queue names per docs/stage01/ai-worker.md (using underscore instead of colon for BullMQ compatibility)
 const QUEUE_ARGUMENT_ANALYSIS = 'ai_argument-analysis';
 const QUEUE_TOPIC_CLUSTER = 'ai_topic-cluster';
 const QUEUE_CONSENSUS_REPORT = 'ai_consensus-report';

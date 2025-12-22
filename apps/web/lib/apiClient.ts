@@ -1,6 +1,7 @@
 import {
   zCreateTopicResponse,
   zArgumentChildrenResponse,
+  zArgumentResponse,
   zBatchBalanceResponse,
   zCreateArgumentResponse,
   zConsensusReportLatestResponse,
@@ -121,7 +122,7 @@ const defaultSigner = createV1Signer(defaultKeyStore);
  * Build batch-balance request items with per-topic signatures
  * Each item is signed with the keypair derived for that specific topic
  *
- * @see docs/api-contract.md#3.10
+ * @see docs/stage01/api-contract.md#3.10
  */
 export async function buildBatchBalanceItems(
   topicIds: string[],
@@ -220,7 +221,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
     },
     /**
      * God View semantic map (public read)
-     * @see docs/api-contract.md#3.11
+     * @see docs/stage01/api-contract.md#3.11
      */
     getClusterMap(topicId: string) {
       const encodedTopicId = encodeURIComponent(topicId);
@@ -247,6 +248,18 @@ export function createApiClient(deps?: { signer?: Signer }) {
         `/v1/arguments/${encodedArgumentId}/children?${params.toString()}`,
         { method: "GET" },
         zArgumentChildrenResponse,
+      );
+    },
+    /**
+     * Argument detail (public read)
+     * @see docs/stage01/api-contract.md#3.5.1
+     */
+    getArgument(argumentId: string) {
+      const encodedArgumentId = encodeURIComponent(argumentId);
+      return requestJson(
+        `/v1/arguments/${encodedArgumentId}`,
+        { method: "GET" },
+        zArgumentResponse,
       );
     },
     getLatestConsensusReport(topicId: string) {
@@ -314,7 +327,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
     },
     /**
      * Get stakes for current identity in a topic
-     * @see docs/api-contract.md#3.9
+     * @see docs/stage01/api-contract.md#3.9
      */
     getStakesMe(topicId: string) {
       const encodedTopicId = encodeURIComponent(topicId);
@@ -329,7 +342,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
     /**
      * Batch query balances for multiple topics
      * Uses item-level signing (no auth headers on request itself)
-     * @see docs/api-contract.md#3.10
+     * @see docs/stage01/api-contract.md#3.10
      */
     async batchBalance(topicIds: string[]) {
       if (topicIds.length === 0) {

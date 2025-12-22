@@ -5,6 +5,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ConsensusReport } from "@epiphany/shared-contracts";
 
 import { apiClient } from "@/lib/apiClient";
+import { P5Alert } from "@/components/ui/P5Alert";
+import { P5Button } from "@/components/ui/P5Button";
 
 type Props = {
   topicId: string;
@@ -83,42 +85,48 @@ export function ConsensusReportModal({
       aria-label="Consensus report"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
     >
-      <div className="relative w-full max-w-3xl overflow-hidden rounded-md border-4 border-black bg-white shadow-[10px_10px_0_0_#000]">
-        <div className="flex items-center justify-between gap-3 bg-black px-4 py-3 text-white">
-          <h2 className="text-sm font-semibold tracking-wide">{title}</h2>
-          <button
+      <div
+        className="relative w-full max-w-3xl overflow-hidden border-[var(--p5-border-width)] border-[color:var(--ink)] bg-[color:var(--paper)] shadow-[var(--p5-shadow-rebel)]"
+        style={{
+          clipPath:
+            "polygon(0 0, calc(100% - var(--p5-cut)) 0, 100% var(--p5-cut), 100% 100%, 0 100%)",
+        }}
+      >
+        <div className="flex items-center justify-between gap-3 bg-[color:var(--ink)] px-4 py-3 text-[color:var(--paper)]">
+          <h2 className="font-mono text-sm font-semibold uppercase tracking-wide">{title}</h2>
+          <P5Button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-white/30 bg-white/10 px-3 py-1.5 text-sm font-medium hover:bg-white/20"
+            size="sm"
+            className="border-[color:var(--paper)] text-[color:var(--paper)] shadow-none hover:bg-white/10"
           >
             Close
-          </button>
+          </P5Button>
         </div>
 
         <div className="max-h-[80vh] overflow-y-auto px-5 py-4">
           {state.status === "loading" ? (
-            <p className="text-sm text-zinc-600">Loading report…</p>
+            <p className="text-sm text-[color:var(--ink)]/80">Loading report…</p>
           ) : null}
 
           {state.status === "error" ? (
-            <div
-              role="alert"
-              className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800"
-            >
+            <P5Alert role="alert" variant="error" title="error">
               {state.errorMessage}
-            </div>
+            </P5Alert>
           ) : null}
 
           {state.status === "success" ? (
             <div className="space-y-4">
               {!report ? (
-                <p className="text-sm text-zinc-700">No report yet.</p>
+                <p className="text-sm text-[color:var(--ink)]/90">No report yet.</p>
               ) : report.status === "generating" ? (
-                <p className="text-sm text-zinc-700">Generating report…</p>
+                <p className="text-sm text-[color:var(--ink)]/90">Generating report…</p>
               ) : report.status === "failed" ? (
                 <div className="space-y-2">
-                  <p className="text-sm font-medium text-red-800">Report failed</p>
-                  <p className="text-sm text-red-700">
+                  <p className="text-sm font-semibold text-[color:var(--rebel-red)]">
+                    Report failed
+                  </p>
+                  <p className="text-sm text-[color:var(--rebel-red)]">
                     {(report.metadata as any)?.error?.message ?? "Unknown error"}
                   </p>
                 </div>
@@ -127,24 +135,21 @@ export function ConsensusReportModal({
               )}
 
               {triggerError ? (
-                <div
-                  role="alert"
-                  className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800"
-                >
+                <P5Alert role="alert" variant="error" title="error">
                   {triggerError}
-                </div>
+                </P5Alert>
               ) : null}
 
               {isOwner ? (
                 <div className="flex flex-wrap gap-2">
-                  <button
+                  <P5Button
                     type="button"
                     onClick={triggerGeneration}
                     disabled={isTriggering || report?.status === "generating"}
-                    className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                    variant="primary"
                   >
                     {isTriggering ? "Generating…" : "Generate report"}
-                  </button>
+                  </P5Button>
                 </div>
               ) : null}
             </div>
@@ -315,4 +320,3 @@ function parseMarkdown(content: string): MarkdownBlock[] {
 
   return blocks;
 }
-

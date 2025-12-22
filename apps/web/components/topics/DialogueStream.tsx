@@ -3,9 +3,17 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import type { LedgerMe } from "@epiphany/shared-contracts";
+import Link from "@tiptap/extension-link";
+import Underline from "@tiptap/extension-underline";
+import { EditorContent, useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
 
 import { useChildren, type ChildrenOrderBy } from "@/components/topics/hooks/useChildren";
 import { apiClient, type ApiError } from "@/lib/apiClient";
+import { P5Alert } from "@/components/ui/P5Alert";
+import { P5Button } from "@/components/ui/P5Button";
+import { P5Panel } from "@/components/ui/P5Panel";
+import { P5Tabs } from "@/components/ui/P5Tabs";
 
 type Props = {
   topicId: string;
@@ -88,7 +96,7 @@ function VoteControl(props: {
     <div className="space-y-2 pt-2">
       <label
         htmlFor={`votes-${props.argumentId}`}
-        className="text-xs font-medium text-zinc-700"
+        className="text-xs font-semibold text-[color:var(--ink)]"
       >
         Votes
       </label>
@@ -104,30 +112,31 @@ function VoteControl(props: {
         className="w-full"
       />
       {increaseForbidden ? (
-        <p className="text-xs text-zinc-500">
+        <p className="text-xs text-[color:var(--ink)]/70">
           {props.argumentPrunedAt
             ? "This node is pruned: you can only withdraw."
             : "Topic is read-only: you can only withdraw."}
         </p>
       ) : null}
-      <p className="text-xs text-zinc-600">
+      <p className="text-xs text-[color:var(--ink)]/80">
         Cost: {targetCost} (ΔCost: {formatDelta(deltaCost)})
       </p>
 
       {submitError ? (
-        <p role="alert" className="text-xs text-red-700">
+        <p role="alert" className="text-xs text-[color:var(--rebel-red)]">
           {submitError}
         </p>
       ) : null}
 
-      <button
+      <P5Button
         type="button"
         onClick={submitVotes}
         disabled={disableSubmit}
-        className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-medium text-zinc-900 hover:bg-zinc-100 disabled:opacity-60"
+        size="sm"
+        className="border-[3px] px-2 py-1 text-xs shadow-[2px_2px_0_var(--ink)]"
       >
         {isSubmitting ? "Saving…" : "Save"}
-      </button>
+      </P5Button>
     </div>
   );
 }
@@ -142,15 +151,43 @@ export function DialogueStream({
   onLedgerUpdated,
 }: Props) {
   const [orderBy, setOrderBy] = useState<ChildrenOrderBy>("totalVotes_desc");
-  const [replyBody, setReplyBody] = useState("");
+  const [replyText, setReplyText] = useState("");
   const [replyError, setReplyError] = useState("");
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
 
+  const canCreateArgument = canWrite && topicStatus === "active";
+
+  const replyEditor = useEditor({
+    extensions: [
+      StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
+      Underline,
+      Link.configure({ openOnClick: false }),
+    ],
+    content: "",
+    editorProps: {
+      attributes: {
+        "aria-label": "Reply",
+        class: [
+          "min-h-[96px] w-full px-3 py-2 text-sm text-zinc-900 outline-none",
+          "prose prose-sm max-w-none",
+        ].join(" "),
+      },
+    },
+    onUpdate: ({ editor }) => {
+      setReplyText(editor.getText());
+    },
+  });
+
+  useEffect(() => {
+    replyEditor?.setEditable(canCreateArgument);
+  }, [replyEditor, canCreateArgument]);
+
   useEffect(() => {
     setOrderBy("totalVotes_desc");
-    setReplyBody("");
+    setReplyText("");
     setReplyError("");
-  }, [parentArgumentId]);
+    replyEditor?.commands.clearContent(true);
+  }, [parentArgumentId, replyEditor]);
 
   const children = useChildren({
     parentArgumentId,
@@ -160,10 +197,9 @@ export function DialogueStream({
   });
 
   const canPost = useMemo(
-    () => Boolean(parentArgumentId && replyBody.trim()),
-    [parentArgumentId, replyBody],
+    () => Boolean(parentArgumentId && replyText.trim()),
+    [parentArgumentId, replyText],
   );
-  const canCreateArgument = canWrite && topicStatus === "active";
 
   async function onSubmitReply(event: FormEvent) {
     event.preventDefault();
@@ -171,7 +207,7 @@ export function DialogueStream({
     if (!canCreateArgument) return;
     setReplyError("");
 
-    const body = replyBody.trim();
+    const body = replyText.trim();
     if (!body) {
       setReplyError("Reply is required");
       return;
@@ -182,13 +218,15 @@ export function DialogueStream({
       parentId: parentArgumentId,
       title: null,
       body,
+      bodyRich: replyEditor?.getJSON() ?? null,
       initialVotes: 0,
     });
     setIsSubmittingReply(false);
 
     if (!result.ok) {
       setReplyError(toFriendlyMessage(result.error));
-      setReplyBody("");
+      replyEditor?.commands.clearContent(true);
+      setReplyText("");
       return;
     }
 
@@ -198,63 +236,48 @@ export function DialogueStream({
       label: toLabel(result.data.argument),
       prunedAt: result.data.argument.prunedAt,
     });
-    setReplyBody("");
+    replyEditor?.commands.clearContent(true);
+    setReplyText("");
   }
 
   return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-medium text-zinc-700">Dialogue</h2>
+    <P5Panel
+      bodyClassName="space-y-3"
+      header={
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-[color:var(--ink)] px-4 py-3 text-[color:var(--paper)]">
+          <h2 className="font-mono text-sm font-semibold uppercase tracking-wide">
+            Dialogue
+          </h2>
 
-        {parentArgumentId ? (
-          <div className="inline-flex rounded-md border border-zinc-200 bg-white p-0.5 text-sm">
-            <button
-              type="button"
-              onClick={() => setOrderBy("totalVotes_desc")}
-              aria-pressed={orderBy === "totalVotes_desc"}
-              className={[
-                "rounded-md px-2 py-1",
-                orderBy === "totalVotes_desc"
-                  ? "bg-zinc-900 text-white"
-                  : "text-zinc-700 hover:bg-zinc-100",
-              ].join(" ")}
-            >
-              最热
-            </button>
-            <button
-              type="button"
-              onClick={() => setOrderBy("createdAt_desc")}
-              aria-pressed={orderBy === "createdAt_desc"}
-              className={[
-                "rounded-md px-2 py-1",
-                orderBy === "createdAt_desc"
-                  ? "bg-zinc-900 text-white"
-                  : "text-zinc-700 hover:bg-zinc-100",
-              ].join(" ")}
-            >
-              最新
-            </button>
-          </div>
-        ) : null}
-      </div>
-
-      {!parentArgumentId ? (
-        <div className="rounded-md border border-zinc-200 bg-white p-4 text-sm text-zinc-700">
-          Select a node to view replies.
+          {parentArgumentId ? (
+            <P5Tabs
+              ariaLabel="Dialogue order"
+              value={orderBy}
+              onValueChange={setOrderBy}
+              tabs={[
+                { value: "totalVotes_desc", label: "最热" },
+                { value: "createdAt_desc", label: "最新" },
+              ]}
+              className="shadow-none"
+            />
+          ) : null}
         </div>
+      }
+    >
+      {!parentArgumentId ? (
+        <P5Alert role="status" variant="info" title="dialogue">
+          Select a node to view replies.
+        </P5Alert>
       ) : null}
 
       {parentArgumentId && children.status === "error" ? (
-        <div
-          role="alert"
-          className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800"
-        >
+        <P5Alert role="alert" variant="error" title="error">
           {children.errorMessage}
-        </div>
+        </P5Alert>
       ) : null}
 
       {parentArgumentId && children.status === "loading" ? (
-        <p className="text-sm text-zinc-600">
+        <p className="text-sm text-[color:var(--ink)]/80">
           Loading {toToggleLabel(orderBy)}…
         </p>
       ) : null}
@@ -264,64 +287,111 @@ export function DialogueStream({
           {canWrite ? (
             <form onSubmit={onSubmitReply} className="space-y-2">
               {topicStatus !== "active" ? (
-                <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">
+                <P5Alert role="status" variant="warn" title="read-only">
                   Topic is read-only ({topicStatus}). You can still withdraw votes.
-                </div>
+                </P5Alert>
               ) : null}
+
               <div className="space-y-1">
-                <label
-                  htmlFor="reply"
-                  className="text-sm font-medium text-zinc-700"
-                >
+                <label className="font-mono text-xs font-semibold uppercase tracking-wide text-[color:var(--ink)]">
                   Reply
                 </label>
-                <textarea
-                  id="reply"
-                  name="reply"
-                  value={replyBody}
-                  onChange={(event) => setReplyBody(event.target.value)}
-                  rows={3}
-                  disabled={!canCreateArgument}
-                  className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
-                />
+                <div
+                  className="overflow-hidden border-[var(--p5-border-width)] border-[color:var(--ink)] bg-[color:var(--paper)] shadow-[var(--p5-shadow-ink)]"
+                  style={{
+                    clipPath:
+                      "polygon(0 0, calc(100% - var(--p5-cut)) 0, 100% var(--p5-cut), 100% 100%, 0 100%)",
+                  }}
+                >
+                  <div className="flex flex-wrap items-center gap-1 border-b-[3px] border-[color:var(--ink)] bg-[color:var(--concrete-200)] p-1 text-xs">
+                    {(
+                      [
+                        {
+                          label: "Bold",
+                          onClick: () => replyEditor?.chain().focus().toggleBold().run(),
+                        },
+                        {
+                          label: "Italic",
+                          onClick: () => replyEditor?.chain().focus().toggleItalic().run(),
+                        },
+                        {
+                          label: "Underline",
+                          onClick: () => replyEditor?.chain().focus().toggleUnderline().run(),
+                        },
+                        {
+                          label: "• List",
+                          onClick: () => replyEditor?.chain().focus().toggleBulletList().run(),
+                        },
+                        {
+                          label: "1. List",
+                          onClick: () => replyEditor?.chain().focus().toggleOrderedList().run(),
+                        },
+                        {
+                          label: "Quote",
+                          onClick: () => replyEditor?.chain().focus().toggleBlockquote().run(),
+                        },
+                      ] as const
+                    ).map((tool) => (
+                      <button
+                        key={tool.label}
+                        type="button"
+                        onClick={tool.onClick}
+                        disabled={!replyEditor || !canCreateArgument}
+                        className="border-[2px] border-[color:var(--ink)] bg-[color:var(--paper)] px-2 py-1 font-semibold text-[color:var(--ink)] shadow-[2px_2px_0_var(--ink)] disabled:opacity-60"
+                        style={{
+                          clipPath:
+                            "polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%)",
+                        }}
+                      >
+                        {tool.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className={canCreateArgument ? "" : "opacity-60"}>
+                    <EditorContent editor={replyEditor} />
+                  </div>
+                </div>
               </div>
 
               {ledger ? (
-                <p className="text-xs text-zinc-600">
+                <p className="text-xs text-[color:var(--ink)]/80">
                   Balance: <span className="font-mono">{ledger.balance}</span>
                 </p>
               ) : null}
 
               {replyError ? (
-                <div
-                  role="alert"
-                  className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800"
-                >
+                <P5Alert role="alert" variant="error" title="error">
                   {replyError}
-                </div>
+                </P5Alert>
               ) : null}
 
-              <button
+              <P5Button
                 type="submit"
+                variant="primary"
                 disabled={!canPost || isSubmittingReply || !canCreateArgument}
-                className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
               >
                 {isSubmittingReply ? "Posting…" : "Post"}
-              </button>
+              </P5Button>
             </form>
           ) : (
-            <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">
+            <P5Alert role="status" variant="info" title="read-only">
               Read-only mode. Set up your identity to reply or vote.
-            </div>
+            </P5Alert>
           )}
 
           {children.items.length === 0 ? (
-            <p className="text-sm text-zinc-600">No replies yet.</p>
+            <p className="text-sm text-[color:var(--ink)]/80">No replies yet.</p>
           ) : (
-            <ul className="divide-y divide-zinc-200 rounded-md border border-zinc-200 bg-white">
+            <ul
+              className="divide-y-[3px] divide-[color:var(--ink)] border-[var(--p5-border-width)] border-[color:var(--ink)] bg-[color:var(--paper)] shadow-[var(--p5-shadow-ink)]"
+              style={{
+                clipPath:
+                  "polygon(0 0, calc(100% - var(--p5-cut)) 0, 100% var(--p5-cut), 100% 100%, 0 100%)",
+              }}
+            >
               {children.items.map((item) => (
                 <li key={item.id} className="p-3">
-                  <p className="text-sm text-zinc-800">{item.label}</p>
+                  <p className="text-sm text-[color:var(--ink)]">{item.label}</p>
                   {canWrite ? (
                     <VoteControl
                       topicId={topicId}
@@ -337,17 +407,17 @@ export function DialogueStream({
           )}
 
           {children.hasMore ? (
-            <button
+            <P5Button
               type="button"
               onClick={children.loadMore}
               disabled={children.isLoadingMore}
-              className="rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-100 disabled:opacity-60"
+              className="justify-center"
             >
               加载更多
-            </button>
+            </P5Button>
           ) : null}
         </div>
       ) : null}
-    </section>
+    </P5Panel>
   );
 }

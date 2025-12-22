@@ -1,12 +1,12 @@
 # AI 思想市场（The Thought Market）架构设计
 
-> 参考：`docs/prd.md`（PRD v3.1）与 `docs/design.md`（Persona5 对齐视觉规范）。本仓库使用 **Turborepo + pnpm workspaces** 进行构建与任务编排（见根目录 `package.json` / `turbo.json` / `pnpm-workspace.yaml`）。
+> 参考：`docs/stage01/prd.md`（PRD v3.1）与 `docs/stage01/design.md`（Persona5 对齐视觉规范）。本仓库使用 **Turborepo + pnpm workspaces** 进行构建与任务编排（见根目录 `package.json` / `turbo.json` / `pnpm-workspace.yaml`）。
 
-API 契约（请求/响应/错误/鉴权/SSE）以 `docs/api-contract.md` 为准。
+API 契约（请求/响应/错误/鉴权/SSE）以 `docs/stage01/api-contract.md` 为准。
 
-核心时序图/流程图（端到端）见 `docs/core-flows.md`。
+核心时序图/流程图（端到端）见 `docs/stage01/core-flows.md`。
 
-AI 异步任务与可选 Python 计算服务的细化设计见 `docs/ai-worker.md`。
+AI 异步任务与可选 Python 计算服务的细化设计见 `docs/stage01/ai-worker.md`。
 
 ## 1. 架构目标
 
@@ -133,7 +133,7 @@ Topic 状态对普通写操作的影响（v1.0）：
 4. 立场判定/Embedding **异步化**（BullMQ）：写入时标记 `analysisStatus=pending_analysis`，立即返回成功给前端。
 5. Worker 完成分析后回填 `stanceScore/embedding/analysisStatus=ready`，并通过 SSE 通知前端更新。
 
-降级渲染（Fallback）：当 `analysisStatus=pending_analysis` 时，前端以“占位节点”样式渲染（例如灰色/虚线边框、无立场色）；待分析完成后播放边框“着色”动画（灰 → RebelRed/Acid/Electric；详见 `docs/design.md`）。立场分只影响样式，不影响树布局位置。
+降级渲染（Fallback）：当 `analysisStatus=pending_analysis` 时，前端以“占位节点”样式渲染（例如灰色/虚线边框、无立场色）；待分析完成后播放边框“着色”动画（灰 → RebelRed/Acid/Electric；详见 `docs/stage01/design.md`）。立场分只影响样式，不影响树布局位置。
 
 ### 5.3 QV 投票/撤回（强一致性）
 
@@ -174,14 +174,14 @@ TDD 建议：在 `packages/core-logic` 提供 `calculateTransaction(currentVotes
 
 UI 呈现原则：
 
-- **边框色永远代表立场（stance）**：RebelRed（反对）/ Acid（中立）/ Electric（支持）（详见 `docs/design.md`）。
+- **边框色永远代表立场（stance）**：RebelRed（反对）/ Acid（中立）/ Electric（支持）（详见 `docs/stage01/design.md`）。
 - **聚类用边界/等高线/分组背景表示**：让用户直观看到“在吵同一件事（聚类），但立场对立（颜色）”。
 
 ## 6. 鉴权与匿名性（需要写清楚的细节）
 
 PRD 的目标可以通过“每 Topic 独立公钥身份”实现，但还需要补齐：
 
-> 密钥派生与签名的完整规范见 `docs/crypto.md`；本节仅保留架构层摘要与接口约束。
+> 密钥派生与签名的完整规范见 `docs/stage01/crypto.md`；本节仅保留架构层摘要与接口约束。
 
 - **密钥派生规范**（packages/crypto，跨 JS/Python 一致）：
   - `Mnemonic -> MasterSeed`：BIP39 生成 64-byte seed（可选 passphrase；MVP 默认空 passphrase）
@@ -277,7 +277,7 @@ SSE 断线续传（v1.0，轻量实现）：
     - `Stake_self(n) = totalVotes(n)`（节点自身票数）
     - `VisualWeight(n) = Stake_self(n) + α · Σ VisualWeight(c)`（c 为子节点，α=0.5）
     - `Size = BaseSize + k * log(VisualWeight(n) + 1)`（对数映射，0 票也可点击）
-  - 立场映射（v1.0）：`score <= -0.3` `RebelRed`（反对）；`(-0.3, 0.3)` `Acid`（中立）；`score >= 0.3` `Electric`（支持）；`analysisStatus=failed` 虚线灰（未知）（详见 `docs/design.md`）
+  - 立场映射（v1.0）：`score <= -0.3` `RebelRed`（反对）；`(-0.3, 0.3)` `Acid`（中立）；`score >= 0.3` `Electric`（支持）；`analysisStatus=failed` 虚线灰（未知）（详见 `docs/stage01/design.md`）
   - Pruned 节点：普通用户 tree/children 接口默认不返回（视为“隐藏+子树不可达”）；不参与聚类；但 My Activity 必须能列出并一键撤回
 - God View（v1.0 决策：散点/语义地图，放弃旭日图）：
   - 目的：鸟瞰“语义阵营/讨论热区”，而非再表达层级结构
@@ -314,7 +314,7 @@ SSE 断线续传（v1.0，轻量实现）：
 12. 已定：**QV/树渲染性能**：`Argument.totalVotes/totalCost` 反范式列；`setVotes` 事务内用 delta 原子更新。
 13. 已定：**聚类数据持久化**：`Camp` + `ClusterData(umapX, umapY)`，v1.0 仅保留 latest 覆盖更新。
 14. 已定：**Pruning 语义**：不参与聚类；不自动退款；对 pruned 节点禁止加票，仅允许减票/撤回（`targetVotes <= currentVotes`）；普通用户 tree/children 默认不返回（隐藏+子树不可达）；My Activity 必须可见并支持“一键撤回”。
-15. 已定：**立场阈值**：`[-1,-0.3]` RebelRed、`(-0.3,0.3)` Acid、`[0.3,1]` Electric；`analysisStatus=failed` 虚线灰（详见 `docs/design.md`）。
+15. 已定：**立场阈值**：`[-1,-0.3]` RebelRed、`(-0.3,0.3)` Acid、`[0.3,1]` Electric；`analysisStatus=failed` 虚线灰（详见 `docs/stage01/design.md`）。
 16. 已定：**聚类节流阈值**：5 分钟 Debounce；`new_arguments>=5` 或 `total_votes_change>=20%` 触发。
 17. 已定：**视觉权重口径**：`Stake_self=totalVotes`；`VisualWeight(n)=Stake_self(n)+0.5·ΣVisualWeight(children)`；`Size=BaseSize+k·log(VisualWeight+1)`。
 18. 已定：**Embedding 向量维度**：pgvector `vector(4096)`（随模型更换需迁移）。

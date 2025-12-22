@@ -1,7 +1,7 @@
 /**
  * @file sse.ts
  * @description SSE event envelope schema (discriminated union)
- * @see docs/api-contract.md#2.9
+ * @see docs/stage01/api-contract.md#2.9
  */
 import { z } from 'zod';
 

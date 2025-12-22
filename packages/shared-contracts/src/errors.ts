@@ -1,7 +1,7 @@
 /**
  * @file errors.ts
  * @description Error response schema
- * @see docs/api-contract.md#2.2
+ * @see docs/stage01/api-contract.md#2.2
  */
 import { z } from 'zod';
 

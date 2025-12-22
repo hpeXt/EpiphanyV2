@@ -1,7 +1,7 @@
 /**
  * @file objects.ts
  * @description Core DTO schemas: TopicSummary, Argument, LedgerMe, StakeMeItem, ClusterMap
- * @see docs/api-contract.md#2.3-2.7
+ * @see docs/stage01/api-contract.md#2.3-2.7
  */
 import { z } from 'zod';
 
@@ -23,10 +23,18 @@ const zUuid = z.string(); // UUID v7 string
 const zIsoDateTime = z.string(); // ISO 8601 datetime string
 const zHex64 = z.string(); // 64 chars hex (32 bytes pubkey)
 const zHex16Lowercase = z.string().regex(/^[0-9a-f]{16}$/, 'Must be 16 lowercase hex chars');
+export const zTiptapDoc = z
+  .object({
+    type: z.literal('doc'),
+    content: z.array(z.unknown()).optional(),
+  })
+  .passthrough();
+
+export type TiptapDoc = z.infer<typeof zTiptapDoc>;
 
 /**
  * TopicSummary - Topic metadata for lists
- * @see docs/api-contract.md#2.3
+ * @see docs/stage01/api-contract.md#2.3
  */
 export const zTopicSummary = z.object({
   id: zUuid,
@@ -42,7 +50,7 @@ export type TopicSummary = z.infer<typeof zTopicSummary>;
 
 /**
  * Argument - Full argument object
- * @see docs/api-contract.md#2.4
+ * @see docs/stage01/api-contract.md#2.4
  */
 export const zArgument = z.object({
   id: zUuid,
@@ -50,6 +58,7 @@ export const zArgument = z.object({
   parentId: zUuid.nullable(),
   title: z.string().nullable(),
   body: z.string(),
+  bodyRich: zTiptapDoc.nullable().optional(),
   authorId: zHex16Lowercase, // sha256(pubkey).slice(0,16) lowercase hex
   analysisStatus: zArgumentAnalysisStatus,
   stanceScore: z.number().min(-1).max(1).nullable(),
@@ -64,7 +73,7 @@ export type Argument = z.infer<typeof zArgument>;
 
 /**
  * LedgerMe - User's ledger for a topic
- * @see docs/api-contract.md#2.5
+ * @see docs/stage01/api-contract.md#2.5
  */
 export const zLedgerMe = z.object({
   topicId: zUuid,
@@ -79,7 +88,7 @@ export type LedgerMe = z.infer<typeof zLedgerMe>;
 
 /**
  * StakeMeItem - Individual stake item
- * @see docs/api-contract.md#2.6
+ * @see docs/stage01/api-contract.md#2.6
  */
 export const zStakeMeItem = z.object({
   argumentId: zUuid,
@@ -95,7 +104,7 @@ export type StakeMeItem = z.infer<typeof zStakeMeItem>;
 
 /**
  * ClusterMap - God View data
- * @see docs/api-contract.md#2.7
+ * @see docs/stage01/api-contract.md#2.7
  */
 export const zClusterMapPoint = z.object({
   argumentId: zUuid,
@@ -132,7 +141,7 @@ export type ClusterMap = z.infer<typeof zClusterMap>;
 
 /**
  * ConsensusReport - Generated consensus report for a topic
- * @see docs/api-contract.md#2.8
+ * @see docs/stage01/api-contract.md#2.8
  */
 const zJsonObject = z.record(z.unknown());
 

@@ -2,18 +2,18 @@
 
 > 目标：后续所有“验收”都在服务器环境发生（staging/验收机/CI runner），因此测试体系以 **可部署、可黑盒验收、可重复运行** 为第一原则。
 >
-> 本文是测试规划，不替代 TDD 的 step 文档：实现过程仍按 `docs/steps/stepXX.md` 逐步落地（每步先测后写）。
+> 本文是测试规划，不替代 TDD 的 step 文档：实现过程仍按 `docs/stage01/steps/stepXX.md` 逐步落地（每步先测后写）。
 
 ## 0. 参考文档（Single Source of Truth）
 
-- Roadmap：`docs/roadmap.md`
-- API 契约：`docs/api-contract.md`
-- DB 语义与不变量：`docs/database.md`
-- Crypto/签名：`docs/crypto.md`
-- 核心端到端流程：`docs/core-flows.md`
-- 架构决策与边界：`docs/architecture.md`
-- Worker 设计：`docs/ai-worker.md`
-- UI/设计规范（用于 UI 验收，不影响服务端口径）：`docs/design.md`、`docs/prd.md`
+- Roadmap：`docs/stage01/roadmap.md`
+- API 契约：`docs/stage01/api-contract.md`
+- DB 语义与不变量：`docs/stage01/database.md`
+- Crypto/签名：`docs/stage01/crypto.md`
+- 核心端到端流程：`docs/stage01/core-flows.md`
+- 架构决策与边界：`docs/stage01/architecture.md`
+- Worker 设计：`docs/stage01/ai-worker.md`
+- UI/设计规范（用于 UI 验收，不影响服务端口径）：`docs/stage01/design.md`、`docs/stage01/prd.md`
 
 ## 1. 验收环境与原则
 
@@ -35,14 +35,14 @@
 - **稳定与可控**：
   - AI 默认使用 `AI_PROVIDER=mock`（确定性输出，避免网络/额度/波动）。
   - 聚类默认 `CLUSTER_ENGINE=node` 或 `python` 任选其一，但必须可在验收机上可复现。
-- **契约冻结**：接口字段、错误码、SSE envelope 以 `docs/api-contract.md` 为准；任何变更必须先改文档再改实现与测试。
+- **契约冻结**：接口字段、错误码、SSE envelope 以 `docs/stage01/api-contract.md` 为准；任何变更必须先改文档再改实现与测试。
 
 ### 1.3 统一验收入口（建议）
 
 将验收测试按“可执行套件”组织（可落到 `apps/e2e-blackbox` 或 `packages/acceptance`）：
 
 - `smoke`：5 分钟内完成，部署后立刻跑（健康检查 + 关键写路径冒烟）。
-- `acceptance`：覆盖核心流程 1~6（见 `docs/core-flows.md`）。
+- `acceptance`：覆盖核心流程 1~6（见 `docs/stage01/core-flows.md`）。
 - `regression`：全量回归（含边界/并发/安全/性能基线），可夜间跑。
 
 ### 1.4 Coolify CLI（本项目默认验收通道）
@@ -50,11 +50,11 @@
 本项目的“服务器验收”默认通过 **Coolify CLI + HTTP 交互**完成：
 
 - 资源状态/部署日志/运行日志：`coolify app|database|service ...`
-- 对外行为验证：对部署后的 `API_BASE_URL/WEB_BASE_URL` 发起 `curl`/脚本请求（按 `docs/api-contract.md` 验收）
+- 对外行为验证：对部署后的 `API_BASE_URL/WEB_BASE_URL` 发起 `curl`/脚本请求（按 `docs/stage01/api-contract.md` 验收）
 
-运行手册见：`docs/coolify-acceptance.md`（含 context 配置、资源定位、部署/日志/重启、SSE 验收）。
+运行手册见：`docs/stage01/coolify-acceptance.md`（含 context 配置、资源定位、部署/日志/重启、SSE 验收）。
 
-默认目标环境见：`docs/coolify-target.md`（仅包含资源 uuid/name 与对外 URL，不含 token）。
+默认目标环境见：`docs/stage01/coolify-target.md`（仅包含资源 uuid/name 与对外 URL，不含 token）。
 
 签名接口建议使用脚本生成 headers：`scripts/coolify/signed-request.mjs`（默认把临时 key 缓存到 `tmp/`，避免手工算签名出错）。
 
@@ -77,7 +77,7 @@
 策略：
 
 - **服务端响应**：黑盒请求后，用 `packages/shared-contracts` 对 response 进行 runtime parse。
-- **错误响应**：所有非 2xx 必须满足 `{ error: { code, message, details? } }`，且 `code` 在允许集合内（见 `docs/api-contract.md#2.2`）。
+- **错误响应**：所有非 2xx 必须满足 `{ error: { code, message, details? } }`，且 `code` 在允许集合内（见 `docs/stage01/api-contract.md#2.2`）。
 
 ### 2.3 集成测试（Integration）
 
@@ -92,7 +92,7 @@
 
 ### 2.4 端到端黑盒验收（E2E Blackbox / Server Acceptance）
 
-目标：覆盖 `docs/core-flows.md` 的端到端流程，真实起 API+DB+Redis+Worker（可选 Web）。
+目标：覆盖 `docs/stage01/core-flows.md` 的端到端流程，真实起 API+DB+Redis+Worker（可选 Web）。
 
 核心点：
 
@@ -159,7 +159,7 @@
 
 ### Suite B — Flow 1：创建 Topic + Host 认领
 
-对齐：`docs/core-flows.md#1`、`docs/api-contract.md#3.1/#3.2`。
+对齐：`docs/stage01/core-flows.md#1`、`docs/stage01/api-contract.md#3.1/#3.2`。
 
 - B1. `POST /v1/topics`：返回 `topicId/rootArgumentId/claimToken/expiresAt`；DB 内 Topic+Root 同事务生成。
 - B2. `CLAIM_OWNER`：
@@ -169,7 +169,7 @@
 
 ### Suite C — Flow 2：公共读（tree/children）+ pruning 过滤
 
-对齐：`docs/core-flows.md#2`、`docs/api-contract.md#3.4/#3.5`。
+对齐：`docs/stage01/core-flows.md#2`、`docs/stage01/api-contract.md#3.4/#3.5`。
 
 - C1. `GET /v1/topics/:topicId/tree?depth=3`：depth 语义正确（超过深度不返回）。
 - C2. `GET /v1/arguments/:id/children`：
@@ -179,7 +179,7 @@
 
 ### Suite D — Flow 3：发言（createArgument + optional initialVotes）+ AI 回填
 
-对齐：`docs/core-flows.md#3`、`docs/api-contract.md#3.6`、`docs/database.md#6.2`。
+对齐：`docs/stage01/core-flows.md#3`、`docs/stage01/api-contract.md#3.6`、`docs/stage01/database.md#6.2`。
 
 - D1. 需要签名：缺少/错误签名 → `401 INVALID_SIGNATURE`。
 - D2. topic/status 校验：
@@ -195,7 +195,7 @@
 
 ### Suite E — Flow 4：QV setVotes（强幂等 + 不变量 + 限制）
 
-对齐：`docs/core-flows.md#4`、`docs/api-contract.md#3.7`、`docs/database.md#6.3`。
+对齐：`docs/stage01/core-flows.md#4`、`docs/stage01/api-contract.md#3.7`、`docs/stage01/database.md#6.3`。
 
 - E1. 输入校验：`targetVotes` 必须整数且 0..10；否则 `400 BAD_REQUEST`。
 - E2. 余额不足：`402 INSUFFICIENT_BALANCE`，且 stake/ledger/totals 全部不变。
@@ -213,7 +213,7 @@
 
 ### Suite F — Flow 5：Pruning + My Activity 找回资金
 
-对齐：`docs/core-flows.md#5`、`docs/api-contract.md#3.9/#3.10`、`docs/roadmap.md` pruning 口径。
+对齐：`docs/stage01/core-flows.md#5`、`docs/stage01/api-contract.md#3.9/#3.10`、`docs/stage01/roadmap.md` pruning 口径。
 
 - F1. Host pruning 后：
   - 公共读 tree/children 不再返回 pruned
@@ -227,7 +227,7 @@
 
 ### Suite G — Flow 6：聚类（God View 数据）+ SSE
 
-对齐：`docs/core-flows.md#6`、`docs/api-contract.md#3.11`、`docs/ai-worker.md#5`。
+对齐：`docs/stage01/core-flows.md#6`、`docs/stage01/api-contract.md#3.11`、`docs/stage01/ai-worker.md#5`。
 
 - G1. 聚类输入口径：
   - 仅 embedding 参与；立场分不参与
@@ -246,7 +246,7 @@
 
 > 若“最终验收”包含 UI 演示，建议在服务器验收机用 Playwright 做最小 E2E（避免仅 API 通过但页面不可用）。
 >
-> 对齐：`docs/roadmap.md` M3/M4/M6/M7、`docs/design.md`（视觉原则）、`docs/core-flows.md`。
+> 对齐：`docs/stage01/roadmap.md` M3/M4/M6/M7、`docs/stage01/design.md`（视觉原则）、`docs/stage01/core-flows.md`。
 
 - W1. Topic 列表与创建
   - 能创建 topic 并在列表出现（契约字段正确）
@@ -265,11 +265,11 @@
   - pruned stake 可见并可一键撤回（资金返还）
 - W6. God View（M6）
   - 能拉取并渲染 cluster-map（空/错误有降级提示）
-  - stance 与 cluster 的视觉编码不冲突（见 `docs/prd.md`/`docs/design.md`）
+  - stance 与 cluster 的视觉编码不冲突（见 `docs/stage01/prd.md`/`docs/stage01/design.md`）
 
 ## 5. SSE 专项测试清单
 
-对齐：`docs/api-contract.md#3.12`。
+对齐：`docs/stage01/api-contract.md#3.12`。
 
 - 事件内容：只允许 invalidation（`id + reason`），禁止携带私密数据（例如 ledger/stakes 明细）。
 - `Last-Event-ID`：
@@ -328,14 +328,14 @@
 
 ## 9. 手动验收（视觉/交互，最小清单）
 
-> 只覆盖“契约没法自动保证”的部分，视觉原则以 `docs/design.md` 为准。
+> 只覆盖“契约没法自动保证”的部分，视觉原则以 `docs/stage01/design.md` 为准。
 
 - Focus View
-  - 连接线为直角折线（不使用曲线），支持渐进式披露（见 `docs/prd.md`）
-  - `pending_analysis` 节点有明确降级样式；`ready/failed` 状态可区分（见 `docs/ai-worker.md`）
+  - 连接线为直角折线（不使用曲线），支持渐进式披露（见 `docs/stage01/prd.md`）
+  - `pending_analysis` 节点有明确降级样式；`ready/failed` 状态可区分（见 `docs/stage01/ai-worker.md`）
 - Calling Card（Hover）
   - 信息卡为厚描边 + 偏移投影 + 轻微不规则裁切（禁止玻璃风）
-  - 内容包含原文片段/票数等关键数值（见 `docs/prd.md`）
+  - 内容包含原文片段/票数等关键数值（见 `docs/stage01/prd.md`）
 - 立场编码（Stance）
-  - 支持=Electric，反对=RebelRed，中立=Acid；描边与连线统一 Ink（见 `docs/design.md`）
-  - stance 仅影响样式，不改变聚类输入（见 `docs/prd.md`/`docs/ai-worker.md`）
+  - 支持=Electric，反对=RebelRed，中立=Acid；描边与连线统一 Ink（见 `docs/stage01/design.md`）
+  - stance 仅影响样式，不改变聚类输入（见 `docs/stage01/prd.md`/`docs/stage01/ai-worker.md`）

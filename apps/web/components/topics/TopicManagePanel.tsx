@@ -5,6 +5,13 @@ import { useMemo, useState, type FormEvent } from "react";
 import type { TopicCommand } from "@epiphany/shared-contracts";
 
 import { apiClient } from "@/lib/apiClient";
+import { P5Alert } from "@/components/ui/P5Alert";
+import { P5Button } from "@/components/ui/P5Button";
+import { useP5Confirm } from "@/components/ui/P5ConfirmProvider";
+import { P5Input } from "@/components/ui/P5Input";
+import { P5Panel } from "@/components/ui/P5Panel";
+import { P5Textarea } from "@/components/ui/P5Textarea";
+import { useP5Toast } from "@/components/ui/P5ToastProvider";
 
 type Props = {
   topicId: string;
@@ -25,6 +32,8 @@ export function TopicManagePanel({
 }: Props) {
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { confirm } = useP5Confirm();
+  const { toast } = useP5Toast();
 
   const [nextTitle, setNextTitle] = useState(topicTitle);
   const [nextBody, setNextBody] = useState(rootBody);
@@ -52,16 +61,29 @@ export function TopicManagePanel({
 
   async function runCommand(command: TopicCommand) {
     setSubmitError("");
+
+    if (command.type === "SET_STATUS" && command.payload.status === "archived") {
+      const ok = await confirm({
+        title: "Archive topic",
+        message: "This will make the topic permanently read-only.\n\nContinue?",
+        confirmLabel: "Archive",
+        variant: "danger",
+      });
+      if (!ok) return;
+    }
+
     setIsSubmitting(true);
     const result = await apiClient.executeTopicCommand(topicId, command);
     setIsSubmitting(false);
 
     if (!result.ok) {
       setSubmitError(result.error.message);
+      toast({ variant: "error", title: "host", message: result.error.message });
       return;
     }
 
     onInvalidate();
+    toast({ variant: "success", title: "host", message: "Command applied." });
   }
 
   async function onSubmitEditRoot(event: FormEvent) {
@@ -75,43 +97,44 @@ export function TopicManagePanel({
   }
 
   return (
-    <section className="rounded-md border border-zinc-200 bg-white p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-sm font-medium text-zinc-700">Manage topic</h2>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100"
-        >
-          Close
-        </button>
-      </div>
-
-      <div className="mt-3 space-y-3">
+    <P5Panel
+      header={
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-[color:var(--ink)] px-4 py-3 text-[color:var(--paper)]">
+          <h2 className="font-mono text-sm font-semibold uppercase tracking-wide">
+            Host Deck
+          </h2>
+          <P5Button type="button" onClick={onClose} size="sm" className="shadow-none">
+            Close
+          </P5Button>
+        </div>
+      }
+      bodyClassName="space-y-3"
+    >
         <div className="space-y-2">
-          <p className="text-sm text-zinc-700">
+          <p className="text-sm text-[color:var(--ink)]">
             Status: <span className="font-mono">{topicStatus}</span>
           </p>
           <div className="flex flex-wrap gap-2">
             {statusActions.map((action) => (
-              <button
+              <P5Button
                 key={action.label}
                 type="button"
                 disabled={isSubmitting || (topicStatus === "archived")}
                 onClick={() => runCommand(action.command)}
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100 disabled:opacity-60"
+                size="sm"
+                className="border-[3px] shadow-[2px_2px_0_var(--ink)]"
               >
                 {action.label}
-              </button>
+              </P5Button>
             ))}
             {topicStatus === "archived" ? (
-              <span className="text-sm text-zinc-500">
+              <span className="text-sm text-[color:var(--ink)]/70">
                 Archived topics are read-only.
               </span>
             ) : null}
           </div>
           {canUnfreeze ? (
-            <p className="text-sm text-zinc-600">
+            <p className="text-sm text-[color:var(--ink)]/80">
               Frozen topics only allow unfreeze.
             </p>
           ) : null}
@@ -119,85 +142,98 @@ export function TopicManagePanel({
 
         <form onSubmit={onSubmitEditRoot} className="space-y-2">
           <div className="space-y-1">
-            <label htmlFor="root-title" className="text-sm font-medium text-zinc-700">
+            <label htmlFor="root-title" className="text-sm font-semibold text-[color:var(--ink)]">
               Root title
             </label>
-            <input
+            <P5Input
               id="root-title"
               value={nextTitle}
               onChange={(event) => setNextTitle(event.target.value)}
               disabled={!canManage || isSubmitting}
-              className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm disabled:opacity-60"
             />
           </div>
           <div className="space-y-1">
-            <label htmlFor="root-body" className="text-sm font-medium text-zinc-700">
+            <label htmlFor="root-body" className="text-sm font-semibold text-[color:var(--ink)]">
               Root body
             </label>
-            <textarea
+            <P5Textarea
               id="root-body"
               value={nextBody}
               onChange={(event) => setNextBody(event.target.value)}
               disabled={!canManage || isSubmitting}
               rows={4}
-              className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm disabled:opacity-60"
             />
           </div>
-          <button
+          <P5Button
             type="submit"
             disabled={!canManage || isSubmitting}
-            className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+            variant="primary"
           >
             Save root
-          </button>
+          </P5Button>
         </form>
 
         <div className="space-y-2">
-          <h3 className="text-sm font-medium text-zinc-700">Pruning</h3>
+          <h3 className="font-mono text-sm font-semibold uppercase tracking-wide text-[color:var(--ink)]">
+            Pruning
+          </h3>
           <div className="grid gap-2 md:grid-cols-2">
             <div className="space-y-1">
-              <label htmlFor="prune-argument-id" className="text-sm font-medium text-zinc-700">
+              <label
+                htmlFor="prune-argument-id"
+                className="text-sm font-semibold text-[color:var(--ink)]"
+              >
                 Argument ID
               </label>
-              <input
+              <P5Input
                 id="prune-argument-id"
                 value={pruneArgumentId}
                 onChange={(event) => setPruneArgumentId(event.target.value)}
                 disabled={!canManage || isSubmitting}
-                className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm disabled:opacity-60"
               />
             </div>
             <div className="space-y-1">
-              <label htmlFor="prune-reason" className="text-sm font-medium text-zinc-700">
+              <label
+                htmlFor="prune-reason"
+                className="text-sm font-semibold text-[color:var(--ink)]"
+              >
                 Reason (optional)
               </label>
-              <input
+              <P5Input
                 id="prune-reason"
                 value={pruneReason}
                 onChange={(event) => setPruneReason(event.target.value)}
                 disabled={!canManage || isSubmitting}
-                className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm disabled:opacity-60"
               />
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
+            <P5Button
               type="button"
               disabled={!canManage || isSubmitting || !pruneArgumentId.trim()}
-              onClick={() =>
-                runCommand({
+              onClick={async () => {
+                const ok = await confirm({
+                  title: "Prune argument",
+                  message:
+                    "This will hide the argument from public reads (stakes can still be withdrawn).\n\nContinue?",
+                  confirmLabel: "Prune",
+                  variant: "danger",
+                });
+                if (!ok) return;
+                await runCommand({
                   type: "PRUNE_ARGUMENT",
                   payload: {
                     argumentId: pruneArgumentId.trim(),
                     reason: pruneReason.trim() ? pruneReason.trim() : null,
                   },
-                })
-              }
-              className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100 disabled:opacity-60"
+                });
+              }}
+              variant="danger"
+              size="sm"
             >
               Prune
-            </button>
-            <button
+            </P5Button>
+            <P5Button
               type="button"
               disabled={!canManage || isSubmitting || !pruneArgumentId.trim()}
               onClick={() =>
@@ -206,23 +242,18 @@ export function TopicManagePanel({
                   payload: { argumentId: pruneArgumentId.trim() },
                 })
               }
-              className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100 disabled:opacity-60"
+              size="sm"
             >
               Unprune
-            </button>
+            </P5Button>
           </div>
         </div>
 
         {submitError ? (
-          <div
-            role="alert"
-            className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800"
-          >
+          <P5Alert role="alert" variant="error" title="error">
             {submitError}
-          </div>
+          </P5Alert>
         ) : null}
-      </div>
-    </section>
+    </P5Panel>
   );
 }
-

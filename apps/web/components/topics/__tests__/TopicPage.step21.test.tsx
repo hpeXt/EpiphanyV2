@@ -172,7 +172,7 @@ describe("TopicPage (Step 21 - Host + read-only semantics)", () => {
     expect(await screen.findByText("Child")).toBeInTheDocument();
 
     const reply = screen.getByLabelText("Reply");
-    expect(reply).toBeDisabled();
+    expect(reply).toHaveAttribute("contenteditable", "false");
 
     const votesSlider = screen.getByLabelText("Votes");
     fireEvent.change(votesSlider, { target: { value: "1" } });

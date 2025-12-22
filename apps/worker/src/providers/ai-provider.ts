@@ -1,7 +1,7 @@
 /**
  * @file ai-provider.ts
  * @description AI Provider interface for stance analysis and embedding generation
- * @see docs/ai-worker.md#4
+ * @see docs/stage01/ai-worker.md#4
  */
 
 /**

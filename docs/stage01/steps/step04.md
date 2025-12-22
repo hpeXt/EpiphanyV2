@@ -4,7 +4,7 @@
 
 把 QV 核心交易计算抽成无框架、无 DB 依赖的纯函数，并用单测锁死不变量（后续 API 只做“编排 + 事务”）。
 
-来源：`docs/architecture.md` 5.3、`docs/database.md` 6.3、`docs/api-contract.md` 3.7。
+来源：`docs/stage01/architecture.md` 5.3、`docs/stage01/database.md` 6.3、`docs/stage01/api-contract.md` 3.7。
 
 ## 依赖
 
@@ -51,11 +51,11 @@
 ## 3) Refactor：模块化与收敛
 
 - [ ] 让 API 能把不同写路径（createArgument initialVotes / setVotes）复用同一套计算与校验
-- [ ] 错误映射：保持与 `docs/api-contract.md` 的 `error.code` 一致（可通过 shared-contracts 常量化）
+- [ ] 错误映射：保持与 `docs/stage01/api-contract.md` 的 `error.code` 一致（可通过 shared-contracts 常量化）
 
 ## 4) 验收
 
-> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+> 前置：先按 `docs/stage01/coolify-target.md` export 环境变量（通用手册：`docs/stage01/coolify-acceptance.md`）。
 
 ### 服务器验收（推荐）
 
@@ -73,7 +73,7 @@ node scripts/coolify/signed-request.mjs POST /v1/arguments/<argumentId>/votes '{
 验收点：
 
 - [ ] 部署成功，无构建/启动失败
-- [ ] （回归）setVotes 黑盒用例通过，资金守恒（见 `docs/test-plan.md` Suite E）
+- [ ] （回归）setVotes 黑盒用例通过，资金守恒（见 `docs/stage01/test-plan.md` Suite E）
 
 ### 本地快速反馈（可选）
 

@@ -1,12 +1,12 @@
 # 核心流程：时序图 / 流程图（v1.0）
 
-本文档把 `docs/architecture.md` 与 `docs/api-contract.md` 中定义的“端到端核心流程”用 **Mermaid** 的时序图/流程图固化，便于前后端/Worker 对齐实现与验收。
+本文档把 `docs/stage01/architecture.md` 与 `docs/stage01/api-contract.md` 中定义的“端到端核心流程”用 **Mermaid** 的时序图/流程图固化，便于前后端/Worker 对齐实现与验收。
 
 ## 0. 参与方与约定
 
 - **Web**：`apps/web`（Next.js），包含 Key 派生、签名、缓存与 SSE 订阅逻辑
 - **API**：`apps/api`（NestJS），包含鉴权、QV 事务、SSE 事件生产/补发
-- **DB**：PostgreSQL（`docs/database.md` 定义 schema 与事务约束）
+- **DB**：PostgreSQL（`docs/stage01/database.md` 定义 schema 与事务约束）
 - **Redis**：claimToken、nonce 去重/幂等缓存、SSE Redis Stream
 - **Worker**：BullMQ 消费者（AI 立场/embedding、聚类、报告生成等）
 - **AI Provider**：外部 LLM/Embedding（仅 Worker 调用）
@@ -17,7 +17,7 @@
 
 ## 1. 创建 Topic + Host 认领（CLAIM_OWNER）
 
-相关文档：`docs/architecture.md`「5.1 创建 Topic」与 `docs/api-contract.md`「3.1/3.2」。
+相关文档：`docs/stage01/architecture.md`「5.1 创建 Topic」与 `docs/stage01/api-contract.md`「3.1/3.2」。
 
 ```mermaid
 sequenceDiagram
@@ -33,7 +33,7 @@ sequenceDiagram
   API->>Redis: SET claimToken (TTL 5~10min)
   API-->>Host: 200 {topicId, rootArgumentId, claimToken, expiresAt}
 
-  Note over Host: derive hostKeypair per docs/crypto.md<br/>ed25519Seed = HMAC_SHA512(masterSeed, "thought-market-topic-v1:" + topicId)[0:32]<br/>keypair = Ed25519.KeypairFromSeed(ed25519Seed)
+  Note over Host: derive hostKeypair per docs/stage01/crypto.md<br/>ed25519Seed = HMAC_SHA512(masterSeed, "thought-market-topic-v1:" + topicId)[0:32]<br/>keypair = Ed25519.KeypairFromSeed(ed25519Seed)
 
   Host->>API: POST /v1/topics/:topicId/commands (CLAIM_OWNER)\nSigned + X-Claim-Token
   API->>Redis: validate claimToken (exists + not expired)
@@ -50,7 +50,7 @@ sequenceDiagram
 
 ## 2. Focus View 首屏加载 + SSE 失效通知（Entity Invalidation）
 
-相关文档：`docs/architecture.md`「通信与实时性」与 `docs/api-contract.md`「3.4/3.5/3.12」。
+相关文档：`docs/stage01/architecture.md`「通信与实时性」与 `docs/stage01/api-contract.md`「3.4/3.5/3.12」。
 
 ```mermaid
 flowchart TD
@@ -74,7 +74,7 @@ flowchart TD
 
 ## 3. 发言（createArgument）+ 可选 initialVotes + AI 回填
 
-相关文档：`docs/architecture.md`「5.2 发言」与 `docs/api-contract.md`「3.6」。
+相关文档：`docs/stage01/architecture.md`「5.2 发言」与 `docs/stage01/api-contract.md`「3.6」。
 
 ```mermaid
 sequenceDiagram
@@ -115,7 +115,7 @@ sequenceDiagram
 
 ## 4. QV setVotes（投票/撤回）+ pruned/只读限制 + 幂等
 
-相关文档：`docs/architecture.md`「5.3 QV 投票/撤回」与 `docs/api-contract.md`「3.7」。
+相关文档：`docs/stage01/architecture.md`「5.3 QV 投票/撤回」与 `docs/stage01/api-contract.md`「3.7」。
 
 ```mermaid
 sequenceDiagram
@@ -148,7 +148,7 @@ sequenceDiagram
 
 ## 5. Host Pruning + My Activity 资金找回（一键撤回）
 
-相关文档：`docs/prd.md`「2.6 枯萎与资金清算 / 2.5 我的界面」与 `docs/api-contract.md`「3.2/3.9/3.10/3.7」。
+相关文档：`docs/stage01/prd.md`「2.6 枯萎与资金清算 / 2.5 我的界面」与 `docs/stage01/api-contract.md`「3.2/3.9/3.10/3.7」。
 
 ```mermaid
 flowchart TD
@@ -173,7 +173,7 @@ flowchart TD
 
 ## 6. God View 聚类批处理（UMAP + HDBSCAN）与推送
 
-相关文档：`docs/architecture.md`「5.4 阵营识别」与 `docs/api-contract.md`「3.11/3.12」。
+相关文档：`docs/stage01/architecture.md`「5.4 阵营识别」与 `docs/stage01/api-contract.md`「3.11/3.12」。
 
 ```mermaid
 sequenceDiagram

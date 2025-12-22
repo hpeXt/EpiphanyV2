@@ -1,7 +1,7 @@
 /**
  * @file endpoints.test.ts
  * @description Tests for API endpoint response schemas
- * @see docs/api-contract.md#3.x
+ * @see docs/stage01/api-contract.md#3.x
  */
 import {
   // POST /v1/topics
@@ -13,6 +13,7 @@ import {
   // GET /v1/arguments/:argumentId/children
   zArgumentChildrenResponse,
   // POST /v1/topics/:topicId/arguments
+  zCreateArgumentRequest,
   zCreateArgumentResponse,
   // POST /v1/arguments/:argumentId/votes
   zSetVotesResponse,
@@ -38,6 +39,31 @@ import {
   type BatchBalanceResponse,
   type ConsensusReportLatestResponse,
 } from '../index.js';
+
+describe('POST /v1/topics/:topicId/arguments request', () => {
+  it('should accept bodyRich (TipTap/ProseMirror JSON) and preserve it', () => {
+    const fixture = {
+      parentId: '0193e3a6-0b7d-7a8d-9f2c-parent123456',
+      title: null,
+      body: 'Hello world',
+      bodyRich: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: 'Hello world' }],
+          },
+        ],
+      },
+      initialVotes: 0,
+    };
+
+    const result = zCreateArgumentRequest.safeParse(fixture);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect((result.data as any).bodyRich).toEqual(fixture.bodyRich);
+  });
+});
 
 describe('POST /v1/topics response', () => {
   it('should parse a valid response with claimToken and expiresAt', () => {

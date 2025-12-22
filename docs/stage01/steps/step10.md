@@ -8,7 +8,7 @@
 - pruned/frozen/archived 限制：只允许减票/撤回
 - 强幂等：同 `(pubkey, nonce)` 重放返回同响应（Redis 缓存 5 分钟）
 
-来源：`docs/api-contract.md` 3.7、`docs/core-flows.md#4`、`docs/roadmap.md` 0.2。
+来源：`docs/stage01/api-contract.md` 3.7、`docs/stage01/core-flows.md#4`、`docs/stage01/roadmap.md` 0.2。
 
 ## 依赖
 
@@ -25,7 +25,7 @@
 
 ## 1) Red：先写测试
 
-对照全量规划：`docs/test-plan.md`（Suite E — Flow 4：QV setVotes）。
+对照全量规划：`docs/stage01/test-plan.md`（Suite E — Flow 4：QV setVotes）。
 
 ### API e2e（supertest）
 
@@ -49,7 +49,7 @@
   - 同 nonce 重放：第二次请求不进入事务计算，直接返回第一次的 200 响应（字段完全一致）
   - 幂等缓存 TTL 至少 5 分钟（可用 fake timers 或 Redis TTL 断言）
   - 同 nonce 但不同请求体（例如先 `targetVotes=3` 再重放 `targetVotes=1`）→ 返回第一次成功响应，且 DB 不应被第二次请求改变
-  - 同 `(pubkey, nonce)` 作用于不同 argument → 返回第一次成功响应（按 `docs/api-contract.md#1.4` 的 `(pubkey, nonce)` 幂等键口径），且第二个 argument 不应被改变
+  - 同 `(pubkey, nonce)` 作用于不同 argument → 返回第一次成功响应（按 `docs/stage01/api-contract.md#1.4` 的 `(pubkey, nonce)` 幂等键口径），且第二个 argument 不应被改变
 - [ ] 契约校验：响应能被 `shared-contracts` parse（字段名/类型一致）
 - [ ] （推荐）成功投票/撤回后写入 SSE invalidation：`argument_updated(reason="new_vote")`（写入 Redis Stream，SSE endpoint 在 Step 12）
 
@@ -60,7 +60,7 @@
   - Redis idempotency：
     - key：`idemp:setVotes:{pubkey}:{nonce}`
     - value：序列化成功响应（5 min TTL）
-  - DB 事务（参考 `docs/database.md#6.3`）：
+  - DB 事务（参考 `docs/stage01/database.md#6.3`）：
     - `SELECT ... FOR UPDATE`：topic、argument、ledger、stake
     - 校验 pruned/status
     - 用 `packages/core-logic` 计算 delta
@@ -74,7 +74,7 @@
 
 ## 4) 验收
 
-> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+> 前置：先按 `docs/stage01/coolify-target.md` export 环境变量（通用手册：`docs/stage01/coolify-acceptance.md`）。
 
 ### 服务器验收（推荐）
 

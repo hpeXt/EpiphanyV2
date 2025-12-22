@@ -8,7 +8,7 @@
 - `GET /v1/topics/:topicId/stakes/me`
 - `POST /v1/user/batch-balance`（item 级签名）
 
-来源：`docs/api-contract.md` 3.8/3.9/3.10、流程见 `docs/core-flows.md#5`。
+来源：`docs/stage01/api-contract.md` 3.8/3.9/3.10、流程见 `docs/stage01/core-flows.md#5`。
 
 ## 依赖
 
@@ -25,7 +25,7 @@
 
 ## 1) Red：先写测试
 
-对照全量规划：`docs/test-plan.md`（Suite F — Flow 5：My Activity 数据口径）。
+对照全量规划：`docs/stage01/test-plan.md`（Suite F — Flow 5：My Activity 数据口径）。
 
 ### API e2e
 
@@ -66,7 +66,7 @@
 
 ## 4) 验收
 
-> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+> 前置：先按 `docs/stage01/coolify-target.md` export 环境变量（通用手册：`docs/stage01/coolify-acceptance.md`）。
 
 ### 服务器验收（推荐）
 

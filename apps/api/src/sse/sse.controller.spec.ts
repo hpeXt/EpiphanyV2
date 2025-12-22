@@ -1,7 +1,8 @@
 import { Test, type TestingModule } from '@nestjs/testing';
-import type { INestApplication } from '@nestjs/common';
-import http from 'node:http';
+import { EventEmitter } from 'node:events';
 import { zSseEnvelope } from '@epiphany/shared-contracts';
+import type { Request, Response } from 'express';
+import { SseController } from './sse.controller';
 import { SseModule } from './sse.module';
 import { RedisService } from '../infrastructure/redis.module';
 
@@ -13,8 +14,7 @@ type MockRedisReader = {
 };
 
 async function readFirstSseDataEvent(opts: {
-  url: string;
-  headers: Record<string, string>;
+  subscribe: (req: Request, res: Response) => Promise<void>;
   timeoutMs?: number;
 }): Promise<{
   statusCode: number;
@@ -25,25 +25,49 @@ async function readFirstSseDataEvent(opts: {
   const timeoutMs = opts.timeoutMs ?? 2_000;
 
   return new Promise((resolve, reject) => {
-    const req = http.request(opts.url, { method: 'GET', headers: opts.headers }, (res) => {
-      let buffer = '';
-      let settled = false;
+    const req = new EventEmitter() as unknown as Request;
+    const headers: Record<string, string> = {};
+    let statusCode = 0;
 
-      const finish = (result: {
-        statusCode: number;
-        contentType: string | undefined;
-        id: string | undefined;
-        data: string;
-      }) => {
-        if (settled) return;
-        settled = true;
-        req.destroy();
+    let buffer = '';
+    let settled = false;
+    let subscribePromise: Promise<void> | null = null;
+
+    const finish = (result: {
+      statusCode: number;
+      contentType: string | undefined;
+      id: string | undefined;
+      data: string;
+    }) => {
+      if (settled) return;
+      settled = true;
+      (req as unknown as EventEmitter).emit('close');
+
+      if (!subscribePromise) {
         resolve(result);
-      };
+        return;
+      }
 
-      res.setEncoding('utf8');
-      res.on('data', (chunk) => {
-        buffer += chunk;
+      subscribePromise
+        .catch(() => {
+          // Ignore errors during disconnect (e.g., aborted request).
+        })
+        .finally(() => resolve(result));
+    };
+
+    const res = {
+      status(code: number) {
+        statusCode = code;
+        return this;
+      },
+      setHeader(name: string, value: unknown) {
+        headers[name.toLowerCase()] = String(value);
+      },
+      flushHeaders() {
+        // no-op
+      },
+      write(chunk: unknown) {
+        buffer += String(chunk);
 
         // SSE event ends with a blank line
         while (buffer.includes('\n\n')) {
@@ -62,43 +86,41 @@ async function readFirstSseDataEvent(opts: {
           if (dataLines.length === 0) continue; // ignore keep-alives/comments
 
           finish({
-            statusCode: res.statusCode ?? 0,
-            contentType: Array.isArray(res.headers['content-type'])
-              ? res.headers['content-type'][0]
-              : res.headers['content-type'],
+            statusCode,
+            contentType: headers['content-type'],
             id,
             data: dataLines.join('\n'),
           });
-          return;
+          return true;
         }
-      });
 
-      res.on('error', (err) => {
-        if (settled) return;
-        settled = true;
-        reject(err);
-      });
-    });
+        return true;
+      },
+      end() {
+        // no-op
+      },
+    } as unknown as Response;
+
+    subscribePromise = opts.subscribe(req, res);
 
     const timer = setTimeout(() => {
-      req.destroy();
+      if (settled) return;
+      (req as unknown as EventEmitter).emit('close');
       reject(new Error(`Timed out waiting for SSE data event (${timeoutMs}ms)`));
     }, timeoutMs);
 
-    req.on('close', () => clearTimeout(timer));
-    req.on('error', (err) => {
-      // Ignore abort-related errors after we manually destroy the request.
-      if ((err as NodeJS.ErrnoException).code === 'ECONNRESET') return;
+    (req as unknown as EventEmitter).on('close', () => clearTimeout(timer));
+
+    subscribePromise.catch((err) => {
+      if (settled) return;
       reject(err);
     });
-
-    req.end();
   });
 }
 
 describe('GET /v1/sse/:topicId (integration)', () => {
-  let app: INestApplication;
-  let baseUrl: string;
+  let moduleFixture: TestingModule;
+  let controller: SseController;
   let redisReader: MockRedisReader;
   let redisServiceMock: { duplicate: jest.Mock };
 
@@ -115,24 +137,17 @@ describe('GET /v1/sse/:topicId (integration)', () => {
       duplicate: jest.fn(() => redisReader),
     };
 
-    const moduleFixture: TestingModule = await Test.createTestingModule({
+    moduleFixture = await Test.createTestingModule({
       imports: [SseModule],
     })
       .overrideProvider(RedisService)
       .useValue(redisServiceMock)
       .compile();
-
-    app = moduleFixture.createNestApplication();
-    await app.listen(0);
-
-    const address = app.getHttpServer().address();
-    const port =
-      typeof address === 'string' ? Number(address.split(':').pop()) : address?.port;
-    baseUrl = `http://127.0.0.1:${port}`;
+    controller = moduleFixture.get(SseController);
   });
 
   afterEach(async () => {
-    await app.close();
+    await moduleFixture.close();
   });
 
   it('should set text/event-stream header and stream new events when no Last-Event-ID', async () => {
@@ -155,8 +170,7 @@ describe('GET /v1/sse/:topicId (integration)', () => {
     ]);
 
     const result = await readFirstSseDataEvent({
-      url: `${baseUrl}/v1/sse/topic_1`,
-      headers: { Accept: 'text/event-stream' },
+      subscribe: (req, res) => controller.subscribe('topic_1', undefined, req, res),
     });
 
     expect(result.statusCode).toBe(200);
@@ -211,8 +225,7 @@ describe('GET /v1/sse/:topicId (integration)', () => {
     redisReader.xread.mockResolvedValue(null);
 
     const result = await readFirstSseDataEvent({
-      url: `${baseUrl}/v1/sse/topic_1`,
-      headers: { Accept: 'text/event-stream', 'Last-Event-ID': '1-0' },
+      subscribe: (req, res) => controller.subscribe('topic_1', '1-0', req, res),
     });
 
     expect(result.id).toBe('2-0');
@@ -248,8 +261,7 @@ describe('GET /v1/sse/:topicId (integration)', () => {
     redisReader.xread.mockResolvedValue(null);
 
     const result = await readFirstSseDataEvent({
-      url: `${baseUrl}/v1/sse/topic_1`,
-      headers: { Accept: 'text/event-stream', 'Last-Event-ID': '1-0' },
+      subscribe: (req, res) => controller.subscribe('topic_1', '1-0', req, res),
     });
 
     expect(result.id).toBe('2-0');

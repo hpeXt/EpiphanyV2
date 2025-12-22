@@ -1,7 +1,7 @@
 /**
  * @file user.service.ts
  * @description User service for batch-balance endpoint
- * @see docs/api-contract.md#3.10
+ * @see docs/stage01/api-contract.md#3.10
  */
 import { Injectable } from '@nestjs/common';
 import { createHash, createPublicKey, verify } from 'node:crypto';
@@ -20,7 +20,7 @@ export class UserService {
 
   /**
    * Process batch balance query with item-level signature verification
-   * @see docs/api-contract.md#3.10
+   * @see docs/stage01/api-contract.md#3.10
    */
   async batchBalance(request: BatchBalanceRequest): Promise<BatchBalanceResponse> {
     const results: BatchBalanceResult[] = [];

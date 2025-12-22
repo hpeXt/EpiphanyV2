@@ -2,7 +2,7 @@
 
 ## 目标
 
-按 `docs/database.md` 落地 MVP 所需的数据模型与关键约束：Topic/Argument/Ledger/Stake + 为 AI/聚类预留 camps/cluster_data/consensus_reports。
+按 `docs/stage01/database.md` 落地 MVP 所需的数据模型与关键约束：Topic/Argument/Ledger/Stake + 为 AI/聚类预留 camps/cluster_data/consensus_reports。
 
 ## 依赖
 
@@ -26,7 +26,7 @@
 - [ ] `prisma migrate dev`/`prisma migrate deploy` 在空库成功
 - [ ] 关键约束（建议 ≥ 5 个）有集成测试覆盖（直接插入“坏数据”应失败）：
   - 每个 Topic 只有一个 Root（`parent_id IS NULL` unique）
-  - 父子同 Topic：`parent_id` 必须指向同一 `topic_id` 下的 argument（见 `docs/database.md` 3.2 建议）
+  - 父子同 Topic：`parent_id` 必须指向同一 `topic_id` 下的 argument（见 `docs/stage01/database.md` 3.2 建议）
   - `ledgers` 唯一键：`(topic_id, pubkey)` 不能重复
   - `stakes` 唯一键：`(topic_id, argument_id, voter_pubkey)` 不能重复
   - Stake `votes` 范围与 `cost = votes^2`（若 DB 层有 check，则必须覆盖；若改为“写入策略保证”，也要测策略）
@@ -39,7 +39,7 @@
 - `packages/database`：
   - Prisma init（`schema.prisma`）
   - 定义 enum：`topic_status`、`argument_analysis_status`、`report_status`（或 Prisma enum 等价物）
-  - 定义表（对齐 `docs/database.md` 3.x）：
+  - 定义表（对齐 `docs/stage01/database.md` 3.x）：
     - `topics`
     - `arguments`
     - `ledgers`
@@ -56,7 +56,7 @@
 
 ## 4) 验收
 
-> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+> 前置：先按 `docs/stage01/coolify-target.md` export 环境变量（通用手册：`docs/stage01/coolify-acceptance.md`）。
 
 ### 服务器验收（推荐）
 

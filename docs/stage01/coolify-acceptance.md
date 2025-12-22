@@ -7,11 +7,11 @@
 - 本机已安装 `coolify` CLI（本仓库默认假设可用：`coolify --help`）
 - 你有一个可用的 Coolify 环境（staging/验收机）并已创建本项目的资源（API/Web/Worker/DB/Redis 等）
 - 你有 Coolify API Token（不要写进仓库；用 context 或环境变量传入）
-- 本仓库默认目标环境见：`docs/coolify-target.md`
+- 本仓库默认目标环境见：`docs/stage01/coolify-target.md`
 
 ## 0.1 快速开始（本仓库默认验收机）
 
-把 `docs/coolify-target.md` 的 export 段复制到你的终端（不含任何敏感信息），然后执行：
+把 `docs/stage01/coolify-target.md` 的 export 段复制到你的终端（不含任何敏感信息），然后执行：
 
 ```bash
 coolify context verify --context "$COOLIFY_CONTEXT"
@@ -130,7 +130,7 @@ coolify service restart <service_uuid>
 
 ## 4. HTTP 交互验收（契约黑盒）
 
-> 对外行为以 `docs/api-contract.md` 为准。建议把 `API_BASE_URL` 设为环境变量。
+> 对外行为以 `docs/stage01/api-contract.md` 为准。建议把 `API_BASE_URL` 设为环境变量。
 
 若你的 API 挂载在路径前缀（例如 `https://example.com/api`），则 `API_BASE_URL` 就应包含该前缀。脚本会自动将该 mount path 拼到请求 URL 上。
 
@@ -185,6 +185,6 @@ curl -N -H "Accept: text/event-stream" "$API_BASE_URL/v1/sse/<topicId>"
 
 ## 6. 与 Steps 的关系
 
-- 每个 `docs/steps/stepXX.md` 的测试部分都应包含：
+- 每个 `docs/stage01/steps/stepXX.md` 的测试部分都应包含：
   - 对应 step 的“服务器验收动作”（部署/状态/日志/HTTP 交互）
-  - 与 `docs/test-plan.md` 对应的 Suite/Flow（Flow 1~6）
+  - 与 `docs/stage01/test-plan.md` 对应的 Suite/Flow（Flow 1~6）

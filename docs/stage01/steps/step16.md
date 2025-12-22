@@ -8,7 +8,7 @@
 - 派生 topicKeypair（HMAC-SHA512 → Ed25519）
 - 对所有写请求/私密读请求按 v1 签名（headers）
 
-来源：`docs/prd.md#2.5`、`docs/crypto.md`、`docs/api-contract.md#1`。
+来源：`docs/stage01/prd.md#2.5`、`docs/stage01/crypto.md`、`docs/stage01/api-contract.md#1`。
 
 ## 依赖
 
@@ -25,7 +25,7 @@
 
 ## 1) Red：先写测试
 
-对照全量规划：`docs/test-plan.md`（Suite W — Web 端到端验收：W4，及签名/防重放安全项）。
+对照全量规划：`docs/stage01/test-plan.md`（Suite W — Web 端到端验收：W4，及签名/防重放安全项）。
 
 - [ ] `identity` 模块（纯函数）：
   - 从 mnemonic 恢复得到稳定 masterSeed
@@ -51,7 +51,7 @@
 
 ## 4) 验收
 
-> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+> 前置：先按 `docs/stage01/coolify-target.md` export 环境变量（通用手册：`docs/stage01/coolify-acceptance.md`）。
 
 ### 服务器验收（推荐）
 

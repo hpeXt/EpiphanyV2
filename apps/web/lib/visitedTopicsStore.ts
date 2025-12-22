@@ -4,7 +4,7 @@
  * VisitedTopicsStore - Local storage for visited topic IDs
  * Step 17: Pure client-side aggregation for "My Activity" page
  *
- * @see docs/steps/step17.md
+ * @see docs/stage01/steps/step17.md
  */
 
 export type VisitedTopicsStore = {

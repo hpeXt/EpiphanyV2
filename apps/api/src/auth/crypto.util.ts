@@ -1,7 +1,7 @@
 /**
  * @file crypto.util.ts
  * @description Crypto utilities for signature verification using Node.js native crypto
- * @see docs/crypto.md
+ * @see docs/stage01/crypto.md
  */
 import { createHash, createPublicKey, verify } from 'crypto';
 
@@ -17,7 +17,7 @@ export function sha256Hex(input: string): string {
  *
  * Format: v1|METHOD|PATH|TIMESTAMP|NONCE|BODY_HASH
  *
- * @see docs/api-contract.md#1.3
+ * @see docs/stage01/api-contract.md#1.3
  */
 export function buildCanonicalMessage(opts: {
   method: string;

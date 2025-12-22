@@ -1,7 +1,7 @@
 /**
  * @file all-exceptions.filter.ts
  * @description Unified exception filter for API error responses
- * @see docs/api-contract.md#2.2
+ * @see docs/stage01/api-contract.md#2.2
  */
 import {
   ExceptionFilter,

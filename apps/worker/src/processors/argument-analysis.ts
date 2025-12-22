@@ -9,8 +9,8 @@
  * 4. Transaction writes back to DB
  * 5. Publishes SSE invalidation event
  *
- * @see docs/ai-worker.md#4
- * @see docs/steps/step18.md
+ * @see docs/stage01/ai-worker.md#4
+ * @see docs/stage01/steps/step18.md
  */
 
 import type { PrismaClient } from '@epiphany/database';

@@ -8,7 +8,7 @@
 
 打造一个结合结构化辩论（Kialo）、机制设计（二次方投票 QV）、数据可视化和 AI 辅助治理（TalkToTheCity/Habermas Machine）的公共议题讨论平台。它是一个可视化的集体智慧决策系统，通过美学与算法，让共识与分歧在"数字生物组织"中自然生长。
 
-视觉基调：设计系统向 Persona 5 对齐（“反叛 UI / 漫画印刷感”），并保留 Memphis 的拼贴语法作为辅助；配色与组件语法以 `docs/design.md` 为准。
+视觉基调：设计系统向 Persona 5 对齐（“反叛 UI / 漫画印刷感”），并保留 Memphis 的拼贴语法作为辅助；配色与组件语法以 `docs/stage01/design.md` 为准。
 
 ---
 
@@ -31,7 +31,7 @@
 触发条件 议题详情页的默认交互视图（替代原 Voronoi）
 布局逻辑 自上而下 (Top-Down) 的层级结构，采用**“渐进式披露” (Progressive Disclosure)** 机制。初始仅显示根节点与第一层级，点击节点后动态展开其子分支。连接线严格采用直角折线 (Orthogonal Lines)，严禁使用曲线，以强化逻辑推演的严密感。
 视觉风格	
-• 视觉方向：Persona5 对齐的强风格化（厚描边、偏移投影、斜切构图、拼贴材质、半调网点）；详见 `docs/design.md`。
+• 视觉方向：Persona5 对齐的强风格化（厚描边、偏移投影、斜切构图、拼贴材质、半调网点）；详见 `docs/stage01/design.md`。
 • 节点与容器：允许轻微旋转/倾斜与不规则裁切（`clip-path`），但信息层级必须通过描边与投影清晰区分。
 • 权重可视化：QV 票数（Total Votes）越高，节点的几何尺寸越大，且边框与连接线越粗 (Visual Weight)。
 • 权重传递（用于父子节点视觉大小/布局）：定义 `Stake_self(n)` 为节点自身的 **Total Votes（总票数）**；用于渲染的 `VisualWeight(n) = Stake_self(n) + α · Σ VisualWeight(c)`（c 为子节点，α ∈ [0,1]，Focus View 默认 0.5，God View 可取 1）。反对阵营的高分子节点不会“削弱”父节点几何尺寸：父节点尺寸表达“关注度/争议度”，立场仍由颜色编码。Cost（积分花费）仅用于扣费/资金明细与交易确认弹窗，不参与默认排序与尺寸计算。
@@ -44,7 +44,7 @@
 
 #### 悬停 (Hover) – 信息浮层
 
-- 鼠标划过节点时，显示 Calling Card 式信息卡（厚描边 + 偏移投影 + 轻微不规则裁切/旋转），避免毛玻璃风（见 `docs/design.md`）。
+- 鼠标划过节点时，显示 Calling Card 式信息卡（厚描边 + 偏移投影 + 轻微不规则裁切/旋转），避免毛玻璃风（见 `docs/stage01/design.md`）。
 - **内容**：原文片段（长文可用 LXGW WenKai，截取前 40 字）、用户昵称/Hash、当前总票数（Total Votes）等关键数值（等宽字体）
 - **注意**：悬停不触发右侧面板变化
 
@@ -102,7 +102,7 @@
 - **影子身份**：针对每个 Topic ID，通过 HMAC 派生独立的子密钥对 (Ed25519)
   - 后端无法关联 Topic A 的用户和 Topic B 的用户是同一人
 - **鉴权**：除创建 Topic 的第一步（`POST /v1/topics`，用于获取 `topicId/rootArgumentId/claimToken` 等公共参数；此时尚未建立会话/身份，不强制签名是合理的）外，其余写请求与私密读均使用私钥签名，后端仅验证签名
-- 派生与签名规范：见 `docs/crypto.md`
+- 派生与签名规范：见 `docs/stage01/crypto.md`
 
 #### 账户备份 / 恢复 / 同步 (必需)
 
@@ -158,7 +158,7 @@
 | 技术 | 说明 |
 |------|------|
 | **框架** | Next.js + React |
-| **字体优化** | 使用 `next/font` 子集化加载：正文 LXGW WenKai；标题/标签使用窄体展示字（如 Bebas Neue/Oswald）；数据/公式使用等宽字体；视觉规范见 `docs/design.md` |
+| **字体优化** | 使用 `next/font` 子集化加载：正文 LXGW WenKai；标题/标签使用窄体展示字（如 Bebas Neue/Oswald）；数据/公式使用等宽字体；视觉规范见 `docs/stage01/design.md` |
 | **可视化** | D3.js (Focus View) + Three.js/Pixi.js (God View) |
 | **编辑器** | TipTap |
 

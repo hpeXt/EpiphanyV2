@@ -32,13 +32,13 @@ import { AllExceptionsFilter } from '../src/filters/all-exceptions.filter';
 import { RawBodyMiddleware } from '../src/middleware/raw-body.middleware';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Test fixtures - Using test vectors from docs/crypto.md
+// Test fixtures - Using test vectors from docs/stage01/crypto.md
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Ed25519 seed from docs/crypto.md test vectors
+// Ed25519 seed from docs/stage01/crypto.md test vectors
 const TEST_SEED_HEX =
   'bd923ee263d27b04fd56910eb07dc4c883b5f860625d188e0e14e95cb81c18d6';
-// Expected pubkey from docs/crypto.md test vectors
+// Expected pubkey from docs/stage01/crypto.md test vectors
 const TEST_PUBKEY =
   'bc0f74935a3f33f1d2486174d9487611a65965dc2d699d7d911f84d1d4cd0cc9';
 

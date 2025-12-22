@@ -8,7 +8,7 @@
 - 触发：Host 手动（先）+ 可后置自动触发
 - UI：全屏/模态展示（Persona5 外框 + 正文排版）
 
-来源：`docs/roadmap.md` v1.1、`docs/ai-worker.md` 相关章节。
+来源：`docs/stage01/roadmap.md` v1.1、`docs/stage01/ai-worker.md` 相关章节。
 
 ## 依赖
 
@@ -25,7 +25,7 @@
 
 ## 1) Red：先写测试
 
-- [ ] 先冻结契约：在实现前补齐/确认对外接口与 SSE 事件（若需新增 `report_updated`，必须先更新 `docs/api-contract.md` + `shared-contracts`）
+- [ ] 先冻结契约：在实现前补齐/确认对外接口与 SSE 事件（若需新增 `report_updated`，必须先更新 `docs/stage01/api-contract.md` + `shared-contracts`）
 - [ ] Worker：
   - job 幂等：同 reportId 重跑不重复生成
   - 失败语义：`status=failed`，error 写入 metadata
@@ -49,7 +49,7 @@
 
 ## 4) 验收
 
-> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+> 前置：先按 `docs/stage01/coolify-target.md` export 环境变量（通用手册：`docs/stage01/coolify-acceptance.md`）。
 
 ### 服务器验收（推荐）
 

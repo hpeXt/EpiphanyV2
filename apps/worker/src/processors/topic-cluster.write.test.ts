@@ -2,7 +2,7 @@
  * @file topic-cluster.write.test.ts
  * @description TDD tests for topic clustering DB write semantics (Step 19)
  *
- * Test cases per docs/steps/step19.md:
+ * Test cases per docs/stage01/steps/step19.md:
  * - Idempotent latest overwrite: re-run replaces camps/cluster_data (no bloat)
  * - cluster_updated invalidation is published after successful write
  */

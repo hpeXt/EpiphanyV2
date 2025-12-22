@@ -8,7 +8,7 @@
 - Canvas/WebGL 渲染散点
 - 点大小：`weight=log(totalVotes+1)`；颜色：stance bucket；cluster 用背景/分区表达
 
-来源：`docs/prd.md#2.1`、`docs/design.md`、`docs/roadmap.md` M6。
+来源：`docs/stage01/prd.md#2.1`、`docs/stage01/design.md`、`docs/stage01/roadmap.md` M6。
 
 ## 依赖
 
@@ -24,7 +24,7 @@
 
 ## 1) Red：先写测试
 
-对照全量规划：`docs/test-plan.md`（Suite W — Web 端到端验收：W6）。
+对照全量规划：`docs/stage01/test-plan.md`（Suite W — Web 端到端验收：W6）。
 
 - [ ] `GodView` 组件：
   - 能拉取并 parse `cluster-map`（用 shared-contracts）
@@ -45,7 +45,7 @@
 
 ## 4) 验收
 
-> 前置：先按 `docs/coolify-target.md` export 环境变量（通用手册：`docs/coolify-acceptance.md`）。
+> 前置：先按 `docs/stage01/coolify-target.md` export 环境变量（通用手册：`docs/stage01/coolify-acceptance.md`）。
 
 ### 服务器验收（推荐）
 
