@@ -7,6 +7,7 @@ import type { LedgerMe } from "@epiphany/shared-contracts";
 import { IdentityOnboarding } from "@/components/identity/IdentityOnboarding";
 import { FocusView } from "@/components/topics/FocusView";
 import { GodView } from "@/components/topics/GodView";
+import { SunburstView } from "@/components/topics/SunburstView";
 import { DialogueStream } from "@/components/topics/DialogueStream";
 import { useTopicTree } from "@/components/topics/hooks/useTopicTree";
 import { useTopicSse } from "@/components/topics/hooks/useTopicSse";
@@ -46,7 +47,7 @@ export function TopicPage({ topicId }: Props) {
   const [selectedArgumentId, setSelectedArgumentId] = useState<string | null>(
     null,
   );
-  const [viewMode, setViewMode] = useState<"focus" | "god">("focus");
+  const [viewMode, setViewMode] = useState<"focus" | "god" | "sunburst">("focus");
   const [ledger, setLedger] = useState<LedgerMe | null>(null);
   const [ledgerError, setLedgerError] = useState("");
 
@@ -171,6 +172,17 @@ export function TopicPage({ topicId }: Props) {
               </button>
               <button
                 type="button"
+                onClick={() => setViewMode("sunburst")}
+                aria-pressed={viewMode === "sunburst"}
+                className={[
+                  "rounded-md px-2.5 py-1 font-medium",
+                  viewMode === "sunburst" ? "bg-zinc-900 text-white" : "text-zinc-900 hover:bg-zinc-100",
+                ].join(" ")}
+              >
+                Overview
+              </button>
+              <button
+                type="button"
                 onClick={() => setViewMode("god")}
                 aria-pressed={viewMode === "god"}
                 className={[
@@ -243,6 +255,13 @@ export function TopicPage({ topicId }: Props) {
       <div className="grid gap-8 lg:grid-cols-[1fr_1.25fr]">
         {viewMode === "god" ? (
           <GodView topicId={topicId} refreshToken={refreshToken} />
+        ) : viewMode === "sunburst" ? (
+          <SunburstView
+            rootId={tree.topic.rootArgumentId}
+            nodes={tree.nodes}
+            selectedId={selectedArgumentId}
+            onSelect={setSelectedArgumentId}
+          />
         ) : (
           <FocusView
             rootId={tree.topic.rootArgumentId}
