@@ -8,6 +8,7 @@
     "dev": "tsx src/main.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
+    "pretest": "pnpm -C ../../packages/database db:generate",
     "test": "vitest run",
     "test:watch": "vitest"
   },

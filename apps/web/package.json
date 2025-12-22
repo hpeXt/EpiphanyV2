@@ -3,12 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "predev": "pnpm -C ../../packages/crypto build",
+    "predev": "pnpm -C ../../packages/crypto build && pnpm -C ../../packages/shared-contracts build",
     "dev": "next dev",
+    "prebuild": "pnpm -C ../../packages/crypto build && pnpm -C ../../packages/shared-contracts build",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "pretest": "pnpm -C ../../packages/crypto build",
+    "pretest": "pnpm -C ../../packages/crypto build && pnpm -C ../../packages/shared-contracts build",
     "test": "jest",
     "test:watch": "jest --watch"
   },
