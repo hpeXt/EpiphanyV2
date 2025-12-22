@@ -157,6 +157,7 @@ export function TopicPage({ topicId }: Props) {
 
   async function claimOwner() {
     if (hasIdentity !== true) return;
+    if (tree.status !== "success") return;
     if (tree.topic.ownerPubkey !== null) return;
     if (!claimInfo) return;
 

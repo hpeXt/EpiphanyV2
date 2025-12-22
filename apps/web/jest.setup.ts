@@ -75,7 +75,7 @@ if (!globalThis.crypto.getRandomValues) {
 // ProseMirror/Tiptap relies on elementFromPoint for selection logic; jsdom doesn't implement it.
 // Patch both the instance and prototype so documents created by libraries still work.
 if (typeof Document !== "undefined" && !Document.prototype.elementFromPoint) {
-  Document.prototype.elementFromPoint = function elementFromPoint() {
+  Document.prototype.elementFromPoint = function elementFromPoint(this: Document) {
     return this.body;
   } as unknown as typeof Document.prototype.elementFromPoint;
 }

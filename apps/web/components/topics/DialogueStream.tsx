@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
-import type { LedgerMe } from "@epiphany/shared-contracts";
+import { zTiptapDoc, type LedgerMe } from "@epiphany/shared-contracts";
 import Link from "@tiptap/extension-link";
 import Underline from "@tiptap/extension-underline";
 import { EditorContent, useEditor } from "@tiptap/react";
@@ -214,11 +214,13 @@ export function DialogueStream({
     }
 
     setIsSubmittingReply(true);
+    const bodyRichResult = replyEditor ? zTiptapDoc.safeParse(replyEditor.getJSON()) : null;
+    const bodyRich = bodyRichResult && bodyRichResult.success ? bodyRichResult.data : null;
     const result = await apiClient.createArgument(topicId, {
       parentId: parentArgumentId,
       title: null,
       body,
-      bodyRich: replyEditor?.getJSON() ?? null,
+      bodyRich,
       initialVotes: 0,
     });
     setIsSubmittingReply(false);
