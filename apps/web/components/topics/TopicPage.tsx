@@ -15,6 +15,7 @@ import { apiClient } from "@/lib/apiClient";
 import { createLocalStorageKeyStore } from "@/lib/signing";
 import { TopicManagePanel } from "@/components/topics/TopicManagePanel";
 import { createLocalStorageVisitedTopicsStore } from "@/lib/visitedTopicsStore";
+import { ConsensusReportModal } from "@/components/topics/ConsensusReportModal";
 
 type Props = {
   topicId: string;
@@ -27,6 +28,7 @@ export function TopicPage({ topicId }: Props) {
   const [identityFingerprint, setIdentityFingerprint] = useState<string | null>(null);
   const [identityPubkeyHex, setIdentityPubkeyHex] = useState<string | null>(null);
   const [isManageOpen, setIsManageOpen] = useState(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
 
   const [refreshToken, setRefreshToken] = useState(0);
   const invalidate = useCallback(() => setRefreshToken((prev) => prev + 1), []);
@@ -152,14 +154,14 @@ export function TopicPage({ topicId }: Props) {
         </div>
       ) : null}
       <header className="space-y-1">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-xl font-semibold">{tree.topic.title}</h1>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex rounded-md border border-zinc-200 bg-white p-0.5 text-sm">
-              <button
-                type="button"
-                onClick={() => setViewMode("focus")}
-                aria-pressed={viewMode === "focus"}
+	        <div className="flex flex-wrap items-center justify-between gap-3">
+	          <h1 className="text-xl font-semibold">{tree.topic.title}</h1>
+	          <div className="flex flex-wrap items-center gap-2">
+	            <div className="inline-flex rounded-md border border-zinc-200 bg-white p-0.5 text-sm">
+	              <button
+	                type="button"
+	                onClick={() => setViewMode("focus")}
+	                aria-pressed={viewMode === "focus"}
                 className={[
                   "rounded-md px-2.5 py-1 font-medium",
                   viewMode === "focus" ? "bg-zinc-900 text-white" : "text-zinc-900 hover:bg-zinc-100",
@@ -175,16 +177,22 @@ export function TopicPage({ topicId }: Props) {
                   "rounded-md px-2.5 py-1 font-medium",
                   viewMode === "god" ? "bg-zinc-900 text-white" : "text-zinc-900 hover:bg-zinc-100",
                 ].join(" ")}
-              >
-                God View
-              </button>
-            </div>
-
-            {isOwner ? (
-              <button
-                type="button"
-                onClick={() => setIsManageOpen((prev) => !prev)}
-                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100"
+	              >
+	                God View
+	              </button>
+	            </div>
+	            <button
+	              type="button"
+	              onClick={() => setIsReportOpen(true)}
+	              className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100"
+	            >
+	              Report
+	            </button>
+	            {isOwner ? (
+	              <button
+	                type="button"
+	                onClick={() => setIsManageOpen((prev) => !prev)}
+	                className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100"
               >
                 Manage
               </button>
@@ -219,6 +227,16 @@ export function TopicPage({ topicId }: Props) {
           rootBody={tree.topic.rootBody}
           onInvalidate={invalidate}
           onClose={() => setIsManageOpen(false)}
+        />
+      ) : null}
+
+      {isReportOpen ? (
+        <ConsensusReportModal
+          topicId={topicId}
+          isOwner={isOwner}
+          refreshToken={refreshToken}
+          onInvalidate={invalidate}
+          onClose={() => setIsReportOpen(false)}
         />
       ) : null}
 

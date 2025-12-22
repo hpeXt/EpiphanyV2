@@ -167,6 +167,8 @@ API 接口与契约以 `docs/api-contract.md` 为准。
 | `content_md` | `text` | nullable | 最终报告（Markdown/富文本） |
 | `model` | `text` | nullable | 例如 `deepseek/deepseek-v3.2` |
 | `prompt_version` | `text` | nullable | Prompt Chaining 版本 |
+| `params` | `jsonb` | nullable | 生成参数（输入口径/抽样策略等，可回溯） |
+| `metadata` | `jsonb` | nullable | 元数据（失败时写入 error 等） |
 | `computed_at` | `timestamptz` | index | 生成时间 |
 | `created_at` | `timestamptz` |  | 创建时间 |
 

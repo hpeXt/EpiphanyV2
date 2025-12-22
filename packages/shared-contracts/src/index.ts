@@ -21,9 +21,11 @@ export {
   // Enums
   zTopicStatus,
   zArgumentAnalysisStatus,
+  zReportStatus,
   zStance,
   type TopicStatus,
   type ArgumentAnalysisStatus,
+  type ReportStatus,
   type Stance,
   // Objects
   zTopicSummary,
@@ -33,6 +35,7 @@ export {
   zClusterMapPoint,
   zClusterMapCluster,
   zClusterMap,
+  zConsensusReport,
   type TopicSummary,
   type Argument,
   type LedgerMe,
@@ -40,6 +43,7 @@ export {
   type ClusterMapPoint,
   type ClusterMapCluster,
   type ClusterMap,
+  type ConsensusReport,
 } from './objects.js';
 
 // SSE Events
@@ -48,6 +52,7 @@ export {
   zSseArgumentUpdated,
   zSseTopicUpdated,
   zSseClusterUpdated,
+  zSseReportUpdated,
   zSseReloadRequired,
   type SseEnvelope,
   type ArgumentUpdatedReason,
@@ -100,7 +105,10 @@ export {
   zTopicCommandEditRoot,
   zTopicCommandPruneArgument,
   zTopicCommandUnpruneArgument,
+  zTopicCommandGenerateConsensusReport,
   zTopicCommandResponse,
+  zConsensusReportLatestResponse,
   type TopicCommand,
   type TopicCommandResponse,
+  type ConsensusReportLatestResponse,
 } from './endpoints.js';

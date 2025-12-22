@@ -252,7 +252,49 @@ Stance 映射（v1.0，与 `docs/architecture.md` 一致）：
 - `stanceScore >= 0.3` → `stance=1`
 - 若 `stanceScore` 为 `null`（`analysisStatus != ready`）：`stance=0`
 
-### 2.8 SSE 事件（Entity Invalidation）
+### 2.8 Consensus Report（共识报告）
+
+```ts
+type ConsensusReport =
+  | {
+      id: string; // reportId
+      topicId: string;
+      status: "generating";
+      contentMd: null;
+      model: string | null;
+      promptVersion: string | null;
+      params: Record<string, unknown> | null;
+      metadata: Record<string, unknown> | null;
+      computedAt: null;
+      createdAt: string; // ISO
+    }
+  | {
+      id: string; // reportId
+      topicId: string;
+      status: "ready";
+      contentMd: string; // Markdown
+      model: string | null;
+      promptVersion: string | null;
+      params: Record<string, unknown> | null;
+      metadata: Record<string, unknown> | null;
+      computedAt: string; // ISO
+      createdAt: string; // ISO
+    }
+  | {
+      id: string; // reportId
+      topicId: string;
+      status: "failed";
+      contentMd: null;
+      model: string | null;
+      promptVersion: string | null;
+      params: Record<string, unknown> | null;
+      metadata: Record<string, unknown> | null; // error 写入 metadata
+      computedAt: string; // ISO
+      createdAt: string; // ISO
+    };
+```
+
+### 2.9 SSE 事件（Entity Invalidation）
 
 SSE `data:` 字段统一为 JSON：
 
@@ -261,6 +303,7 @@ type SseEnvelope =
   | { event: "argument_updated"; data: { argumentId: string; reason: "new_vote" | "analysis_done" | "edited" | "pruned" } }
   | { event: "topic_updated"; data: { topicId: string; reason: "status_changed" | "owner_claimed" | "root_edited" } }
   | { event: "cluster_updated"; data: { topicId: string } }
+  | { event: "report_updated"; data: { topicId: string; reportId: string } }
   | { event: "reload_required"; data: { reason: "trimmed" } };
 ```
 
@@ -321,7 +364,8 @@ type TopicCommand =
   | { type: "SET_STATUS"; payload: { status: "active" | "frozen" | "archived" } }
   | { type: "EDIT_ROOT"; payload: { title: string; body: string } }
   | { type: "PRUNE_ARGUMENT"; payload: { argumentId: string; reason: string | null } }
-  | { type: "UNPRUNE_ARGUMENT"; payload: { argumentId: string } };
+  | { type: "UNPRUNE_ARGUMENT"; payload: { argumentId: string } }
+  | { type: "GENERATE_CONSENSUS_REPORT"; payload: {} };
 ```
 
 响应（200）：返回最小可用回执（前端依赖 SSE + 拉取刷新即可）
@@ -652,3 +696,38 @@ data: {"event":"argument_updated","data":{"argumentId":"...","reason":"new_vote"
 - 事件持久化：Redis Stream `topic:events:{topicId}`，`XADD`，`MAXLEN ~ 1000`
 - 补发：`XRANGE topic:events:{topicId} (<lastId> +`
 - 若 `Last-Event-ID` 过旧：发送 `reload_required`
+
+---
+
+### 3.13 `GET /v1/topics/:topicId/consensus-report/latest`（共识报告：latest，公共读）
+
+响应（200）：
+
+```json
+{
+  "report": null
+}
+```
+
+或：
+
+```json
+{
+  "report": {
+    "id": "uuidv7",
+    "topicId": "uuidv7",
+    "status": "ready",
+    "contentMd": "# ...",
+    "model": "string-or-null",
+    "promptVersion": "string-or-null",
+    "params": {},
+    "metadata": {},
+    "computedAt": "ISO",
+    "createdAt": "ISO"
+  }
+}
+```
+
+错误：
+
+- `404 TOPIC_NOT_FOUND`

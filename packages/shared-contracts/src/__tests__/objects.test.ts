@@ -9,11 +9,13 @@ import {
   zLedgerMe,
   zStakeMeItem,
   zClusterMap,
+  zConsensusReport,
   type TopicSummary,
   type Argument,
   type LedgerMe,
   type StakeMeItem,
   type ClusterMap,
+  type ConsensusReport,
 } from '../index.js';
 
 describe('TopicSummary', () => {
@@ -432,5 +434,61 @@ describe('ClusterMap', () => {
 
       expect(zClusterMap.safeParse(fixture).success).toBe(true);
     });
+  });
+});
+
+describe('ConsensusReport', () => {
+  it('should parse generating report with null contentMd and computedAt', () => {
+    const fixture: ConsensusReport = {
+      id: '0193e3a6-0b7d-7a8d-9f2c-abcdef123456',
+      topicId: '0193e3a6-0b7d-7a8d-9f2c-1234567890ab',
+      status: 'generating',
+      contentMd: null,
+      model: null,
+      promptVersion: 'v1',
+      params: { maxArguments: 30, ordering: 'totalVotes_desc' },
+      metadata: null,
+      computedAt: null,
+      createdAt: '2025-12-19T12:34:56.789Z',
+    };
+
+    const result = zConsensusReport.safeParse(fixture);
+    expect(result.success).toBe(true);
+  });
+
+  it('should parse ready report with markdown contentMd and computedAt', () => {
+    const fixture: ConsensusReport = {
+      id: '0193e3a6-0b7d-7a8d-9f2c-abcdef123456',
+      topicId: '0193e3a6-0b7d-7a8d-9f2c-1234567890ab',
+      status: 'ready',
+      contentMd: '# Consensus\\n\\n- point',
+      model: 'mock-report-model',
+      promptVersion: 'v1',
+      params: { maxArguments: 30, ordering: 'totalVotes_desc' },
+      metadata: null,
+      computedAt: '2025-12-19T12:35:56.789Z',
+      createdAt: '2025-12-19T12:34:56.789Z',
+    };
+
+    const result = zConsensusReport.safeParse(fixture);
+    expect(result.success).toBe(true);
+  });
+
+  it('should parse failed report with metadata error and computedAt', () => {
+    const fixture: ConsensusReport = {
+      id: '0193e3a6-0b7d-7a8d-9f2c-abcdef123456',
+      topicId: '0193e3a6-0b7d-7a8d-9f2c-1234567890ab',
+      status: 'failed',
+      contentMd: null,
+      model: 'mock-report-model',
+      promptVersion: 'v1',
+      params: { maxArguments: 30, ordering: 'totalVotes_desc' },
+      metadata: { error: { message: 'Provider failed' } },
+      computedAt: '2025-12-19T12:35:56.789Z',
+      createdAt: '2025-12-19T12:34:56.789Z',
+    };
+
+    const result = zConsensusReport.safeParse(fixture);
+    expect(result.success).toBe(true);
   });
 });

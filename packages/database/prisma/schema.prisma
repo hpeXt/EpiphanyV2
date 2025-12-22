@@ -156,6 +156,8 @@ model ConsensusReport {
   contentMd     String?      @map("content_md") @db.Text
   model         String?      @db.Text
   promptVersion String?      @map("prompt_version") @db.Text
+  params        Json?        @db.JsonB
+  metadata      Json?        @db.JsonB
   computedAt    DateTime?    @map("computed_at") @db.Timestamptz(6)
   createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
 

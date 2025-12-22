@@ -323,7 +323,9 @@ Job：`ai:consensus-report`
   - `consensus_reports.status = generating|ready|failed`
   - `content_md` 为最终报告（Markdown）
   - `prompt_version` 固化链路版本号（便于回归）
-- 事件：建议复用 `topic_updated(reason="root_edited" 不合适)`，更合理的是引入新事件 `report_updated`；但会影响 `docs/api-contract.md`，因此 v1.0 暂不在 SSE 中暴露“报告更新”，由前端轮询或手动刷新获取。
+- 事件：
+  - 引入新事件 `report_updated`（对齐 `docs/api-contract.md`），SSE 仍只做 invalidation（不推流式内容）。
+  - 前端收到 `report_updated` 后拉取 `GET /v1/topics/:topicId/consensus-report/latest` 获取最新报告与状态。
 
 ---
 

@@ -21,10 +21,16 @@ import { processArgumentAnalysis } from './processors/argument-analysis.js';
 import { processTopicCluster, enqueueTopicClusterDebounced, type TopicClusterEngine } from './processors/topic-cluster.js';
 import { createNodeTopicClusterEngine } from './clustering/node-topic-cluster-engine.js';
 import { createPythonTopicClusterEngine } from './clustering/python-topic-cluster-engine.js';
+import {
+  processConsensusReport,
+  type ConsensusReportProvider,
+  type GenerateConsensusReportInput,
+} from './processors/consensus-report.js';
 
 // Queue names per docs/ai-worker.md (using underscore instead of colon for BullMQ compatibility)
 const QUEUE_ARGUMENT_ANALYSIS = 'ai_argument-analysis';
 const QUEUE_TOPIC_CLUSTER = 'ai_topic-cluster';
+const QUEUE_CONSENSUS_REPORT = 'ai_consensus-report';
 
 // Configuration
 const port = Number(process.env.PORT ?? process.env.WORKER_PORT ?? 3002);
@@ -38,6 +44,7 @@ const aiProvider = createAIProvider();
 // Create queues for health checks
 const argumentAnalysisQueue = new Queue(QUEUE_ARGUMENT_ANALYSIS, { connection });
 const topicClusterQueue = new Queue(QUEUE_TOPIC_CLUSTER, { connection });
+const consensusReportQueue = new Queue(QUEUE_CONSENSUS_REPORT, { connection });
 
 function getTopicClusterEngine(): TopicClusterEngine {
   const configured = (process.env.CLUSTER_ENGINE ?? 'node').toLowerCase();
@@ -54,6 +61,35 @@ function getTopicClusterEngine(): TopicClusterEngine {
 }
 
 const topicClusterEngine = getTopicClusterEngine();
+
+const consensusReportProvider: ConsensusReportProvider = {
+  async generate(input: GenerateConsensusReportInput) {
+    const bulletLines = input.arguments
+      .slice(0, 10)
+      .map((arg) => {
+        const title = arg.title?.trim() ? ` — ${arg.title.trim()}` : '';
+        const excerpt = arg.body.trim().slice(0, 160).replaceAll('\n', ' ');
+        return `- (${arg.totalVotes} votes) ${arg.id}${title}: ${excerpt}${arg.body.length > 160 ? '…' : ''}`;
+      })
+      .join('\n');
+
+    const contentMd = [
+      '# 共识报告',
+      '',
+      `Topic: ${input.topicTitle}`,
+      '',
+      '## 输入摘要（Top arguments）',
+      '',
+      bulletLines || '- (no arguments)',
+      '',
+      '## 结论（mock）',
+      '',
+      '- 这是 mock 报告内容；后续可替换为真实 LLM Prompt Chaining。',
+    ].join('\n');
+
+    return { contentMd, model: 'mock-report-model' };
+  },
+};
 
 /**
  * Argument Analysis Job Payload
@@ -140,6 +176,48 @@ const topicClusterWorker = new Worker<TopicClusterJobData>(
   }
 );
 
+/**
+ * Consensus Report Job Payload
+ */
+interface ConsensusReportJobData {
+  topicId: string;
+  reportId: string;
+  trigger: 'auto' | 'host';
+}
+
+/**
+ * Consensus Report Worker
+ */
+const consensusReportWorker = new Worker<ConsensusReportJobData>(
+  QUEUE_CONSENSUS_REPORT,
+  async (job: Job<ConsensusReportJobData>) => {
+    const { topicId, reportId, trigger } = job.data;
+
+    console.log(
+      `[worker] Processing consensus-report job=${job.id} topicId=${topicId} reportId=${reportId} trigger=${trigger}`,
+    );
+
+    const result = await processConsensusReport({
+      topicId,
+      reportId,
+      trigger,
+      prisma,
+      redis,
+      provider: consensusReportProvider,
+    });
+
+    if (!result.success) {
+      console.warn(`[worker] consensus-report job=${job.id} failed: ${result.error}`);
+    }
+
+    return result;
+  },
+  {
+    connection,
+    concurrency: 1,
+  },
+);
+
 topicClusterWorker.on('ready', () => {
   console.log(
     `[worker] Topic cluster worker ready queue=${QUEUE_TOPIC_CLUSTER} redis=${connection.host}:${connection.port}`
@@ -181,6 +259,26 @@ argumentAnalysisWorker.on('error', (err) => {
   console.error(`[worker] Worker error: ${err?.message ?? err}`);
 });
 
+consensusReportWorker.on('ready', () => {
+  console.log(
+    `[worker] Consensus report worker ready queue=${QUEUE_CONSENSUS_REPORT} redis=${connection.host}:${connection.port}`,
+  );
+});
+
+consensusReportWorker.on('completed', (job) => {
+  console.log(`[worker] Completed job=${job.id} name=${job.name}`);
+});
+
+consensusReportWorker.on('failed', (job, err) => {
+  console.error(
+    `[worker] Failed job=${job?.id ?? 'unknown'} name=${job?.name ?? 'unknown'} err=${err?.message ?? err}`,
+  );
+});
+
+consensusReportWorker.on('error', (err) => {
+  console.error(`[worker] Worker error: ${err?.message ?? err}`);
+});
+
 // HTTP response helper
 function writeJson(res: http.ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { 'content-type': 'application/json' });
@@ -202,8 +300,13 @@ const server = http.createServer(async (req, res) => {
         await client1.ping();
         const client2 = await topicClusterQueue.client;
         await client2.ping();
+        const client3 = await consensusReportQueue.client;
+        await client3.ping();
         await prisma.$queryRaw`SELECT 1`;
-        writeJson(res, 200, { ok: true, queues: [QUEUE_ARGUMENT_ANALYSIS, QUEUE_TOPIC_CLUSTER] });
+        writeJson(res, 200, {
+          ok: true,
+          queues: [QUEUE_ARGUMENT_ANALYSIS, QUEUE_TOPIC_CLUSTER, QUEUE_CONSENSUS_REPORT],
+        });
         return;
       } catch (err) {
         console.error('[worker] Health check failed:', err);
@@ -267,6 +370,8 @@ async function shutdown(signal: string): Promise<void> {
   await argumentAnalysisQueue.close();
   await topicClusterWorker.close();
   await topicClusterQueue.close();
+  await consensusReportWorker.close();
+  await consensusReportQueue.close();
   await redis.quit();
   await prisma.$disconnect();
   process.exit(0);

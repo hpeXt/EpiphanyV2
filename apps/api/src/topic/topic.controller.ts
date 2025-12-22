@@ -74,6 +74,15 @@ export class TopicController {
   }
 
   /**
+   * GET /v1/topics/:topicId/consensus-report/latest - Latest consensus report (public read)
+   * @see docs/api-contract.md#3.13
+   */
+  @Get(':topicId/consensus-report/latest')
+  async getLatestConsensusReport(@Param('topicId') topicId: string) {
+    return this.topicService.getLatestConsensusReport(topicId);
+  }
+
+  /**
    * POST /v1/topics/:topicId/commands - Execute topic command
    */
   @Post(':topicId/commands')
@@ -122,6 +131,9 @@ export class TopicController {
 
       case 'UNPRUNE_ARGUMENT':
         return { topic: await this.topicService.unpruneArgument(topicId, command.payload, pubkey) };
+
+      case 'GENERATE_CONSENSUS_REPORT':
+        return { topic: await this.topicService.generateConsensusReport(topicId, pubkey) };
 
       default:
         throw new BadRequestException({

@@ -14,9 +14,12 @@ import { v7 as uuidv7 } from 'uuid';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../infrastructure/prisma.module.js';
 import { RedisService } from '../infrastructure/redis.module.js';
+import { QueueService } from '../infrastructure/queue.module.js';
 import { TopicEventsPublisher } from '../sse/topic-events.publisher.js';
 import type {
   ClusterMap,
+  ConsensusReport,
+  ConsensusReportLatestResponse,
   CreateTopicRequest,
   LedgerMe,
   StakeMeItem,
@@ -54,6 +57,7 @@ export class TopicService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    private readonly queue: QueueService,
     private readonly topicEvents: TopicEventsPublisher,
   ) {}
 
@@ -68,7 +72,15 @@ export class TopicService {
 
   private assertTopicStatusAllowsHostCommand(params: {
     currentStatus: 'active' | 'frozen' | 'archived';
-    command: { type: 'SET_STATUS' | 'EDIT_ROOT' | 'PRUNE_ARGUMENT' | 'UNPRUNE_ARGUMENT'; payload: unknown };
+    command: {
+      type:
+        | 'SET_STATUS'
+        | 'EDIT_ROOT'
+        | 'PRUNE_ARGUMENT'
+        | 'UNPRUNE_ARGUMENT'
+        | 'GENERATE_CONSENSUS_REPORT';
+      payload: unknown;
+    };
   }): void {
     if (params.currentStatus === 'active') return;
 
@@ -93,6 +105,193 @@ export class TopicService {
         message: 'Topic status disallows write',
       },
     });
+  }
+
+  private toJsonObject(value: Prisma.JsonValue | null): Record<string, unknown> | null {
+    if (!value) return null;
+    if (typeof value !== 'object') return null;
+    if (Array.isArray(value)) return null;
+    return value as Record<string, unknown>;
+  }
+
+  async getLatestConsensusReport(topicId: string): Promise<ConsensusReportLatestResponse> {
+    const topic = await this.prisma.topic.findUnique({
+      where: { id: topicId },
+      select: { id: true },
+    });
+
+    if (!topic) {
+      throw new NotFoundException({
+        error: { code: 'TOPIC_NOT_FOUND', message: 'Topic not found' },
+      });
+    }
+
+    const latest = await this.prisma.consensusReport.findFirst({
+      where: { topicId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: {
+        id: true,
+        topicId: true,
+        status: true,
+        contentMd: true,
+        model: true,
+        promptVersion: true,
+        params: true,
+        metadata: true,
+        computedAt: true,
+        createdAt: true,
+      },
+    });
+
+    if (!latest) {
+      return { report: null };
+    }
+
+    return { report: this.toConsensusReportDto(latest) };
+  }
+
+  private toConsensusReportDto(report: {
+    id: string;
+    topicId: string;
+    status: 'generating' | 'ready' | 'failed';
+    contentMd: string | null;
+    model: string | null;
+    promptVersion: string | null;
+    params: Prisma.JsonValue | null;
+    metadata: Prisma.JsonValue | null;
+    computedAt: Date | null;
+    createdAt: Date;
+  }): ConsensusReport {
+    const base = {
+      id: report.id,
+      topicId: report.topicId,
+      model: report.model,
+      promptVersion: report.promptVersion,
+      params: this.toJsonObject(report.params),
+      metadata: this.toJsonObject(report.metadata),
+      createdAt: report.createdAt.toISOString(),
+    };
+
+    if (report.status === 'generating') {
+      return {
+        ...base,
+        status: 'generating',
+        contentMd: null,
+        computedAt: null,
+      };
+    }
+
+    const computedAt = (report.computedAt ?? report.createdAt).toISOString();
+
+    if (report.status === 'ready') {
+      return {
+        ...base,
+        status: 'ready',
+        contentMd: report.contentMd ?? '',
+        computedAt,
+      };
+    }
+
+    return {
+      ...base,
+      status: 'failed',
+      contentMd: null,
+      computedAt,
+    };
+  }
+
+  /**
+   * GENERATE_CONSENSUS_REPORT host command (requires owner)
+   * @see docs/steps/step22.md
+   */
+  async generateConsensusReport(topicId: string, pubkeyHex: string): Promise<TopicSummary> {
+    const topic = await this.prisma.topic.findUnique({
+      where: { id: topicId },
+      select: {
+        id: true,
+        status: true,
+        ownerPubkey: true,
+      },
+    });
+
+    if (!topic) {
+      throw new NotFoundException({
+        error: { code: 'TOPIC_NOT_FOUND', message: 'Topic not found' },
+      });
+    }
+
+    this.assertIsTopicOwner(topic, pubkeyHex);
+    this.assertTopicStatusAllowsHostCommand({
+      currentStatus: topic.status,
+      command: { type: 'GENERATE_CONSENSUS_REPORT', payload: {} },
+    });
+
+    const reportId = uuidv7();
+
+    await this.prisma.consensusReport.create({
+      data: {
+        id: reportId,
+        topicId,
+        status: 'generating',
+        contentMd: null,
+        model: null,
+        promptVersion: null,
+        params: null,
+        metadata: null,
+        computedAt: null,
+      },
+    });
+
+    // SSE invalidation so clients can pull latest report (best-effort)
+    try {
+      await this.topicEvents.publish(topicId, {
+        event: 'report_updated',
+        data: { topicId, reportId },
+      });
+    } catch {
+      // ignore
+    }
+
+    // Fire-and-forget: don't block the response on queue
+    this.queue.enqueueConsensusReport({ topicId, reportId, trigger: 'host' }).catch(async (err) => {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(
+        `[topic] Failed to enqueue consensus-report for topicId=${topicId} reportId=${reportId}:`,
+        message,
+      );
+      // Mark failed so UI doesn't hang on "generating" forever.
+      try {
+        await this.prisma.consensusReport.update({
+          where: { id: reportId },
+          data: {
+            status: 'failed',
+            contentMd: null,
+            metadata: {
+              error: {
+                message,
+                timestamp: new Date().toISOString(),
+              },
+            },
+            computedAt: new Date(),
+          },
+        });
+
+        await this.topicEvents.publish(topicId, {
+          event: 'report_updated',
+          data: { topicId, reportId },
+        });
+      } catch {
+        // ignore
+      }
+    });
+
+    const updatedTopic = await this.getTopicById(topicId);
+    if (!updatedTopic) {
+      throw new NotFoundException({
+        error: { code: 'TOPIC_NOT_FOUND', message: 'Topic not found' },
+      });
+    }
+    return updatedTopic;
   }
 
   /**

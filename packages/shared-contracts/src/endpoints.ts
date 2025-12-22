@@ -4,7 +4,14 @@
  * @see docs/api-contract.md#3.x
  */
 import { z } from 'zod';
-import { zTopicSummary, zArgument, zLedgerMe, zStakeMeItem, zClusterMap } from './objects.js';
+import {
+  zTopicSummary,
+  zArgument,
+  zLedgerMe,
+  zStakeMeItem,
+  zClusterMap,
+  zConsensusReport,
+} from './objects.js';
 import { zErrorCode } from './errors.js';
 
 // ============================================================================
@@ -207,12 +214,18 @@ export const zTopicCommandUnpruneArgument = z.object({
   }),
 });
 
+export const zTopicCommandGenerateConsensusReport = z.object({
+  type: z.literal('GENERATE_CONSENSUS_REPORT'),
+  payload: z.object({}),
+});
+
 export const zTopicCommand = z.discriminatedUnion('type', [
   zTopicCommandClaimOwner,
   zTopicCommandSetStatus,
   zTopicCommandEditRoot,
   zTopicCommandPruneArgument,
   zTopicCommandUnpruneArgument,
+  zTopicCommandGenerateConsensusReport,
 ]);
 
 export type TopicCommand = z.infer<typeof zTopicCommand>;
@@ -222,6 +235,16 @@ export const zTopicCommandResponse = z.object({
 });
 
 export type TopicCommandResponse = z.infer<typeof zTopicCommandResponse>;
+
+// ============================================================================
+// GET /v1/topics/:topicId/consensus-report/latest - Latest Consensus Report
+// ============================================================================
+
+export const zConsensusReportLatestResponse = z.object({
+  report: zConsensusReport.nullable(),
+});
+
+export type ConsensusReportLatestResponse = z.infer<typeof zConsensusReportLatestResponse>;
 
 // Re-export ClusterMap for endpoint use
 export { zClusterMap };
