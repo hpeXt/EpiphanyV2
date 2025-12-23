@@ -27,6 +27,8 @@ export interface VerifyResult {
 @Injectable()
 export class AuthService {
   private readonly TIMESTAMP_WINDOW_MS = 60_000; // 60 seconds
+  private readonly NONCE_TTL_SECONDS = 60;
+  private readonly SET_VOTES_NONCE_TTL_SECONDS = 300; // align with setVotes idempotency window
 
   constructor(private readonly redis: RedisService) {}
 
@@ -49,6 +51,10 @@ export class AuthService {
       return { valid: false, errorCode: 'BAD_REQUEST', message: 'Nonce cannot contain |' };
     }
 
+    if (nonce.length === 0 || nonce.length > 128) {
+      return { valid: false, errorCode: 'BAD_REQUEST', message: 'Nonce length out of range' };
+    }
+
     // Check timestamp window
     const ts = parseInt(timestamp, 10);
     if (isNaN(ts)) {
@@ -61,7 +67,10 @@ export class AuthService {
     }
 
     // Check nonce replay
-    const nonceOk = await this.redis.checkAndSetNonce(pubkey, nonce);
+    const nonceTtlSeconds = allowNonceReplay
+      ? this.SET_VOTES_NONCE_TTL_SECONDS
+      : this.NONCE_TTL_SECONDS;
+    const nonceOk = await this.redis.checkAndSetNonce(pubkey, nonce, nonceTtlSeconds);
     if (!nonceOk && !allowNonceReplay) {
       return { valid: false, errorCode: 'NONCE_REPLAY', message: 'Nonce already used' };
     }
@@ -74,6 +83,9 @@ export class AuthService {
 
     // Build canonical message (PATH without query string)
     const pathWithoutQuery = path.split('?')[0];
+    if (pathWithoutQuery.includes('|')) {
+      return { valid: false, errorCode: 'BAD_REQUEST', message: 'Path cannot contain |' };
+    }
     const canonical = `v1|${method}|${pathWithoutQuery}|${timestamp}|${nonce}|${bodyHash}`;
 
     try {

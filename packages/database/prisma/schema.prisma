@@ -132,6 +132,18 @@ model Stake {
   @@map("stakes")
 }
 
+model SetVotesIdempotency {
+  pubkey    Bytes    @db.ByteA
+  nonce     String   @db.VarChar(128)
+  response  Json     @db.JsonB
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@id([pubkey, nonce])
+  @@index([expiresAt])
+  @@map("set_votes_idempotency")
+}
+
 model Camp {
   topicId    String  @map("topic_id") @db.Uuid
   clusterId  Int     @map("cluster_id")

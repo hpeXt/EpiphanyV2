@@ -22,13 +22,15 @@ import {
   Module,
   Injectable,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { createHash, createPrivateKey, sign } from 'crypto';
 
-import { AuthGuard } from '../src/auth/auth.guard';
-import { NonceService } from '../src/auth/nonce.service';
-import { AllExceptionsFilter } from '../src/filters/all-exceptions.filter';
+import { AuthGuard, RequireSignature } from '../src/common/auth.guard';
+import { AuthService } from '../src/common/auth.service';
+import { HttpExceptionFilter } from '../src/common/http-exception.filter';
+import { RedisService } from '../src/infrastructure/redis.module';
 import { RawBodyMiddleware } from '../src/middleware/raw-body.middleware';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -111,19 +113,14 @@ function makeSignedHeaders(opts: {
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Injectable()
-class MockNonceService {
-  private usedNonces = new Map<string, number>();
+class MockRedisService {
+  private usedNonces = new Set<string>();
 
-  async checkAndMarkNonce(nonce: string): Promise<boolean> {
-    if (this.usedNonces.has(nonce)) {
-      return false;
-    }
-    this.usedNonces.set(nonce, Date.now());
+  async checkAndSetNonce(pubkey: string, nonce: string): Promise<boolean> {
+    const key = `${pubkey}:${nonce}`;
+    if (this.usedNonces.has(key)) return false;
+    this.usedNonces.add(key);
     return true;
-  }
-
-  clear() {
-    this.usedNonces.clear();
   }
 }
 
@@ -135,11 +132,13 @@ class MockNonceService {
 @UseGuards(AuthGuard)
 class TestProtectedController {
   @Get('ping')
+  @RequireSignature()
   ping() {
     return { ok: true };
   }
 
   @Post('echo')
+  @RequireSignature()
   echo(@Body() body: any) {
     return { ok: true, body };
   }
@@ -148,8 +147,10 @@ class TestProtectedController {
 @Module({
   controllers: [TestProtectedController],
   providers: [
+    Reflector,
     AuthGuard,
-    { provide: NonceService, useClass: MockNonceService },
+    AuthService,
+    { provide: RedisService, useClass: MockRedisService },
   ],
 })
 class TestModule {}
@@ -172,7 +173,7 @@ describe('AuthGuard (e2e)', () => {
     app.use(RawBodyMiddleware);
 
     // Apply global exception filter
-    app.useGlobalFilters(new AllExceptionsFilter());
+    app.useGlobalFilters(new HttpExceptionFilter());
 
     await app.init();
   });

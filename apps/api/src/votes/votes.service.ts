@@ -19,6 +19,7 @@ import { TopicEventsPublisher } from '../sse/topic-events.publisher.js';
 import { QueueService } from '../infrastructure/queue.module.js';
 
 const IDEMPOTENCY_TTL_SECONDS = 300; // 5 minutes
+const IDEMPOTENCY_DB_CLEANUP_LIMIT = 500;
 
 @Injectable()
 export class VotesService {
@@ -59,26 +60,66 @@ export class VotesService {
     nonceReplay: boolean;
   }): Promise<SetVotesResponse> {
     const idempotencyKey = this.getIdempotencyKey(params.pubkey, params.nonce);
+    const pubkeyBytes = Buffer.from(params.pubkey, 'hex');
 
     // Idempotency read: return cached success response regardless of request body/argumentId
-    const cached = await this.redis.get(idempotencyKey);
-    if (cached) {
-      try {
-        const parsed = zSetVotesResponse.safeParse(JSON.parse(cached));
-        if (parsed.success) return parsed.data;
-      } catch {
-        // fall through to recompute; cache will be overwritten on next success
+    try {
+      const cached = await this.redis.get(idempotencyKey);
+      if (cached) {
+        try {
+          const parsed = zSetVotesResponse.safeParse(JSON.parse(cached));
+          if (parsed.success) return parsed.data;
+        } catch {
+          // fall through to recompute; cache will be overwritten on next success
+        }
+      }
+    } catch {
+      // Best-effort: if Redis is unavailable, fall back to DB-backed idempotency.
+    }
+
+    // Best-effort: keep DB idempotency table bounded (expired rows).
+    // This is intentionally limited to avoid per-request full-table deletes.
+    try {
+      await this.prisma.$executeRaw(Prisma.sql`
+        DELETE FROM set_votes_idempotency
+        WHERE ctid IN (
+          SELECT ctid
+          FROM set_votes_idempotency
+          WHERE expires_at < NOW()
+          LIMIT ${IDEMPOTENCY_DB_CLEANUP_LIMIT}
+        )
+      `);
+    } catch {
+      // ignore cleanup failures
+    }
+
+    const now = new Date();
+    const existing = await this.prisma.setVotesIdempotency.findUnique({
+      where: { pubkey_nonce: { pubkey: pubkeyBytes, nonce: params.nonce } },
+      select: { response: true, expiresAt: true },
+    });
+    if (existing) {
+      if (existing.expiresAt > now) {
+        const parsed = zSetVotesResponse.safeParse(existing.response);
+        if (parsed.success) {
+          try {
+            const ttlSeconds = Math.min(
+              IDEMPOTENCY_TTL_SECONDS,
+              Math.max(1, Math.ceil((existing.expiresAt.getTime() - Date.now()) / 1000)),
+            );
+            await this.redis.set(idempotencyKey, JSON.stringify(parsed.data), 'EX', ttlSeconds);
+          } catch {
+            // best-effort cache warm
+          }
+          return parsed.data;
+        }
+      } else {
+        // Expired: allow nonce reuse after the window.
+        await this.prisma.setVotesIdempotency
+          .delete({ where: { pubkey_nonce: { pubkey: pubkeyBytes, nonce: params.nonce } } })
+          .catch(() => undefined);
       }
     }
-
-    // If nonce is a replay but we have no cached response, treat it as a true replay attack
-    if (params.nonceReplay) {
-      throw new ConflictException({
-        error: { code: 'NONCE_REPLAY', message: 'Nonce already used' },
-      });
-    }
-
-    const pubkeyBytes = Buffer.from(params.pubkey, 'hex');
 
     const result = await this.prisma.$transaction(async (tx) => {
       // Lock argument + topic
@@ -218,6 +259,61 @@ export class VotesService {
 
       const { delta } = validation;
 
+      // DB-backed idempotency (durable): store the success response in the same transaction.
+      // If another request already created the record, return its stored response and avoid writes.
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + IDEMPOTENCY_TTL_SECONDS * 1000);
+
+      const response: SetVotesResponse = {
+        argumentId: params.argumentId,
+        previousVotes: currentVotes,
+        targetVotes: params.targetVotes,
+        deltaVotes: delta.deltaVotes,
+        previousCost: delta.previousCost,
+        targetCost: delta.targetCost,
+        deltaCost: delta.deltaCost,
+        ledger: {
+          topicId,
+          pubkey: params.pubkey,
+          balance: ledger.balance - delta.deltaCost,
+          myTotalVotes: ledger.totalVotesStaked + delta.deltaVotes,
+          myTotalCost: ledger.totalCostStaked + delta.deltaCost,
+          lastInteractionAt: now.toISOString(),
+        },
+      };
+
+      try {
+        await tx.setVotesIdempotency.create({
+          data: {
+            pubkey: pubkeyBytes,
+            nonce: params.nonce,
+            response,
+            expiresAt,
+          },
+        });
+      } catch (err) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+          const existing = await tx.setVotesIdempotency.findUnique({
+            where: { pubkey_nonce: { pubkey: pubkeyBytes, nonce: params.nonce } },
+            select: { response: true, expiresAt: true },
+          });
+
+          if (existing && existing.expiresAt > now) {
+            const parsed = zSetVotesResponse.safeParse(existing.response);
+            if (parsed.success) {
+              return { topicId: parsed.data.ledger.topicId, response: parsed.data, didMutate: false, expiresAt: existing.expiresAt };
+            }
+          }
+
+          // Existing but invalid/expired: fall through to let the request fail (consistent with "nonce consumed").
+          throw new ConflictException({
+            error: { code: 'NONCE_REPLAY', message: 'Nonce already used' },
+          });
+        }
+
+        throw err;
+      }
+
       // Update stake (upsert/delete)
       if (params.targetVotes === 0) {
         if (currentVotes > 0) {
@@ -254,8 +350,6 @@ export class VotesService {
         });
       }
 
-      const now = new Date();
-
       // Update ledger (explicit values; row is locked)
       const updatedLedger = await tx.ledger.update({
         where: { topicId_pubkey: { topicId, pubkey: pubkeyBytes } },
@@ -284,27 +378,24 @@ export class VotesService {
         },
       });
 
-      const response: SetVotesResponse = {
-        argumentId: params.argumentId,
-        previousVotes: currentVotes,
-        targetVotes: params.targetVotes,
-        deltaVotes: delta.deltaVotes,
-        previousCost: delta.previousCost,
-        targetCost: delta.targetCost,
-        deltaCost: delta.deltaCost,
-        ledger: this.toLedgerMe(updatedLedger),
-      };
-
-      return { topicId, response };
+      response.ledger = this.toLedgerMe(updatedLedger);
+      return { topicId, response, didMutate: true, expiresAt };
     });
 
-    // Idempotency write: cache only successful responses
-    await this.redis.set(
-      idempotencyKey,
-      JSON.stringify(result.response),
-      'EX',
-      IDEMPOTENCY_TTL_SECONDS,
-    );
+    // Idempotency write: cache only successful responses (best-effort; DB is the source of truth)
+    try {
+      const ttlSeconds = Math.min(
+        IDEMPOTENCY_TTL_SECONDS,
+        Math.max(1, Math.ceil((result.expiresAt.getTime() - Date.now()) / 1000)),
+      );
+      await this.redis.set(idempotencyKey, JSON.stringify(result.response), 'EX', ttlSeconds);
+    } catch {
+      // ignore Redis failures
+    }
+
+    if (!result.didMutate) {
+      return result.response;
+    }
 
     // (Optional, Step 12 consumes) SSE invalidation stream write
     try {

@@ -11,6 +11,10 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps/web/package.json ./apps/web/
 COPY apps/api/package.json ./apps/api/
+COPY packages/shared-contracts/package.json ./packages/shared-contracts/
+COPY packages/core-logic/package.json ./packages/core-logic/
+COPY packages/crypto/package.json ./packages/crypto/
+COPY packages/database/package.json ./packages/database/
 
 # Install ALL dependencies (needed for turbo and workspace resolution)
 RUN pnpm install --frozen-lockfile
@@ -22,6 +26,7 @@ WORKDIR /app
 # Copy all node_modules from deps stage
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps ./apps
+COPY --from=deps /app/packages ./packages
 COPY . .
 
 # Build the application

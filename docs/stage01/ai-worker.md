@@ -335,6 +335,7 @@ Worker（Node）：
 
 - `DATABASE_URL`
 - `REDIS_URL`
+- `WORKER_DEBUG_TOKEN`（可选：启用调试入队端点 `POST /enqueue-analysis`；请求需带 `X-Worker-Debug-Token`，**不得暴露到公网**）
 - `OPENROUTER_API_KEY`（OpenRouter API 密钥，**已配置**）
 - `OPENROUTER_BASE_URL`（默认：`https://openrouter.ai/api/v1`）
 - `EMBEDDING_MODEL`（默认：`qwen/qwen3-embedding-8b`，**已配置**）

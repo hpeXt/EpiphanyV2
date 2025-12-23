@@ -36,6 +36,14 @@ const QUEUE_CONSENSUS_REPORT = 'ai_consensus-report';
 const port = Number(process.env.PORT ?? process.env.WORKER_PORT ?? 3002);
 const connection = getRedisConnection();
 
+function isAuthorizedDebugRequest(req: http.IncomingMessage): boolean {
+  const token = process.env.WORKER_DEBUG_TOKEN;
+  if (!token) return false;
+  const header = req.headers['x-worker-debug-token'];
+  if (typeof header !== 'string') return false;
+  return header === token;
+}
+
 // Initialize dependencies
 const prisma = getPrisma();
 const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379');
@@ -317,6 +325,14 @@ const server = http.createServer(async (req, res) => {
 
     // Debug: Manually enqueue an argument for analysis
     if (path === '/enqueue-analysis' && req.method === 'POST') {
+      // Disabled unless explicitly enabled via a secret token.
+      // This endpoint must never be exposed unauthenticated on the public Internet.
+      if (!isAuthorizedDebugRequest(req)) {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+
       let body = '';
       for await (const chunk of req) {
         body += chunk;

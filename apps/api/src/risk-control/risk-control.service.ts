@@ -37,13 +37,6 @@ function normalizeIp(ip: string): string {
   return ip;
 }
 
-function parseForwardedFor(headerValue: string | undefined): string | null {
-  if (!headerValue) return null;
-  const first = headerValue.split(',')[0]?.trim();
-  if (!first) return null;
-  return normalizeIp(first);
-}
-
 @Injectable()
 export class RiskControlService {
   private readonly windowSeconds: number;
@@ -68,9 +61,26 @@ return {current, ttl}
     private readonly redis: RedisService,
   ) {
     this.windowSeconds = parsePositiveInt(process.env.RISK_RL_WINDOW_SECONDS, 60);
-    this.ipHashSalt = process.env.RISK_IP_HASH_SALT ?? 'epiphany-dev';
+    const configuredSalt = process.env.RISK_IP_HASH_SALT;
+    if (process.env.NODE_ENV === 'production') {
+      if (
+        !configuredSalt ||
+        configuredSalt === 'epiphany-dev' ||
+        configuredSalt.length < 16
+      ) {
+        throw new Error(
+          'RISK_IP_HASH_SALT must be set to a strong secret in production',
+        );
+      }
+    }
+    this.ipHashSalt = configuredSalt ?? 'epiphany-dev';
 
     this.endpointLimits = {
+      createTopic: {
+        // No signature/pubkey is required for topic creation, so pubkey scope is not applicable.
+        pubkeyLimit: 0,
+        ipLimit: parseNonNegativeInt(process.env.RISK_RL_CREATE_TOPIC_IP_LIMIT, 10),
+      },
       createArgument: {
         pubkeyLimit: parseNonNegativeInt(process.env.RISK_RL_CREATE_ARGUMENT_PUBKEY_LIMIT, 10),
         ipLimit: parseNonNegativeInt(process.env.RISK_RL_CREATE_ARGUMENT_IP_LIMIT, 20),
@@ -87,15 +97,15 @@ return {current, ttl}
   }
 
   getClientIp(req: Request): string | null {
-    const fromForwarded = parseForwardedFor(req.headers['x-forwarded-for'] as string | undefined);
-    if (fromForwarded) return fromForwarded;
+    // Express `req.ip` honors `trust proxy` and therefore resists spoofed forwarded headers
+    // when the request is not coming from a trusted ingress.
+    const ip = (req.ip || '').trim();
+    if (ip) return normalizeIp(ip);
 
-    const realIp = req.headers['x-real-ip'] as string | undefined;
-    if (realIp) return normalizeIp(realIp.trim());
+    const socketIp = (req.socket.remoteAddress || '').trim();
+    if (socketIp) return normalizeIp(socketIp);
 
-    const ip = (req.ip || req.socket.remoteAddress || '').trim();
-    if (!ip) return null;
-    return normalizeIp(ip);
+    return null;
   }
 
   async resolveTopicIdByArgumentId(argumentId: string): Promise<string | null> {
@@ -126,7 +136,7 @@ return {current, ttl}
   async checkRateLimit(params: {
     endpoint: RiskControlEndpoint;
     topicId: string;
-    pubkeyHex: string;
+    pubkeyHex: string | null;
     ip: string | null;
   }): Promise<RateLimitCheckResult> {
     const limits = this.endpointLimits[params.endpoint];
@@ -136,7 +146,7 @@ return {current, ttl}
       return { limited: false, windowSeconds: this.windowSeconds };
     }
 
-    if (limits.pubkeyLimit > 0) {
+    if (limits.pubkeyLimit > 0 && params.pubkeyHex) {
       const key = this.getPubkeyKey(params.endpoint, params.topicId, params.pubkeyHex);
       const { count, ttlSeconds } = await this.incrWithWindow(key);
       if (count > limits.pubkeyLimit) {
@@ -198,4 +208,3 @@ return {current, ttl}
     return { count, ttlSeconds };
   }
 }
-

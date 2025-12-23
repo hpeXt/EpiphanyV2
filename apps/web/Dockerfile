@@ -9,9 +9,9 @@ WORKDIR /app
 
 # Copy root workspace files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY apps/web/package.json ./apps/web/
 COPY packages/crypto/package.json ./packages/crypto/
 COPY packages/shared-contracts/package.json ./packages/shared-contracts/
-COPY apps/web/package.json ./apps/web/
 
 # Install dependencies
 RUN pnpm install --frozen-lockfile

@@ -61,6 +61,9 @@ temp
 *.swp
 *~
 
+# Audit evidence bundles (may contain sensitive data)
+audit-artifacts
+
 # Secrets & credentials
 *.pem
 *.key

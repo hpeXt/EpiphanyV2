@@ -130,7 +130,7 @@
 - `PATH` **不含 query string**（前端实现已显式 `path.split("?")[0]`：`apps/web/lib/apiClient.ts`）
 - `BODY_HASH` 是 `sha256(rawBodyString)`；后端基于**raw body**算 hash（不要对对象 re-stringify）
 - `X-Nonce` 不能包含 `|`
-- nonce 去重窗口：60s；`setVotes` 额外做“强幂等缓存”（5 分钟内同 nonce 重放返回同成功响应）
+- nonce 去重窗口：60s；`setVotes` 建议对齐到 300s（避免风控/回放窗口不一致），并额外做“强幂等缓存”（5 分钟内同 nonce 重放返回同成功响应）
 
 UI 设计建议：
 

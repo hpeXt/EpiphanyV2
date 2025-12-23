@@ -32,6 +32,7 @@ export class TopicController {
    * POST /v1/topics - Create topic (no signature required)
    */
   @Post()
+  @RiskControl({ endpoint: 'createTopic', topicResolver: { kind: 'constant', topicId: '__topic_create__' } })
   @HttpCode(HttpStatus.CREATED)
   async createTopic(@Body() body: unknown) {
     const parsed = zCreateTopicRequest.safeParse(body);
