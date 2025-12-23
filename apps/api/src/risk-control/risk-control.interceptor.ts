@@ -26,10 +26,10 @@ export class RiskControlInterceptor implements NestInterceptor {
     const pubkeyHeader = req.headers['x-pubkey'];
     const pubkeyHex: string | null =
       (typeof pubkeyHeader === 'string' ? pubkeyHeader : undefined) ??
-      (req as Request & { pubkey?: string }).pubkey;
+      (req as Request & { pubkey?: string }).pubkey ??
+      null;
 
-    const requiresPubkey = options.endpoint !== 'createTopic';
-    if (requiresPubkey && !pubkeyHex) return next.handle();
+    if (options.endpoint !== 'createTopic' && !pubkeyHex) return next.handle();
 
     let topicId: string | null = null;
     if (options.topicResolver.kind === 'param') {
@@ -55,7 +55,8 @@ export class RiskControlInterceptor implements NestInterceptor {
     // Topic blacklist affects only user write endpoints (createArgument/setVotes).
     if (options.endpoint !== 'topicCommands' && options.endpoint !== 'createTopic') {
       // createTopic is public/no-signature and does not have a topic scope yet.
-      await this.risk.assertNotBlacklisted(topicId, pubkeyHex as string);
+      if (!pubkeyHex) return next.handle();
+      await this.risk.assertNotBlacklisted(topicId, pubkeyHex);
     }
 
     const ip = this.risk.getClientIp(req);
