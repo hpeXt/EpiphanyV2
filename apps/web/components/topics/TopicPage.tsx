@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { LedgerMe } from "@epiphany/shared-contracts";
+import type { LedgerMe, Argument } from "@epiphany/shared-contracts";
 
 import { IdentityOnboarding } from "@/components/identity/IdentityOnboarding";
 import { FocusView } from "@/components/topics/FocusView";
@@ -19,11 +19,13 @@ import { TopicManagePanel } from "@/components/topics/TopicManagePanel";
 import { createLocalStorageVisitedTopicsStore } from "@/lib/visitedTopicsStore";
 import { ConsensusReportModal } from "@/components/topics/ConsensusReportModal";
 import { P5Alert } from "@/components/ui/P5Alert";
-import { P5Badge } from "@/components/ui/P5Badge";
 import { P5Button } from "@/components/ui/P5Button";
-import { P5Panel } from "@/components/ui/P5Panel";
 import { P5Tabs } from "@/components/ui/P5Tabs";
 import { useP5Toast } from "@/components/ui/P5ToastProvider";
+import { P5SkeletonList } from "@/components/ui/P5Skeleton";
+import { TopicDualColumn } from "@/components/topics/TopicDualColumn";
+import { TopicTopBar } from "@/components/topics/TopicTopBar";
+import { SelectedNodeCard } from "@/components/topics/SelectedNodeCard";
 
 type Props = {
   topicId: string;
@@ -56,11 +58,17 @@ export function TopicPage({ topicId }: Props) {
 
   const tree = useTopicTree(topicId, 3, refreshToken);
   const [selectedArgumentId, setSelectedArgumentId] = useState<string | null>(
-    null,
+    null
   );
   const [viewMode, setViewMode] = useState<"focus" | "god" | "sunburst">("focus");
   const [ledger, setLedger] = useState<LedgerMe | null>(null);
   const [ledgerError, setLedgerError] = useState("");
+
+  // 获取选中节点
+  const selectedNode = useMemo((): Argument | null => {
+    if (!selectedArgumentId || tree.status !== "success") return null;
+    return tree.arguments.find((n) => n.id === selectedArgumentId) || null;
+  }, [selectedArgumentId, tree]);
 
   useEffect(() => {
     try {
@@ -124,17 +132,33 @@ export function TopicPage({ topicId }: Props) {
 
   if (tree.status === "loading") {
     return (
-      <P5Alert role="status" variant="info" title="topic">
-        Loading topic…
-      </P5Alert>
+      <div className="flex h-screen flex-col">
+        <div className="flex h-14 flex-shrink-0 items-center justify-center border-b-[4px] border-[color:var(--ink)] bg-[color:var(--ink)]">
+          <span className="font-display text-lg uppercase text-[color:var(--paper)]">
+            Loading...
+          </span>
+        </div>
+        <div className="flex-1 p-8">
+          <P5SkeletonList count={3} />
+        </div>
+      </div>
     );
   }
 
   if (tree.status === "error") {
     return (
-      <P5Alert role="alert" variant="error" title="error">
-        {tree.errorMessage}
-      </P5Alert>
+      <div className="flex h-screen flex-col">
+        <div className="flex h-14 flex-shrink-0 items-center justify-center border-b-[4px] border-[color:var(--ink)] bg-[color:var(--ink)]">
+          <span className="font-display text-lg uppercase text-[color:var(--paper)]">
+            Error
+          </span>
+        </div>
+        <div className="flex-1 p-8">
+          <P5Alert role="alert" variant="error" title="error">
+            {tree.errorMessage}
+          </P5Alert>
+        </div>
+      </div>
     );
   }
 
@@ -166,7 +190,7 @@ export function TopicPage({ topicId }: Props) {
     const result = await apiClient.executeTopicCommand(
       topicId,
       { type: "CLAIM_OWNER", payload: {} },
-      { "x-claim-token": claimInfo.claimToken },
+      { "x-claim-token": claimInfo.claimToken }
     );
     setIsClaiming(false);
 
@@ -177,7 +201,11 @@ export function TopicPage({ topicId }: Props) {
         title: "claim",
         message: result.error.message,
       });
-      if (result.error.kind === "http" && (result.error.code === "CLAIM_TOKEN_EXPIRED" || result.error.code === "CLAIM_TOKEN_INVALID")) {
+      if (
+        result.error.kind === "http" &&
+        (result.error.code === "CLAIM_TOKEN_EXPIRED" ||
+          result.error.code === "CLAIM_TOKEN_INVALID")
+      ) {
         try {
           claimTokenStore.remove(topicId);
         } catch {
@@ -200,120 +228,156 @@ export function TopicPage({ topicId }: Props) {
     invalidate();
   }
 
-  const statusBadgeVariant =
-    tree.topic.status === "active"
-      ? "electric"
-      : tree.topic.status === "frozen"
-        ? "acid"
-        : "ink";
-
   return (
-    <div className="space-y-6">
-      {hasIdentity === false ? (
-        <IdentityOnboarding onComplete={() => setHasIdentity(true)} />
-      ) : null}
-      {reloadRequired ? (
-        <P5Alert title="reload_required" variant="warn" role="alert">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <span>Realtime stream is out of date. Please refresh.</span>
+    <div className="flex h-screen flex-col">
+      {/* Topic 专用 TopBar */}
+      <TopicTopBar
+        title={tree.topic.title}
+        status={tree.topic.status}
+        balance={ledger?.balance ?? null}
+        identityFingerprint={identityFingerprint}
+        showBackButton={true}
+        reportButton={
+          <P5Button
+            onClick={() => setIsReportOpen(true)}
+            size="sm"
+            variant="ghost"
+            className="border-[color:var(--paper)] bg-transparent text-[color:var(--paper)] hover:bg-[color:var(--paper)]/10"
+          >
+            Report
+          </P5Button>
+        }
+        claimButton={
+          claimInfo ? (
             <P5Button
-              type="button"
-              onClick={() => window.location.reload()}
-              variant="ink"
+              onClick={claimOwner}
               size="sm"
+              variant="primary"
+              disabled={isClaiming}
             >
-              Refresh
+              {isClaiming ? "Claiming…" : "Claim Host"}
             </P5Button>
-          </div>
-        </P5Alert>
-      ) : null}
+          ) : null
+        }
+        manageButton={
+          isOwner ? (
+            <P5Button
+              onClick={() => setIsManageOpen((prev) => !prev)}
+              size="sm"
+              variant="ghost"
+              className="border-[color:var(--paper)] bg-transparent text-[color:var(--paper)] hover:bg-[color:var(--paper)]/10"
+            >
+              Manage
+            </P5Button>
+          ) : null
+        }
+      />
 
-      <P5Panel
-        header={
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-[color:var(--ink)] px-4 py-3 text-[color:var(--paper)]">
-            <div className="min-w-0">
-              <div className="font-mono text-xs font-semibold uppercase tracking-wide text-white/80">
-                Topic
+      {/* 双栏布局 */}
+      <TopicDualColumn
+        left={
+          <div className="flex h-full flex-col">
+            {/* Identity Onboarding */}
+            {hasIdentity === false && (
+              <div className="mb-4">
+                <IdentityOnboarding onComplete={() => setHasIdentity(true)} />
               </div>
-              <h1 className="truncate text-xl font-semibold">{tree.topic.title}</h1>
+            )}
+
+            {/* Reload Banner */}
+            {reloadRequired && (
+              <div className="mb-4">
+                <P5Alert title="reload_required" variant="warn" role="alert">
+                  <div className="flex items-center justify-between">
+                    <span>数据已更新，请刷新</span>
+                    <P5Button onClick={() => window.location.reload()} size="sm">
+                      刷新
+                    </P5Button>
+                  </div>
+                </P5Alert>
+              </div>
+            )}
+
+            {/* Claim Error */}
+            {claimError && (
+              <div className="mb-4">
+                <P5Alert role="alert" variant="error" title="claim">
+                  {claimError}
+                </P5Alert>
+              </div>
+            )}
+
+            {/* Ledger Error */}
+            {ledgerError && (
+              <div className="mb-4">
+                <P5Alert role="alert" variant="error" title="ledger">
+                  {ledgerError}
+                </P5Alert>
+              </div>
+            )}
+
+            {/* ViewMode Tabs */}
+            <div className="mb-4 flex items-center justify-between">
+              <P5Tabs
+                ariaLabel="视图模式"
+                value={viewMode}
+                onValueChange={setViewMode}
+                tabs={[
+                  { value: "focus", label: "Focus" },
+                  { value: "sunburst", label: "Overview" },
+                  { value: "god", label: "God View" },
+                ]}
+              />
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <P5Badge variant={statusBadgeVariant}>{tree.topic.status}</P5Badge>
-              {identityFingerprint ? (
-                <P5Badge variant="paper" className="font-mono normal-case tracking-normal">
-                  {identityFingerprint}
-                </P5Badge>
-              ) : null}
+            {/* Visualization */}
+            <div className="min-h-0 flex-1">
+              {viewMode === "god" ? (
+                <GodView topicId={topicId} refreshToken={refreshToken} />
+              ) : viewMode === "sunburst" ? (
+                <SunburstView
+                  rootId={tree.topic.rootArgumentId}
+                  nodes={tree.nodes}
+                  selectedId={selectedArgumentId}
+                  onSelect={setSelectedArgumentId}
+                />
+              ) : (
+                <FocusView
+                  rootId={tree.topic.rootArgumentId}
+                  nodes={tree.nodes}
+                  selectedId={selectedArgumentId}
+                  onSelect={setSelectedArgumentId}
+                />
+              )}
             </div>
           </div>
         }
-      >
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="space-y-1 text-sm text-[color:var(--ink)]">
-            <p>
-              TopicId: <code className="font-mono">{tree.topic.id}</code>
-            </p>
-            <p>
-              Status: <span className="font-mono">{tree.topic.status}</span>
-            </p>
-            {ledger ? (
-              <p>
-                Balance: <span className="font-mono">{ledger.balance}</span>
-              </p>
-            ) : ledgerError ? (
-              <p className="text-[color:var(--rebel-red)]">{ledgerError}</p>
-            ) : null}
+        right={
+          <div className="flex h-full flex-col">
+            {/* Selected Node Card */}
+            <div className="flex-shrink-0 p-4">
+              <SelectedNodeCard node={selectedNode} />
+            </div>
+
+            {/* DialogueStream */}
+            <div className="min-h-0 flex-1 overflow-auto">
+              <DialogueStream
+                topicId={topicId}
+                parentArgumentId={selectedArgumentId}
+                topicStatus={tree.topic.status}
+                refreshToken={refreshToken}
+                onInvalidate={invalidate}
+                canWrite={hasIdentity === true}
+                ledger={ledger}
+                onLedgerUpdated={setLedger}
+              />
+            </div>
           </div>
+        }
+      />
 
-          <div className="flex flex-wrap items-center justify-start gap-2 md:justify-end">
-            <P5Tabs
-              ariaLabel="Topic view mode"
-              value={viewMode}
-              onValueChange={setViewMode}
-              tabs={[
-                { value: "focus", label: "Focus" },
-                { value: "sunburst", label: "Overview" },
-                { value: "god", label: "God View" },
-              ]}
-            />
-
-            <P5Button type="button" onClick={() => setIsReportOpen(true)} size="sm">
-              Report
-            </P5Button>
-
-            {claimInfo ? (
-              <P5Button
-                type="button"
-                onClick={claimOwner}
-                size="sm"
-                variant="primary"
-                disabled={isClaiming}
-              >
-                {isClaiming ? "Claiming…" : "Claim Host"}
-              </P5Button>
-            ) : null}
-
-            {isOwner ? (
-              <P5Button
-                type="button"
-                onClick={() => setIsManageOpen((prev) => !prev)}
-                size="sm"
-              >
-                Manage
-              </P5Button>
-            ) : null}
-          </div>
-        </div>
-      </P5Panel>
-
-      {claimError ? (
-        <P5Alert role="alert" variant="error" title="claim">
-          {claimError}
-        </P5Alert>
-      ) : null}
-
-      {isOwner && isManageOpen ? (
+      {/* Modals */}
+      {isOwner && isManageOpen && (
         <TopicManagePanel
           topicId={topicId}
           topicTitle={tree.topic.title}
@@ -322,9 +386,9 @@ export function TopicPage({ topicId }: Props) {
           onInvalidate={invalidate}
           onClose={() => setIsManageOpen(false)}
         />
-      ) : null}
+      )}
 
-      {isReportOpen ? (
+      {isReportOpen && (
         <ConsensusReportModal
           topicId={topicId}
           isOwner={isOwner}
@@ -332,37 +396,7 @@ export function TopicPage({ topicId }: Props) {
           onInvalidate={invalidate}
           onClose={() => setIsReportOpen(false)}
         />
-      ) : null}
-
-      <div className="grid gap-8 lg:grid-cols-[1fr_1.25fr]">
-        {viewMode === "god" ? (
-          <GodView topicId={topicId} refreshToken={refreshToken} />
-        ) : viewMode === "sunburst" ? (
-          <SunburstView
-            rootId={tree.topic.rootArgumentId}
-            nodes={tree.nodes}
-            selectedId={selectedArgumentId}
-            onSelect={setSelectedArgumentId}
-          />
-        ) : (
-          <FocusView
-            rootId={tree.topic.rootArgumentId}
-            nodes={tree.nodes}
-            selectedId={selectedArgumentId}
-            onSelect={setSelectedArgumentId}
-          />
-        )}
-        <DialogueStream
-          topicId={topicId}
-          parentArgumentId={selectedArgumentId}
-          topicStatus={tree.topic.status}
-          refreshToken={refreshToken}
-          onInvalidate={invalidate}
-          canWrite={hasIdentity === true}
-          ledger={ledger}
-          onLedgerUpdated={setLedger}
-        />
-      </div>
+      )}
     </div>
   );
 }

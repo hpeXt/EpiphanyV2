@@ -22,6 +22,8 @@ export type SignInputV1 = {
 export type KeyStore = {
   getMasterSeedHex(): string | null;
   setMasterSeedHex(masterSeedHex: string): void;
+  getMnemonic(): string | null;
+  setMnemonic(mnemonic: string): void;
   clear(): void;
 };
 
@@ -69,6 +71,7 @@ function getStorage(): Storage {
 
 export function createLocalStorageKeyStore(options?: { key?: string }): KeyStore {
   const key = options?.key ?? "tm:master-seed:v1";
+  const mnemonicKey = `${key}:mnemonic`;
 
   return {
     getMasterSeedHex() {
@@ -89,9 +92,18 @@ export function createLocalStorageKeyStore(options?: { key?: string }): KeyStore
       const storage = getStorage();
       storage.setItem(key, masterSeedHex.toLowerCase());
     },
+    getMnemonic() {
+      const storage = getStorage();
+      return storage.getItem(mnemonicKey);
+    },
+    setMnemonic(mnemonic: string) {
+      const storage = getStorage();
+      storage.setItem(mnemonicKey, mnemonic);
+    },
     clear() {
       const storage = getStorage();
       storage.removeItem(key);
+      storage.removeItem(mnemonicKey);
     },
   };
 }

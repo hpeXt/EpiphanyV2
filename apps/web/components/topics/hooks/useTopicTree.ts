@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import type { Argument } from "@epiphany/shared-contracts";
 import { apiClient } from "@/lib/apiClient";
 
 export type FocusTreeNode = {
@@ -20,9 +21,9 @@ export type TopicHeader = {
 };
 
 type UseTopicTreeState =
-  | { status: "loading"; errorMessage: ""; topic: null; nodes: [] }
-  | { status: "error"; errorMessage: string; topic: null; nodes: [] }
-  | { status: "success"; errorMessage: ""; topic: TopicHeader; nodes: FocusTreeNode[] };
+  | { status: "loading"; errorMessage: ""; topic: null; nodes: []; arguments: [] }
+  | { status: "error"; errorMessage: string; topic: null; nodes: []; arguments: [] }
+  | { status: "success"; errorMessage: ""; topic: TopicHeader; nodes: FocusTreeNode[]; arguments: Argument[] };
 
 function toLabel(input: { title: string | null; body: string; id: string }): string {
   if (input.title) return input.title;
@@ -41,6 +42,7 @@ export function useTopicTree(
     errorMessage: "",
     topic: null,
     nodes: [],
+    arguments: [],
   });
 
   useEffect(() => {
@@ -55,6 +57,7 @@ export function useTopicTree(
         errorMessage: "",
         topic: null,
         nodes: [],
+        arguments: [],
       };
     });
 
@@ -72,6 +75,7 @@ export function useTopicTree(
             errorMessage: result.error.message,
             topic: null,
             nodes: [],
+            arguments: [],
           };
         });
         return;
@@ -96,6 +100,7 @@ export function useTopicTree(
           parentId: arg.parentId,
           label: toLabel(arg),
         })),
+        arguments: result.data.arguments,
       });
     })();
 

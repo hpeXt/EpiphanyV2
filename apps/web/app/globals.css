@@ -3,50 +3,409 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* ========================================
+     Font Stacks (Persona5 Typography)
+     ======================================== */
+  --font-display-stack: var(--font-display), "Oswald", system-ui;
+  --font-body-stack: var(--font-body), "Noto Sans SC", system-ui;
+  --font-mono-stack: var(--font-mono), "Courier New", monospace;
+
+  /* Legacy fallbacks */
   --font-geist-sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
     Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
   --font-geist-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
 
-  /* Persona5-aligned design tokens (docs/stage01/design.md) */
+  /* ========================================
+     Persona5 Design Tokens
+     ======================================== */
+
+  /* Base Colors */
   --ink: #1a1a1d;
   --paper: #ffffff;
   --concrete-300: #c9c9c9;
   --concrete-200: #e5e5e5;
   --concrete-100: #d4d4d4;
 
+  /* Accent Colors (High Saturation) */
   --rebel-red: #ff0033;
   --acid: #facc15;
   --electric: #2563eb;
 
+  /* ========================================
+     Typography Scale
+     ======================================== */
+  --p5-font-size-h1: 48px;
+  --p5-font-size-h2: 32px;
+  --p5-font-size-h3: 24px;
+  --p5-font-size-body: 16px;
+  --p5-font-size-caption: 14px;
+  --p5-font-size-data: 14px;
+
+  --p5-line-height-h1: 1.1;
+  --p5-line-height-h2: 1.2;
+  --p5-line-height-h3: 1.3;
+  --p5-line-height-body: 1.6;
+  --p5-line-height-caption: 1.5;
+
+  /* ========================================
+     Borders & Shapes
+     ======================================== */
   --p5-border-width: 4px;
+  --p5-border-width-sm: 3px;
+  --p5-border-width-lg: 6px;
   --p5-cut: 12px;
+  --p5-cut-sm: 6px;
+
+  /* Clip paths */
+  --p5-clip-card: polygon(
+    0 0,
+    100% 0,
+    100% calc(100% - 12px),
+    calc(100% - 12px) 100%,
+    0 100%
+  );
+  --p5-clip-badge: polygon(
+    0 0,
+    100% 0,
+    100% calc(100% - 6px),
+    calc(100% - 6px) 100%,
+    0 100%
+  );
+
+  /* ========================================
+     Shadows
+     ======================================== */
+  --p5-shadow-sm: 2px 2px 0 var(--ink);
+  --p5-shadow-md: 4px 4px 0 var(--ink);
+  --p5-shadow-lg: 6px 6px 0 var(--ink);
+  --p5-shadow-xl: 8px 8px 0 var(--ink);
+
+  /* Legacy aliases */
   --p5-shadow-ink: 4px 4px 0 var(--ink);
   --p5-shadow-rebel: 4px 4px 0 var(--rebel-red), 8px 8px 0 var(--ink);
-  --p5-noise-opacity: 0.09;
 
+  /* Selected/Important state */
+  --p5-shadow-selected: 4px 4px 0 var(--rebel-red), 8px 8px 0 var(--ink);
+
+  /* ========================================
+     Motion / Animation
+     ======================================== */
+  --p5-motion-micro: 50ms;
+  --p5-motion-fast: 80ms;
+  --p5-motion-normal: 120ms;
+  --p5-motion-slow: 200ms;
+  --p5-motion-complex: 300ms;
+
+  /* Easing functions */
+  --p5-ease-snap: cubic-bezier(0.22, 1, 0.36, 1);
+  --p5-ease-bounce: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --p5-ease-out: ease-out;
+
+  /* Legacy aliases */
   --p5-motion-tooltip-snap-duration: 120ms;
   --p5-motion-tooltip-snap-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --p5-motion-fade-in-duration: 180ms;
   --p5-motion-fade-in-ease: ease-out;
+
+  /* Texture */
+  --p5-noise-opacity: 0.09;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-body-stack);
+  --font-mono: var(--font-mono-stack);
+  --font-display: var(--font-display-stack);
 }
 
+/* Disable dark mode - P5 style is inherently high contrast */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    /* Keep same colors - P5 doesn't need dark mode */
   }
 }
 
 body {
   background: var(--concrete-300);
   color: var(--ink);
-  font-family: var(--font-geist-sans);
+  font-family: var(--font-body-stack);
+}
+
+/* ========================================
+   Typography Utility Classes
+   ======================================== */
+
+.font-display {
+  font-family: var(--font-display-stack);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.font-body {
+  font-family: var(--font-body-stack);
+}
+
+.font-mono {
+  font-family: var(--font-mono-stack);
+}
+
+/* ========================================
+   P5 Motion System - Keyframes
+   ======================================== */
+
+/* Shake - Error feedback */
+@keyframes p5-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-8px) rotate(-1deg);
+  }
+  40% {
+    transform: translateX(8px) rotate(1deg);
+  }
+  60% {
+    transform: translateX(-4px) rotate(-0.5deg);
+  }
+  80% {
+    transform: translateX(4px) rotate(0.5deg);
+  }
+}
+
+/* Pop - Appear animation */
+@keyframes p5-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.9) rotate(-2deg);
+  }
+  70% {
+    transform: scale(1.02) rotate(0.5deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
+}
+
+/* Stamp - Vote success (seal stamp down) */
+@keyframes p5-stamp {
+  0% {
+    opacity: 0;
+    transform: scale(2) rotate(-15deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1) rotate(5deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+
+/* Slide In - Drawer/Panel */
+@keyframes p5-slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes p5-slide-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes p5-slide-in-up {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Pulse - Value update */
+@keyframes p5-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+/* Skeleton loading */
+@keyframes p5-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* Sector grow (Homepage sunburst) */
+@keyframes p5-sector-grow {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Flash - Brief highlight */
+@keyframes p5-flash {
+  0% {
+    opacity: 0.15;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ========================================
+   Motion Utility Classes
+   ======================================== */
+
+.animate-shake {
+  animation: p5-shake var(--p5-motion-complex) ease-in-out;
+}
+
+.animate-pop {
+  animation: p5-pop var(--p5-motion-normal) var(--p5-ease-snap) forwards;
+}
+
+.animate-stamp {
+  animation: p5-stamp var(--p5-motion-complex) var(--p5-ease-bounce) forwards;
+}
+
+.animate-slide-in-right {
+  animation: p5-slide-in-right var(--p5-motion-slow) var(--p5-ease-out) forwards;
+}
+
+.animate-slide-in-left {
+  animation: p5-slide-in-left var(--p5-motion-slow) var(--p5-ease-out) forwards;
+}
+
+.animate-slide-in-up {
+  animation: p5-slide-in-up var(--p5-motion-normal) var(--p5-ease-out) forwards;
+}
+
+.animate-pulse-p5 {
+  animation: p5-pulse var(--p5-motion-slow) ease-in-out;
+}
+
+/* ========================================
+   Texture Utility Classes
+   ======================================== */
+
+/* Noise overlay */
+.texture-noise {
+  position: relative;
+}
+
+.texture-noise::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.09'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  opacity: var(--p5-noise-opacity);
+  pointer-events: none;
+  mix-blend-mode: overlay;
+}
+
+/* Halftone dots (for skeleton) */
+.texture-halftone {
+  background-image: radial-gradient(var(--ink) 1px, transparent 1px);
+  background-size: 4px 4px;
+}
+
+/* Diagonal stripes (for skeleton) */
+.texture-stripes {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--concrete-200),
+    var(--concrete-200) 4px,
+    var(--concrete-100) 4px,
+    var(--concrete-100) 8px
+  );
+}
+
+/* ========================================
+   Reduced Motion Support
+   ======================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ========================================
+   Stance Color Utility Classes
+   ======================================== */
+
+.stance-pro {
+  --stance-color: var(--electric);
+}
+
+.stance-con {
+  --stance-color: var(--rebel-red);
+}
+
+.stance-neutral {
+  --stance-color: var(--acid);
+}
+
+/* ========================================
+   Focus States (Accessibility)
+   ======================================== */
+
+:focus-visible {
+  outline: 3px solid var(--rebel-red);
+  outline-offset: 2px;
+}
+
+/* ========================================
+   Scrollbar Styling (P5 Style)
+   ======================================== */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--concrete-200);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--ink);
+  border: 2px solid var(--concrete-200);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--rebel-red);
 }

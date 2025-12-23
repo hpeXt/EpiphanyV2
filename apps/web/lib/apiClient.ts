@@ -115,8 +115,19 @@ async function requestJson<T>(
   return { ok: true, data: parsed.data };
 }
 
-const defaultKeyStore = createLocalStorageKeyStore();
-const defaultSigner = createV1Signer(defaultKeyStore);
+// Lazy-initialized default signer (only available on client-side)
+let _defaultSigner: Signer | null = null;
+function getDefaultSigner(): Signer | null {
+  if (typeof window === "undefined") {
+    // Server-side: no signer available
+    return null;
+  }
+  if (!_defaultSigner) {
+    const keyStore = createLocalStorageKeyStore();
+    _defaultSigner = createV1Signer(keyStore);
+  }
+  return _defaultSigner;
+}
 
 /**
  * Build batch-balance request items with per-topic signatures
@@ -126,8 +137,13 @@ const defaultSigner = createV1Signer(defaultKeyStore);
  */
 export async function buildBatchBalanceItems(
   topicIds: string[],
-  signer: Signer = defaultSigner,
+  signer?: Signer,
 ): Promise<BatchBalanceRequestItem[]> {
+  const effectiveSigner = signer ?? getDefaultSigner();
+  if (!effectiveSigner) {
+    console.error("buildBatchBalanceItems called without signer on server");
+    return [];
+  }
   if (topicIds.length === 0) return [];
 
   const items: BatchBalanceRequestItem[] = [];
@@ -137,7 +153,7 @@ export async function buildBatchBalanceItems(
     const path = `/v1/topics/${encodedTopicId}/ledger/me`;
 
     // Sign as if it were a GET request to ledger/me (empty body)
-    const headers: SignedHeadersV1 = await signer.signV1(topicId, {
+    const headers: SignedHeadersV1 = await effectiveSigner.signV1(topicId, {
       method: "GET",
       path,
       rawBody: null,
@@ -193,7 +209,8 @@ async function requestJsonSigned<T>(
 }
 
 export function createApiClient(deps?: { signer?: Signer }) {
-  const signer = deps?.signer ?? defaultSigner;
+  // Get signer lazily - deps.signer takes precedence, then default signer
+  const getSigner = (): Signer | null => deps?.signer ?? getDefaultSigner();
 
   return {
     listTopics() {
@@ -270,7 +287,14 @@ export function createApiClient(deps?: { signer?: Signer }) {
         zConsensusReportLatestResponse,
       );
     },
-    getLedgerMe(topicId: string) {
+    getLedgerMe(topicId: string): Promise<ApiResult<z.infer<typeof zLedgerMe>>> {
+      const signer = getSigner();
+      if (!signer) {
+        return Promise.resolve({
+          ok: false,
+          error: { kind: "config", message: "No signer available (server-side)" },
+        });
+      }
       const encodedTopicId = encodeURIComponent(topicId);
       return requestJsonSigned(
         signer,
@@ -280,7 +304,14 @@ export function createApiClient(deps?: { signer?: Signer }) {
         zLedgerMe,
       );
     },
-    createArgument(topicId: string, input: CreateArgumentRequest) {
+    createArgument(topicId: string, input: CreateArgumentRequest): Promise<ApiResult<z.infer<typeof zCreateArgumentResponse>>> {
+      const signer = getSigner();
+      if (!signer) {
+        return Promise.resolve({
+          ok: false,
+          error: { kind: "config", message: "No signer available (server-side)" },
+        });
+      }
       const encodedTopicId = encodeURIComponent(topicId);
       const body = JSON.stringify(input);
       return requestJsonSigned(
@@ -295,7 +326,14 @@ export function createApiClient(deps?: { signer?: Signer }) {
         zCreateArgumentResponse,
       );
     },
-    setVotes(topicId: string, argumentId: string, input: SetVotesRequest) {
+    setVotes(topicId: string, argumentId: string, input: SetVotesRequest): Promise<ApiResult<z.infer<typeof zSetVotesResponse>>> {
+      const signer = getSigner();
+      if (!signer) {
+        return Promise.resolve({
+          ok: false,
+          error: { kind: "config", message: "No signer available (server-side)" },
+        });
+      }
       const encodedArgumentId = encodeURIComponent(argumentId);
       const body = JSON.stringify(input);
       return requestJsonSigned(
@@ -310,7 +348,14 @@ export function createApiClient(deps?: { signer?: Signer }) {
         zSetVotesResponse,
       );
     },
-    executeTopicCommand(topicId: string, command: TopicCommand, extraHeaders?: Record<string, string>) {
+    executeTopicCommand(topicId: string, command: TopicCommand, extraHeaders?: Record<string, string>): Promise<ApiResult<z.infer<typeof zTopicCommandResponse>>> {
+      const signer = getSigner();
+      if (!signer) {
+        return Promise.resolve({
+          ok: false,
+          error: { kind: "config", message: "No signer available (server-side)" },
+        });
+      }
       const encodedTopicId = encodeURIComponent(topicId);
       const body = JSON.stringify(command);
       return requestJsonSigned(
@@ -329,7 +374,14 @@ export function createApiClient(deps?: { signer?: Signer }) {
      * Get stakes for current identity in a topic
      * @see docs/stage01/api-contract.md#3.9
      */
-    getStakesMe(topicId: string) {
+    getStakesMe(topicId: string): Promise<ApiResult<z.infer<typeof zStakesMeResponse>>> {
+      const signer = getSigner();
+      if (!signer) {
+        return Promise.resolve({
+          ok: false,
+          error: { kind: "config", message: "No signer available (server-side)" },
+        });
+      }
       const encodedTopicId = encodeURIComponent(topicId);
       return requestJsonSigned(
         signer,
@@ -349,7 +401,15 @@ export function createApiClient(deps?: { signer?: Signer }) {
         return { ok: true as const, data: { results: [] } };
       }
 
-      const items = await buildBatchBalanceItems(topicIds, signer);
+      const signer = getSigner();
+      const items = await buildBatchBalanceItems(topicIds, signer ?? undefined);
+      if (items.length === 0 && topicIds.length > 0) {
+        // Signing failed (server-side)
+        return {
+          ok: false as const,
+          error: { kind: "config" as const, message: "No signer available (server-side)" },
+        };
+      }
       const body = JSON.stringify({ items });
 
       return requestJson(
