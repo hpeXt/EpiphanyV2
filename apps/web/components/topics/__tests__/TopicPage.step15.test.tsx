@@ -5,6 +5,11 @@ const { TopicPage } = require("@/components/topics/TopicPage");
 
 type MockJsonResponse = { ok: boolean; status: number; json: unknown };
 
+async function clickRoot(user: ReturnType<typeof userEvent.setup>) {
+  const [rootButton] = await screen.findAllByRole("button", { name: "Root" });
+  await user.click(rootButton);
+}
+
 function jsonResponse(response: MockJsonResponse) {
   return {
     ok: response.ok,
@@ -177,7 +182,7 @@ describe("TopicPage (Step 15)", () => {
 
     render(<TopicPage topicId="topic-1" />);
 
-    await user.click(await screen.findByRole("button", { name: "Root" }));
+    await clickRoot(user);
     expect(await screen.findByText("No replies yet.")).toBeInTheDocument();
 
     await user.type(await screen.findByLabelText("Reply"), "Hello world");
@@ -207,7 +212,7 @@ describe("TopicPage (Step 15)", () => {
 
     render(<TopicPage topicId="topic-1" />);
 
-    await user.click(await screen.findByRole("button", { name: "Root" }));
+    await clickRoot(user);
     expect(await screen.findByText("No replies yet.")).toBeInTheDocument();
 
     await user.type(await screen.findByLabelText("Reply"), "Hello world");
@@ -235,7 +240,7 @@ describe("TopicPage (Step 15)", () => {
 
     render(<TopicPage topicId="topic-1" />);
 
-    await user.click(await screen.findByRole("button", { name: "Root" }));
+    await clickRoot(user);
     await screen.findByText("Child A");
 
     const slider = screen.getByRole("slider", { name: /votes/i });
@@ -264,7 +269,7 @@ describe("TopicPage (Step 15)", () => {
 
     render(<TopicPage topicId="topic-1" />);
 
-    await user.click(await screen.findByRole("button", { name: "Root" }));
+    await clickRoot(user);
     await screen.findByText("Child A");
 
     const treeCalls = () =>
@@ -327,7 +332,7 @@ describe("TopicPage (Step 15)", () => {
 
     render(<TopicPage topicId="topic-1" />);
 
-    await user.click(await screen.findByRole("button", { name: "Root" }));
+    await clickRoot(user);
     await user.type(await screen.findByLabelText("Reply"), "Hello world");
     await user.click(screen.getByRole("button", { name: "Post" }));
 
@@ -373,7 +378,7 @@ describe("TopicPage (Step 15)", () => {
 
     render(<TopicPage topicId="topic-1" />);
 
-    await user.click(await screen.findByRole("button", { name: "Root" }));
+    await clickRoot(user);
 
     await user.type(await screen.findByLabelText("Reply"), "Hello 0");
     await user.click(screen.getByRole("button", { name: "Post" }));

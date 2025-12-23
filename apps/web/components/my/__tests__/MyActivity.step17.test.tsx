@@ -48,7 +48,7 @@ describe("MyActivity Component (Step 17)", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText(/no topics visited yet/i),
+          screen.getByText(/no topics visited yet|暂无参与记录/i),
         ).toBeInTheDocument();
       });
     });
@@ -123,7 +123,7 @@ describe("MyActivity Component (Step 17)", () => {
       render(<MyActivity />);
 
       await waitFor(() => {
-        expect(screen.getByText("Balance:")).toBeInTheDocument();
+        expect(screen.getByText(/Balance:|余额:/i)).toBeInTheDocument();
         expect(screen.getByText("75")).toBeInTheDocument();
       });
     });
@@ -172,7 +172,7 @@ describe("MyActivity Component (Step 17)", () => {
 
         // Second topic shows error
         expect(screen.getByText("topic-2")).toBeInTheDocument();
-        expect(screen.getByText(/topic not found/i)).toBeInTheDocument();
+        expect(screen.getByText(/topic not found|议题不存在/i)).toBeInTheDocument();
       });
     });
 
@@ -203,7 +203,7 @@ describe("MyActivity Component (Step 17)", () => {
       render(<MyActivity />);
 
       await waitFor(() => {
-        expect(screen.getByText(/signature/i)).toBeInTheDocument();
+        expect(screen.getByText(/signature|签名错误/i)).toBeInTheDocument();
       });
     });
   });
@@ -270,7 +270,7 @@ describe("MyActivity Component (Step 17)", () => {
 
       await waitFor(() => {
         expect(screen.getByText("Test Argument")).toBeInTheDocument();
-        expect(screen.getByText("Votes:")).toBeInTheDocument();
+        expect(screen.getByText(/Votes:|票数:/i)).toBeInTheDocument();
         expect(screen.getByText("3")).toBeInTheDocument();
       });
     });
@@ -333,7 +333,7 @@ describe("MyActivity Component (Step 17)", () => {
 
       await waitFor(() => {
         expect(screen.getByText("Pruned Argument")).toBeInTheDocument();
-        expect(screen.getByText("Pruned")).toBeInTheDocument();
+        expect(screen.getByText(/^Pruned$|^已修剪$/i)).toBeInTheDocument();
       });
     });
   });
@@ -396,7 +396,9 @@ describe("MyActivity Component (Step 17)", () => {
       await user.click(screen.getByText("topic-1"));
 
       await waitFor(() => {
-        expect(screen.getByRole("button", { name: /withdraw all/i })).toBeInTheDocument();
+        expect(
+          screen.getByRole("button", { name: /withdraw all|全部撤回/i }),
+        ).toBeInTheDocument();
       });
     });
 
@@ -459,7 +461,9 @@ describe("MyActivity Component (Step 17)", () => {
       await user.click(screen.getByText("topic-1"));
 
       await waitFor(() => {
-        expect(screen.getByRole("button", { name: /withdraw all/i })).toBeInTheDocument();
+        expect(
+          screen.getByRole("button", { name: /withdraw all|全部撤回/i }),
+        ).toBeInTheDocument();
       });
 
       // Mock setVotes(0) success then refresh stakes
@@ -501,7 +505,9 @@ describe("MyActivity Component (Step 17)", () => {
             ),
         });
 
-      await user.click(screen.getByRole("button", { name: /withdraw all/i }));
+      await user.click(
+        screen.getByRole("button", { name: /withdraw all|全部撤回/i }),
+      );
 
       await waitFor(() => {
         // Balance should be updated to 100
@@ -566,7 +572,9 @@ describe("MyActivity Component (Step 17)", () => {
       await user.click(screen.getByText("topic-1"));
 
       await waitFor(() => {
-        expect(screen.getByRole("button", { name: /withdraw all/i })).toBeInTheDocument();
+        expect(
+          screen.getByRole("button", { name: /withdraw all|全部撤回/i }),
+        ).toBeInTheDocument();
       });
 
       // Mock: withdrawal fails then refresh stakes
@@ -595,12 +603,14 @@ describe("MyActivity Component (Step 17)", () => {
             ),
         });
 
-      await user.click(screen.getByRole("button", { name: /withdraw all/i }));
+      await user.click(
+        screen.getByRole("button", { name: /withdraw all|全部撤回/i }),
+      );
 
       await waitFor(
         () => {
           // Should show retry button for failed item
-          expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
+          expect(screen.getByRole("button", { name: /retry|重试/i })).toBeInTheDocument();
         },
         { timeout: 3000 },
       );
@@ -617,7 +627,7 @@ describe("MyActivity Component (Step 17)", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText(/set up.*identity/i),
+          screen.getByText(/set up.*identity|身份尚未初始化/i),
         ).toBeInTheDocument();
       });
     });

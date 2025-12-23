@@ -168,7 +168,8 @@ describe("TopicPage (Step 21 - Host + read-only semantics)", () => {
 
     render(<TopicPage topicId="topic-1" />);
 
-    await user.click(await screen.findByRole("button", { name: "Root" }));
+    const [rootButton] = await screen.findAllByRole("button", { name: "Root" });
+    await user.click(rootButton);
     expect(await screen.findByText("Child")).toBeInTheDocument();
 
     const reply = screen.getByLabelText("Reply");

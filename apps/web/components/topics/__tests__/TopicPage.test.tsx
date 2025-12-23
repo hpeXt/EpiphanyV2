@@ -245,9 +245,10 @@ describe("TopicPage", () => {
     expect(url.pathname).toBe("/v1/topics/topic-1/tree");
     expect(url.searchParams.get("depth")).toBe("3");
 
-    expect(await screen.findByRole("button", { name: "Root" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Child" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Grandchild" })).toBeInTheDocument();
+    const [rootButton] = await screen.findAllByRole("button", { name: "Root" });
+    expect(rootButton).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Child" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "Grandchild" }).length).toBeGreaterThan(0);
 
     expect(screen.queryByText(/pruned/i)).not.toBeInTheDocument();
   });
@@ -259,7 +260,8 @@ describe("TopicPage", () => {
 
     render(<TopicPage topicId="topic-1" />);
 
-    await user.click(await screen.findByRole("button", { name: "Root" }));
+    const [rootButton] = await screen.findAllByRole("button", { name: "Root" });
+    await user.click(rootButton);
 
     await screen.findByText("Child A");
 
@@ -282,7 +284,8 @@ describe("TopicPage", () => {
 
     render(<TopicPage topicId="topic-1" />);
 
-    await user.click(await screen.findByRole("button", { name: "Root" }));
+    const [rootButton] = await screen.findAllByRole("button", { name: "Root" });
+    await user.click(rootButton);
 
     await screen.findByText("Child A");
 
