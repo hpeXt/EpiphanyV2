@@ -468,7 +468,7 @@ export function TopicsTopBar() {
           textShadow: "2px 2px 0 var(--rebel-red)",
         }}
       >
-        TM
+        EP
       </Link>
 
       {/* 中间标题 */}

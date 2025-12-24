@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as d3 from "d3";
 import { useRouter } from "next/navigation";
 import { P5Badge } from "@/components/ui/P5Badge";
+import { BRAND } from "@/lib/brand";
 
 interface TopicOverviewItem {
   id: string;
@@ -102,7 +103,7 @@ export function TopicUniverse({ topics, stats }: Props) {
 
     // 构建层级数据
     const root = {
-      name: "TM",
+      name: BRAND.mark,
       children: topicsWithWeight.map((t) => ({
         name: t.title,
         value: t.weight,
@@ -213,7 +214,7 @@ export function TopicUniverse({ topics, stats }: Props) {
       .attr("font-family", "var(--font-display-stack)")
       .attr("font-size", innerRadius * 0.5)
       .attr("letter-spacing", "0.1em")
-      .text("TM");
+      .text(BRAND.mark);
 
     g.append("text")
       .attr("text-anchor", "middle")
@@ -224,7 +225,7 @@ export function TopicUniverse({ topics, stats }: Props) {
       .attr("font-size", innerRadius * 0.12)
       .attr("letter-spacing", "0.05em")
       .attr("opacity", 0.8)
-      .text("THOUGHT MARKET");
+      .text(BRAND.nameUpper);
   }, [sunburstData, dimensions, router]);
 
   // 空态
@@ -233,10 +234,10 @@ export function TopicUniverse({ topics, stats }: Props) {
       <div className="flex h-full flex-col items-center justify-center">
         <div className="border-[6px] border-[color:var(--ink)] bg-[color:var(--ink)] p-12 text-center shadow-[var(--p5-shadow-xl)]">
           <div className="mb-4 font-display text-4xl tracking-wider text-[color:var(--paper)]">
-            TM
+            {BRAND.mark}
           </div>
           <div className="mb-2 font-display text-xl text-[color:var(--paper)]">
-            THOUGHT MARKET
+            {BRAND.nameUpper}
           </div>
           <div className="mb-6 text-[color:var(--paper)]/80">
             这里还很安静

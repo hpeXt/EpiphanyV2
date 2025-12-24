@@ -183,7 +183,7 @@ export function TopicUniverse({ topics, stats }: Props) {
 
     // 构建层级数据
     const root = {
-      name: "TM",
+      name: "EP",
       children: topicsWithWeight.map((t) => ({
         name: t.title,
         value: t.weight,
@@ -296,7 +296,7 @@ export function TopicUniverse({ topics, stats }: Props) {
       .attr("font-family", "var(--font-display)")
       .attr("font-size", innerRadius * 0.5)
       .attr("letter-spacing", "0.1em")
-      .text("TM");
+      .text("EP");
 
     g.append("text")
       .attr("text-anchor", "middle")
@@ -307,7 +307,7 @@ export function TopicUniverse({ topics, stats }: Props) {
       .attr("font-size", innerRadius * 0.15)
       .attr("letter-spacing", "0.05em")
       .attr("opacity", 0.8)
-      .text("THOUGHT MARKET");
+      .text("EPIPHANY");
 
   }, [sunburstData, dimensions, router]);
 
@@ -317,10 +317,10 @@ export function TopicUniverse({ topics, stats }: Props) {
       <div className="flex h-full flex-col items-center justify-center">
         <div className="border-[6px] border-[color:var(--ink)] bg-[color:var(--ink)] p-12 text-center shadow-[var(--p5-shadow-xl)]">
           <div className="mb-4 font-display text-4xl tracking-wider text-[color:var(--paper)]">
-            TM
+            EP
           </div>
           <div className="mb-2 font-display text-xl text-[color:var(--paper)]">
-            THOUGHT MARKET
+            EPIPHANY
           </div>
           <div className="mb-6 text-[color:var(--paper)]/80">
             这里还很安静<br />

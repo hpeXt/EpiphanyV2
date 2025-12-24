@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { P5LinkButton } from "@/components/ui/P5Button";
+import { BRAND } from "@/lib/brand";
 
 export function TopicsTopBar() {
   return (
@@ -14,7 +15,7 @@ export function TopicsTopBar() {
           textShadow: "2px 2px 0 var(--rebel-red)",
         }}
       >
-        TM
+        {BRAND.mark}
       </Link>
 
       {/* 中间标题 */}

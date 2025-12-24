@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { P5TopNav } from "@/components/ui/P5TopNav";
+import { BRAND } from "@/lib/brand";
 
 export function P5Shell({ children }: { children: ReactNode }) {
   return (
@@ -44,9 +45,9 @@ export function P5Shell({ children }: { children: ReactNode }) {
               ].join(" ")}
             >
               <span className="bg-[color:var(--ink)] px-2 py-1 text-[color:var(--paper)]">
-                TM
+                {BRAND.mark}
               </span>
-              <span className="hidden sm:inline">The Thought Market</span>
+              <span className="hidden sm:inline">{BRAND.name}</span>
             </Link>
 
             <P5TopNav />

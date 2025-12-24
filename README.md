@@ -1,4 +1,4 @@
-# AI 思想市场（The Thought Market）
+# Epiphany
 
 一个结合结构化辩论（Kialo）、二次方投票（QV）、语义可视化与 AI 辅助治理的公共议题讨论平台。
 

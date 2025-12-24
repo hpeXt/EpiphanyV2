@@ -28,7 +28,7 @@
 ### Packages（稳定边界：尽量别在 UI 重构时改这里的对外接口）
 
 - `packages/shared-contracts`：**前后端共享契约**（Zod schemas + TS types；命名以 `zXxx`/`Xxx` 为主）
-- `packages/crypto`：**签名/派生/助记词**（Thought Market signature v1）
+- `packages/crypto`：**签名/派生/助记词**（signature v1；历史名 Thought Market signature v1，勿改）
 - `packages/core-logic`：QV 纯逻辑（`validateSetVotes`、`INITIAL_BALANCE=100`、投票范围等）
 - `packages/database`：Prisma schema + migrations + `getPrisma()`
 

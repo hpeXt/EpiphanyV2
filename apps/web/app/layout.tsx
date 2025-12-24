@@ -7,6 +7,7 @@ import { P5Shell } from "@/components/ui/P5Shell";
 import { P5ConfirmProvider } from "@/components/ui/P5ConfirmProvider";
 import { P5ToastProvider } from "@/components/ui/P5ToastProvider";
 import { IdentityInitializerWrapper } from "@/components/identity/IdentityInitializerWrapper";
+import { BRAND } from "@/lib/brand";
 
 // Display font: Bebas Neue (titles, labels)
 const bebasNeue = Bebas_Neue({
@@ -31,8 +32,8 @@ const lxgwWenKai = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "The Thought Market",
-  description: "Structured debate × QV × semantic maps × AI governance",
+  title: BRAND.name,
+  description: BRAND.description,
 };
 
 export default function RootLayout({
