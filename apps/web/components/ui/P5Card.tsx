@@ -36,22 +36,17 @@ export function P5Card({
   return (
     <section
       className={[
-        "border-[var(--p5-border-width)] border-[color:var(--ink)] bg-[color:var(--paper)]",
-        "shadow-[var(--p5-shadow-ink)]",
+        "rounded-lg border border-border/60 bg-card text-card-foreground shadow-sm",
         className,
       ].join(" ")}
-      style={{
-        clipPath:
-          "polygon(0 0, calc(100% - var(--p5-cut)) 0, 100% var(--p5-cut), 100% 100%, 0 100%)",
-      }}
     >
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b-[var(--p5-border-width)] border-[color:var(--ink)] bg-[color:var(--ink)] px-4 py-3 text-[color:var(--paper)]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 px-5 py-4">
         <div className="min-w-0">
-          <TitleTag className="truncate font-mono text-sm font-semibold uppercase tracking-wide">
+          <TitleTag className="truncate font-serif text-xl font-semibold text-foreground">
             {title}
           </TitleTag>
           {subtitle ? (
-            <p className="mt-1 truncate text-xs text-white/80">{subtitle}</p>
+            <p className="mt-1 truncate text-sm text-muted-foreground">{subtitle}</p>
           ) : null}
         </div>
 
@@ -63,7 +58,7 @@ export function P5Card({
                 href={action.href}
                 variant={action.variant ?? "ghost"}
                 size="sm"
-                className="border-[color:var(--paper)] text-[color:var(--paper)] shadow-none hover:bg-white/10"
+                className="text-muted-foreground hover:text-foreground"
               >
                 {action.label}
               </P5LinkButton>
@@ -72,8 +67,7 @@ export function P5Card({
         ) : null}
       </div>
 
-      <div className={["px-4 py-4", bodyClassName].join(" ").trim()}>{children}</div>
+      <div className={["px-5 py-5", bodyClassName].join(" ").trim()}>{children}</div>
     </section>
   );
 }
-

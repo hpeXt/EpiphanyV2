@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1768041267931,
+      "tag": "0000_brave_silhouette",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1768041357737,
+      "tag": "0001_early_timeslip",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1768046012192,
+      "tag": "0002_dapper_warlock",
+      "breakpoints": true
+    }
+  ]
+}

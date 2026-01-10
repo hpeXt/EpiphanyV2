@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { P5Button } from "@/components/ui/P5Button";
+import { P5Alert } from "@/components/ui/P5Alert";
 
 type Props = {
   mnemonic: string;
@@ -51,9 +52,7 @@ export function MnemonicDisplay({ mnemonic }: Props) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="font-display text-sm uppercase tracking-wide text-[color:var(--ink)]">
-          助记词备份
-        </h3>
+        <h3 className="font-serif text-base font-semibold text-foreground">助记词备份</h3>
         <div className="flex gap-2">
           <P5Button
             size="sm"
@@ -76,14 +75,7 @@ export function MnemonicDisplay({ mnemonic }: Props) {
       {/* 助记词卡片 */}
       <div
         className={`
-          relative overflow-hidden
-          border-[4px] border-[color:var(--ink)]
-          transition-all duration-150
-          ${
-            isRevealed
-              ? "bg-[color:var(--ink)] shadow-[var(--p5-shadow-md)]"
-              : "bg-[color:var(--concrete-200)]"
-          }
+          relative overflow-hidden rounded-lg border border-border/60 bg-card shadow-sm
         `}
       >
         {isRevealed ? (
@@ -92,12 +84,12 @@ export function MnemonicDisplay({ mnemonic }: Props) {
             {words.map((word, i) => (
               <div
                 key={i}
-                className="border-[2px] border-[color:var(--paper)] bg-[color:var(--ink)] px-2 py-1 text-center"
+                className="rounded-md border border-border bg-background px-2 py-1 text-center"
               >
-                <span className="mr-1 font-mono text-xs text-[color:var(--paper)]/50">
+                <span className="mr-1 font-mono text-xs text-muted-foreground">
                   {i + 1}.
                 </span>
-                <span className="font-mono text-sm text-[color:var(--paper)]">
+                <span className="font-mono text-sm text-foreground">
                   {word}
                 </span>
               </div>
@@ -114,7 +106,7 @@ export function MnemonicDisplay({ mnemonic }: Props) {
                 {Array.from({ length: 4 }, (_, j) => (
                   <span
                     key={j}
-                    className="h-2 w-2 rounded-full bg-[color:var(--ink)]/30"
+                    className="h-2 w-2 rounded-full bg-muted-foreground/30"
                   />
                 ))}
               </div>
@@ -124,26 +116,21 @@ export function MnemonicDisplay({ mnemonic }: Props) {
 
         {/* 自动隐藏倒计时（揭示时显示） */}
         {isRevealed && (
-          <div className="border-t-[2px] border-[color:var(--paper)]/30 px-4 py-2 text-center text-xs text-[color:var(--paper)]/70">
+          <div className="border-t border-border/60 px-4 py-3 text-center text-xs text-muted-foreground">
             30 秒后自动隐藏
           </div>
         )}
       </div>
 
       {/* 警告提示 */}
-      <div className="border-[3px] border-[color:var(--acid)] bg-[color:var(--paper)] p-3 text-sm">
-        <div className="flex items-start gap-2">
-          <span className="text-lg">⚠</span>
-          <div>
-            <p className="font-medium text-[color:var(--ink)]">
-              助记词是恢复身份的唯一方式
-            </p>
-            <p className="mt-1 text-[color:var(--ink)]/70">
-              清除浏览器数据或更换设备后，未备份将永久丢失
-            </p>
-          </div>
+      <P5Alert variant="warn" title="备份提示" role="status">
+        <div className="space-y-1">
+          <p className="font-medium">助记词是恢复身份的唯一方式</p>
+          <p className="text-muted-foreground">
+            清除浏览器数据或更换设备后，未备份将永久丢失
+          </p>
         </div>
-      </div>
+      </P5Alert>
     </div>
   );
 }

@@ -132,7 +132,7 @@ export function TopicPage({ topicId }: Props) {
 
   if (tree.status === "loading") {
     return (
-      <div className="flex h-screen flex-col">
+      <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex h-14 flex-shrink-0 items-center justify-center border-b-[4px] border-[color:var(--ink)] bg-[color:var(--ink)]">
           <span className="font-display text-lg uppercase text-[color:var(--paper)]">
             Loading...
@@ -147,7 +147,7 @@ export function TopicPage({ topicId }: Props) {
 
   if (tree.status === "error") {
     return (
-      <div className="flex h-screen flex-col">
+      <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex h-14 flex-shrink-0 items-center justify-center border-b-[4px] border-[color:var(--ink)] bg-[color:var(--ink)]">
           <span className="font-display text-lg uppercase text-[color:var(--paper)]">
             Error
@@ -229,7 +229,7 @@ export function TopicPage({ topicId }: Props) {
   }
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       {/* Topic 专用 TopBar */}
       <TopicTopBar
         title={tree.topic.title}
@@ -242,7 +242,6 @@ export function TopicPage({ topicId }: Props) {
             onClick={() => setIsReportOpen(true)}
             size="sm"
             variant="ghost"
-            className="border-[color:var(--paper)] bg-transparent text-[color:var(--paper)] hover:bg-[color:var(--paper)]/10"
           >
             Report
           </P5Button>
@@ -265,7 +264,6 @@ export function TopicPage({ topicId }: Props) {
               onClick={() => setIsManageOpen((prev) => !prev)}
               size="sm"
               variant="ghost"
-              className="border-[color:var(--paper)] bg-transparent text-[color:var(--paper)] hover:bg-[color:var(--paper)]/10"
             >
               Manage
             </P5Button>

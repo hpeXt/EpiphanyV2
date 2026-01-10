@@ -14,16 +14,16 @@ type Props = {
 
 const VARIANT: Record<Variant, { bar: string; body: string }> = {
   error: {
-    bar: "bg-[color:var(--rebel-red)]",
-    body: "bg-[color:var(--paper)] text-[color:var(--ink)]",
+    bar: "bg-destructive text-destructive-foreground",
+    body: "bg-card text-card-foreground",
   },
   warn: {
-    bar: "bg-[color:var(--acid)]",
-    body: "bg-[color:var(--paper)] text-[color:var(--ink)]",
+    bar: "bg-[color:var(--chart-2)] text-foreground",
+    body: "bg-card text-card-foreground",
   },
   info: {
-    bar: "bg-[color:var(--electric)]",
-    body: "bg-[color:var(--paper)] text-[color:var(--ink)]",
+    bar: "bg-accent text-accent-foreground",
+    body: "bg-card text-card-foreground",
   },
 };
 
@@ -40,21 +40,14 @@ export function P5Alert({
     <div
       role={role}
       className={[
-        "overflow-hidden border-[var(--p5-border-width)] border-[color:var(--ink)] shadow-[var(--p5-shadow-ink)]",
+        "overflow-hidden rounded-lg border border-border/60 shadow-sm",
         className,
       ].join(" ")}
-      style={{
-        clipPath:
-          "polygon(0 0, calc(100% - var(--p5-cut)) 0, 100% var(--p5-cut), 100% 100%, 0 100%)",
-      }}
     >
-      <div className={["px-4 py-2 text-[color:var(--paper)]", style.bar].join(" ")}>
-        <div className="font-mono text-xs font-semibold uppercase tracking-wide">
-          {title ?? variant}
-        </div>
+      <div className={["px-4 py-2", style.bar].join(" ")}>
+        <div className="text-xs font-medium tracking-wide">{title ?? variant}</div>
       </div>
       <div className={["px-4 py-3 text-sm", style.body].join(" ")}>{children}</div>
     </div>
   );
 }
-

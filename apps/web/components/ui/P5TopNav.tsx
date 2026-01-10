@@ -6,14 +6,12 @@ import { usePathname } from "next/navigation";
 function cls(active: boolean) {
   return [
     "inline-flex items-center justify-center",
-    "border-[var(--p5-border-width)] border-[color:var(--ink)]",
-    "px-3 py-1.5 text-sm font-semibold",
-    "shadow-[var(--p5-shadow-ink)]",
-    "transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0.5 active:translate-y-0.5",
-    "focus-visible:outline-none focus-visible:shadow-[var(--p5-shadow-rebel)]",
+    "rounded-md px-3 py-2 text-sm font-medium",
+    "transition-colors",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
     active
-      ? "bg-[color:var(--ink)] text-[color:var(--paper)]"
-      : "bg-[color:var(--paper)] text-[color:var(--ink)] hover:bg-[color:var(--concrete-200)]",
+      ? "bg-muted text-foreground"
+      : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
   ].join(" ");
 }
 
@@ -46,4 +44,3 @@ export function P5TopNav() {
     </nav>
   );
 }
-

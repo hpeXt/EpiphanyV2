@@ -20,27 +20,18 @@ export function P5Panel({
   return (
     <section
       className={[
-        "border-[var(--p5-border-width)] border-[color:var(--ink)] bg-[color:var(--paper)]",
-        "shadow-[var(--p5-shadow-ink)]",
+        "rounded-lg border border-border/60 bg-card text-card-foreground shadow-sm",
         className,
       ].join(" ")}
-      style={{
-        clipPath:
-          "polygon(0 0, calc(100% - var(--p5-cut)) 0, 100% var(--p5-cut), 100% 100%, 0 100%)",
-      }}
     >
       {header ? (
         <div
-          className={[
-            "border-b-[var(--p5-border-width)] border-[color:var(--ink)]",
-            headerClassName,
-          ].join(" ")}
+          className={["border-b border-border/60", headerClassName].join(" ")}
         >
           {header}
         </div>
       ) : null}
-      <div className={["px-4 py-4", bodyClassName].join(" ").trim()}>{children}</div>
+      <div className={["px-5 py-5", bodyClassName].join(" ").trim()}>{children}</div>
     </section>
   );
 }
-

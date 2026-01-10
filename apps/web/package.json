@@ -17,6 +17,8 @@
     "@epiphany/crypto": "workspace:*",
     "@epiphany/shared-contracts": "workspace:*",
     "@tiptap/extension-link": "^2.11.0",
+    "@tiptap/extension-placeholder": "^2.11.0",
+    "@tiptap/extension-typography": "^2.11.0",
     "@tiptap/extension-underline": "^2.11.0",
     "@tiptap/react": "^2.11.0",
     "@tiptap/starter-kit": "^2.11.0",
@@ -28,6 +30,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@tailwindcss/typography": "^0.5.15",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",

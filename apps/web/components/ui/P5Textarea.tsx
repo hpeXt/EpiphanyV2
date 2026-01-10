@@ -11,11 +11,11 @@ export function P5Textarea({ className = "", ...props }: Props) {
     <textarea
       {...props}
       className={[
-        "w-full border-[var(--p5-border-width)] border-[color:var(--ink)] bg-[color:var(--paper)] px-3 py-2 text-sm text-[color:var(--ink)] shadow-[var(--p5-shadow-ink)]",
-        "focus-visible:outline-none focus-visible:shadow-[var(--p5-shadow-rebel)]",
+        "w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm",
+        "placeholder:text-muted-foreground",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         className,
       ].join(" ")}
     />
   );
 }
-

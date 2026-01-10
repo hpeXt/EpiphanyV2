@@ -89,26 +89,20 @@ export function P5ConfirmProvider({ children }: { children: ReactNode }) {
           role="dialog"
           aria-modal="true"
           aria-label={state.title}
-          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4"
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-4"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) close(false);
           }}
         >
           <div
-            className="w-full max-w-lg border-[var(--p5-border-width)] border-[color:var(--ink)] bg-[color:var(--paper)] shadow-[var(--p5-shadow-rebel)]"
-            style={{
-              clipPath:
-                "polygon(0 0, calc(100% - var(--p5-cut)) 0, 100% var(--p5-cut), 100% 100%, 0 100%)",
-            }}
+            className="w-full max-w-lg overflow-hidden rounded-lg border border-border/60 bg-card text-card-foreground shadow-lg"
           >
-            <div className="border-b-[var(--p5-border-width)] border-[color:var(--ink)] bg-[color:var(--ink)] px-4 py-3 text-[color:var(--paper)]">
-              <div className="font-mono text-sm font-semibold uppercase tracking-wide">
-                {state.title}
-              </div>
+            <div className="border-b border-border/60 px-5 py-4">
+              <div className="font-serif text-xl font-semibold text-foreground">{state.title}</div>
             </div>
 
-            <div className="space-y-4 px-4 py-4 text-[color:var(--ink)]">
-              <p className="whitespace-pre-wrap text-sm">{state.message}</p>
+            <div className="space-y-4 px-5 py-5 text-foreground">
+              <p className="whitespace-pre-wrap text-sm text-muted-foreground">{state.message}</p>
 
               <div className="flex flex-wrap justify-end gap-2">
                 <P5Button type="button" onClick={() => close(false)} size="sm">
@@ -117,7 +111,7 @@ export function P5ConfirmProvider({ children }: { children: ReactNode }) {
                 <P5Button
                   type="button"
                   onClick={() => close(true)}
-                  variant={state.variant === "danger" ? "primary" : "ink"}
+                  variant={state.variant === "danger" ? "danger" : "primary"}
                   size="sm"
                   autoFocus
                 >
@@ -145,4 +139,3 @@ export function useP5Confirm(): ConfirmApi {
     }
   );
 }
-

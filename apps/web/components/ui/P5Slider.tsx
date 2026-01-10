@@ -73,7 +73,7 @@ export function P5Slider({
       {/* 标签 */}
       <label
         htmlFor={id}
-        className="block font-display text-sm uppercase tracking-wide text-[color:var(--ink)]"
+        className="block text-sm font-medium text-foreground"
       >
         投票数
       </label>
@@ -82,22 +82,22 @@ export function P5Slider({
       <div className="relative pt-10">
         {/* 数值气泡 */}
         <div
-          className="absolute top-0 -translate-x-1/2 border-2 border-[color:var(--paper)] bg-[color:var(--ink)] px-2 py-1 font-mono text-sm text-[color:var(--paper)]"
+          className="absolute top-0 -translate-x-1/2 rounded-md border border-border bg-foreground px-2 py-1 font-mono text-sm text-background shadow-sm"
           style={{ left: `${percentage}%` }}
         >
           {value}
           {/* 三角指向 */}
-          <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[color:var(--ink)]" />
+          <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 border-4 border-transparent border-t-foreground" />
         </div>
 
         {/* 刻度线 */}
-        <div className="mb-2 flex justify-between px-3 font-mono text-xs text-[color:var(--ink)]/70">
+        <div className="mb-3 flex justify-between px-1 font-mono text-xs text-muted-foreground">
           {Array.from({ length: max - min + 1 }, (_, i) => min + i).map(
             (tick) => (
               <span
                 key={tick}
                 className={
-                  tick === value ? "font-bold text-[color:var(--rebel-red)]" : ""
+                  tick === value ? "font-semibold text-foreground" : ""
                 }
               >
                 {tick}
@@ -107,10 +107,10 @@ export function P5Slider({
         </div>
 
         {/* 轨道 */}
-        <div className="relative h-3 border-[3px] border-[color:var(--ink)] bg-[color:var(--concrete-200)]">
+        <div className="relative h-2 rounded-full bg-muted">
           {/* 填充部分 */}
           <div
-            className="absolute inset-y-0 left-0 bg-[color:var(--rebel-red)]"
+            className="absolute inset-y-0 left-0 rounded-full bg-primary"
             style={{ width: `${percentage}%` }}
           />
 
@@ -140,13 +140,13 @@ export function P5Slider({
           <div
             className={`
               absolute top-1/2 -translate-y-1/2
-              h-7 w-7 -translate-x-1/2
-              border-[4px] border-[color:var(--ink)] bg-[color:var(--paper)]
-              transition-all duration-[var(--p5-motion-micro)]
+              h-5 w-5 -translate-x-1/2
+              rounded-full border border-border bg-background shadow-sm
+              transition-transform duration-100
               ${
                 isDragging
-                  ? "shadow-[1px_1px_0_var(--ink)] scale-95"
-                  : "shadow-[var(--p5-shadow-sm)] hover:scale-110 hover:shadow-[3px_3px_0_var(--rebel-red),5px_5px_0_var(--ink)]"
+                  ? "scale-95"
+                  : "hover:scale-110"
               }
               ${
                 disabled
@@ -163,33 +163,33 @@ export function P5Slider({
       <div className="flex flex-wrap items-center justify-between gap-4 text-sm">
         <div className="flex items-center gap-4">
           {/* 花费 */}
-          <div className="border-[3px] border-[color:var(--ink)] bg-[color:var(--paper)] px-3 py-2 shadow-[var(--p5-shadow-sm)]">
-            <div className="font-display text-xs uppercase tracking-wide text-[color:var(--ink)]/70">
+          <div className="rounded-lg border border-border/60 bg-card px-3 py-2 shadow-sm">
+            <div className="text-xs tracking-wide text-muted-foreground">
               花费
             </div>
             <div
               className={`font-mono text-lg ${
-                !canAfford ? "text-[color:var(--rebel-red)]" : ""
+                !canAfford ? "text-destructive" : "text-foreground"
               }`}
             >
               {currentCost} 分
             </div>
-            <div className="font-mono text-xs text-[color:var(--ink)]/50">
+            <div className="font-mono text-xs text-muted-foreground">
               ({value}² = {currentCost})
             </div>
           </div>
 
           {/* 变化 */}
           {previousValue !== value && (
-            <div className="border-[3px] border-[color:var(--ink)] bg-[color:var(--paper)] px-3 py-2 shadow-[var(--p5-shadow-sm)]">
-              <div className="font-display text-xs uppercase tracking-wide text-[color:var(--ink)]/70">
+            <div className="rounded-lg border border-border/60 bg-card px-3 py-2 shadow-sm">
+              <div className="text-xs tracking-wide text-muted-foreground">
                 变化
               </div>
               <div
                 className={`font-mono text-lg ${
                   deltaCost > 0
-                    ? "text-[color:var(--rebel-red)]"
-                    : "text-[color:var(--electric)]"
+                    ? "text-destructive"
+                    : "text-accent"
                 }`}
               >
                 {deltaCost > 0 ? `+${deltaCost}` : deltaCost} 分
@@ -200,13 +200,13 @@ export function P5Slider({
 
         {/* 余额预览 */}
         <div className="flex items-center gap-2 font-mono">
-          <span className="text-[color:var(--ink)]/70">◆ {balance}</span>
-          <span className="text-[color:var(--ink)]/50">→</span>
+          <span className="text-muted-foreground">◆ {balance}</span>
+          <span className="text-muted-foreground">→</span>
           <span
             className={
               !canAfford
-                ? "font-bold text-[color:var(--rebel-red)]"
-                : "text-[color:var(--ink)]"
+                ? "font-semibold text-destructive"
+                : "text-foreground"
             }
           >
             ◆ {newBalance}
@@ -217,7 +217,7 @@ export function P5Slider({
       {/* 余额不足警告 */}
       {!canAfford && (
         <div
-          className="animate-shake border-[4px] border-[color:var(--rebel-red)] bg-[color:var(--paper)] p-3 text-sm text-[color:var(--rebel-red)]"
+          className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
           role="alert"
         >
           ⚠ 余额不足！需要 {deltaCost} 分，当前余额 {balance} 分
@@ -226,7 +226,7 @@ export function P5Slider({
 
       {/* Decrease Only 提示 */}
       {decreaseOnly && (
-        <div className="border-[3px] border-[color:var(--acid)] bg-[color:var(--paper)] p-2 text-sm text-[color:var(--ink)]">
+        <div className="rounded-md border border-border/60 bg-card p-2 text-sm text-muted-foreground">
           ⚠ 此节点已被修剪，仅允许减少投票
         </div>
       )}

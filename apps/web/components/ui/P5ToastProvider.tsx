@@ -55,11 +55,11 @@ function titleForVariant(variant: ToastVariant): string {
   return "info";
 }
 
-function barClass(variant: ToastVariant): string {
-  if (variant === "error") return "bg-[color:var(--rebel-red)]";
-  if (variant === "warn") return "bg-[color:var(--acid)] text-[color:var(--ink)]";
-  if (variant === "success") return "bg-[color:var(--electric)]";
-  return "bg-[color:var(--ink)]";
+function dotClass(variant: ToastVariant): string {
+  if (variant === "error") return "bg-destructive";
+  if (variant === "warn") return "bg-[color:var(--chart-2)]";
+  if (variant === "success") return "bg-[color:var(--chart-3)]";
+  return "bg-accent";
 }
 
 export function P5ToastProvider({ children }: { children: ReactNode }) {
@@ -127,46 +127,33 @@ export function P5ToastProvider({ children }: { children: ReactNode }) {
         aria-relevant="additions text"
         className="pointer-events-none fixed right-4 top-4 z-[100] flex w-[min(420px,calc(100vw-2rem))] flex-col gap-3"
       >
-        {toasts.map((t, index) => (
+        {toasts.map((t) => (
           <div
             key={t.id}
             role={t.variant === "error" ? "alert" : "status"}
             className={[
               "pointer-events-auto",
-              "border-[var(--p5-border-width)] border-[color:var(--ink)] bg-[color:var(--paper)]",
-              "shadow-[var(--p5-shadow-ink)]",
-              index % 2 === 0 ? "rotate-[-0.6deg]" : "rotate-[0.4deg]",
+              "overflow-hidden rounded-lg border border-border/60 bg-card text-card-foreground shadow-lg",
             ].join(" ")}
-            style={{
-              clipPath:
-                "polygon(0 0, calc(100% - var(--p5-cut)) 0, 100% var(--p5-cut), 100% 100%, 0 100%)",
-            }}
           >
-            <div
-              className={[
-                "flex items-center justify-between gap-3 border-b-[var(--p5-border-width)] border-[color:var(--ink)] px-3 py-2",
-                barClass(t.variant),
-                t.variant === "warn" ? "text-[color:var(--ink)]" : "text-[color:var(--paper)]",
-              ].join(" ")}
-            >
-              <div className="font-mono text-xs font-semibold uppercase tracking-wide">
-                {t.title}
+            <div className="flex items-start gap-3 px-4 py-3">
+              <span
+                aria-hidden
+                className={["mt-1.5 h-2 w-2 rounded-full", dotClass(t.variant)].join(" ")}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-foreground">{t.title}</div>
+                <div className="mt-1 text-sm text-muted-foreground">{t.message}</div>
               </div>
               <button
                 type="button"
                 onClick={() => dismiss(t.id)}
-                className={[
-                  "inline-flex h-7 w-7 items-center justify-center",
-                  "border-[2px] border-[color:var(--ink)] bg-[color:var(--paper)] text-[color:var(--ink)]",
-                  "shadow-[2px_2px_0_var(--ink)]",
-                  "focus-visible:outline-none focus-visible:shadow-[var(--p5-shadow-rebel)]",
-                ].join(" ")}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 aria-label="Dismiss toast"
               >
                 ×
               </button>
             </div>
-            <div className="px-3 py-2 text-sm text-[color:var(--ink)]">{t.message}</div>
           </div>
         ))}
       </div>
@@ -184,4 +171,3 @@ export function useP5Toast(): ToastApi {
     }
   );
 }
-

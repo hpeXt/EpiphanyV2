@@ -14,36 +14,22 @@ export function TopicDualColumn({ left, right }: Props) {
   return (
     <>
       {/* 桌面端：双栏 */}
-      <div className="hidden h-[calc(100vh-56px)] overflow-hidden md:flex">
-        {/* 左栏 - 60% */}
-        <div className="relative flex w-[60%] flex-col overflow-auto bg-[color:var(--concrete-300)] p-4">
+      <div className="hidden min-h-0 flex-1 overflow-hidden rounded-lg border border-border/60 bg-card shadow-sm md:flex">
+        {/* 左栏 */}
+        <div className="relative flex w-[55%] min-w-[360px] flex-col overflow-auto border-r border-border/60 bg-background p-4">
           {left}
         </div>
 
-        {/* 对角撕裂分隔线 */}
-        <div
-          className="w-2 flex-shrink-0"
-          style={{
-            background: `
-              linear-gradient(135deg, var(--ink) 25%, transparent 25%),
-              linear-gradient(-135deg, var(--ink) 25%, transparent 25%)
-            `,
-            backgroundSize: "8px 8px",
-            backgroundColor: "var(--concrete-200)",
-          }}
-          aria-hidden="true"
-        />
-
-        {/* 右栏 - 40% */}
-        <div className="flex w-[40%] flex-col overflow-hidden bg-[color:var(--paper)]">
+        {/* 右栏 */}
+        <div className="flex w-[45%] flex-col overflow-hidden bg-background">
           {right}
         </div>
       </div>
 
       {/* 移动端：单栏切换 */}
-      <div className="flex h-[calc(100vh-56px)] flex-col md:hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-card shadow-sm md:hidden">
         {/* 切换 Tabs */}
-        <div className="flex-shrink-0 border-b-[3px] border-[color:var(--ink)] bg-[color:var(--paper)] p-2">
+        <div className="flex-shrink-0 border-b border-border/60 bg-background p-2">
           <P5Tabs
             ariaLabel="移动端视图切换"
             value={mobileView}
@@ -58,9 +44,9 @@ export function TopicDualColumn({ left, right }: Props) {
         {/* 内容区 */}
         <div className="min-h-0 flex-1 overflow-auto">
           {mobileView === "viz" ? (
-            <div className="h-full bg-[color:var(--concrete-300)] p-4">{left}</div>
+            <div className="h-full bg-background p-4">{left}</div>
           ) : (
-            <div className="h-full bg-[color:var(--paper)]">{right}</div>
+            <div className="h-full bg-background">{right}</div>
           )}
         </div>
       </div>

@@ -9,11 +9,10 @@ export default function NotFound() {
         subtitle="This page does not exist."
         actions={[{ href: "/topics", label: "Back to Topics" }]}
       >
-        <p className="text-sm text-[color:var(--ink)]">
+        <p className="text-sm text-muted-foreground">
           Check the URL, or go back to the Topics list.
         </p>
       </P5Card>
     </div>
   );
 }
-

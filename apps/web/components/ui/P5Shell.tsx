@@ -6,56 +6,27 @@ import { BRAND } from "@/lib/brand";
 
 export function P5Shell({ children }: { children: ReactNode }) {
   return (
-    <div className="relative min-h-dvh bg-[color:var(--concrete-300)] text-[color:var(--ink)]">
+    <div className="flex min-h-dvh flex-col bg-background text-foreground">
       <a
         href="#main"
-        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[110] focus:border-[var(--p5-border-width)] focus:border-[color:var(--ink)] focus:bg-[color:var(--paper)] focus:px-3 focus:py-2 focus:font-mono focus:text-sm focus:font-semibold focus:uppercase focus:tracking-wide focus:shadow-[var(--p5-shadow-rebel)]"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[110] focus:rounded-md focus:border focus:border-border focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:shadow-sm"
       >
         Skip to content
       </a>
-      <div
-        aria-hidden
-        className={[
-          "pointer-events-none fixed inset-0 z-0 opacity-[var(--p5-noise-opacity)]",
-          // 3-layer cheap texture: diagonal lines + dots + grain-ish
-          "bg-[linear-gradient(135deg,rgba(0,0,0,0.15)_0,rgba(0,0,0,0.15)_1px,transparent_1px,transparent_10px),radial-gradient(rgba(0,0,0,0.18)_1px,transparent_1px),radial-gradient(rgba(0,0,0,0.08)_1px,transparent_1px)]",
-          "bg-[length:14px_14px,18px_18px,34px_34px] bg-[position:0_0,6px_2px,12px_9px]",
-        ].join(" ")}
-      />
 
-      <header className="relative z-10 px-4 pt-4">
-        <div className="mx-auto max-w-5xl">
-          <div
-            className={[
-              "flex flex-wrap items-center justify-between gap-3",
-              "border-[var(--p5-border-width)] border-[color:var(--ink)] bg-[color:var(--paper)]",
-              "shadow-[var(--p5-shadow-ink)]",
-              "px-4 py-3",
-            ].join(" ")}
-            style={{
-              clipPath:
-                "polygon(0 0, calc(100% - var(--p5-cut)) 0, 100% var(--p5-cut), 100% 100%, 0 100%)",
-            }}
-          >
-            <Link
-              href="/topics"
-              className={[
-                "inline-flex items-baseline gap-3",
-                "font-mono text-sm font-semibold uppercase tracking-wide",
-              ].join(" ")}
-            >
-              <span className="bg-[color:var(--ink)] px-2 py-1 text-[color:var(--paper)]">
-                {BRAND.mark}
-              </span>
-              <span className="hidden sm:inline">{BRAND.name}</span>
-            </Link>
-
-            <P5TopNav />
-          </div>
+      <header className="border-b border-border/50 bg-background">
+        <div className="container flex items-center justify-between gap-4 py-6">
+          <Link href="/" className="flex items-center gap-3">
+            <span className="text-2xl font-serif text-foreground/80">Σ</span>
+            <span className="text-sm tracking-wide text-muted-foreground">
+              {BRAND.nameUpper}
+            </span>
+          </Link>
+          <P5TopNav />
         </div>
       </header>
 
-      <main id="main" className="relative z-10 px-4 py-8">
+      <main id="main" className="container flex min-h-0 flex-1 flex-col py-10">
         {children}
       </main>
     </div>

@@ -10,11 +10,11 @@ type Props = Omit<HTMLAttributes<HTMLSpanElement>, "children"> & {
 };
 
 const VARIANT: Record<Variant, string> = {
-  ink: "bg-[color:var(--ink)] text-[color:var(--paper)]",
-  paper: "bg-[color:var(--paper)] text-[color:var(--ink)]",
-  rebel: "bg-[color:var(--rebel-red)] text-[color:var(--paper)]",
-  electric: "bg-[color:var(--electric)] text-[color:var(--paper)]",
-  acid: "bg-[color:var(--acid)] text-[color:var(--ink)]",
+  ink: "border-transparent bg-foreground text-background",
+  paper: "bg-background text-foreground",
+  rebel: "border-transparent bg-destructive text-destructive-foreground",
+  electric: "border-transparent bg-accent text-accent-foreground",
+  acid: "border-transparent bg-[color:var(--chart-2)] text-foreground",
 };
 
 export function P5Badge({ children, variant = "paper", className = "", ...props }: Props) {
@@ -22,17 +22,12 @@ export function P5Badge({ children, variant = "paper", className = "", ...props 
     <span
       {...props}
       className={[
-        "inline-flex items-center justify-center border-[3px] border-[color:var(--ink)] px-2 py-0.5 text-xs font-semibold uppercase tracking-wide",
-        "shadow-[2px_2px_0_var(--ink)]",
+        "inline-flex items-center justify-center rounded-full border border-border px-2 py-0.5 text-xs font-medium",
         VARIANT[variant],
         className,
       ].join(" ")}
-      style={{
-        clipPath: "polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%)",
-      }}
     >
       {children}
     </span>
   );
 }
-

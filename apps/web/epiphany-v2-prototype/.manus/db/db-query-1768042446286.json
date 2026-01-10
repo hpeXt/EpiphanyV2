@@ -1,0 +1,15 @@
+{
+  "query": "SELECT id, slug, title FROM topics;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2RrEjnPbKkJW67L.root --database 4YmQKSfbtDjMNyXbQp5L36 --execute SELECT id, slug, title FROM topics;",
+  "rows": [
+    {
+      "id": "1",
+      "slug": "ThYP1IAfEI",
+      "title": "hi"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tslug\ttitle\n1\tThYP1IAfEI\thi\n",
+  "stderr": "",
+  "execution_time_ms": 1543
+}

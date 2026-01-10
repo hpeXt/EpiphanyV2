@@ -11,7 +11,7 @@ export default async function TopicDetailPage({
   const { topicId } = await params;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="space-y-6">
       <header className="flex items-center justify-between">
         <P5LinkButton href="/topics" variant="ghost" size="sm">
           Back to list

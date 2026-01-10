@@ -17,6 +17,7 @@ type Props = {
   showTooltip?: boolean;
   onSelectedIdChange?: (id: string | null) => void;
   onNodeClick?: (node: { id: string; label: string; depth: number; parentId: string | null; value: number; childCount: number }) => void;
+  onHoverChange?: (value: { id: string; pointer: PointerPosition } | null) => void;
 };
 
 type ArcSpec = {
@@ -111,6 +112,7 @@ export function Sunburst({
   showTooltip = false,
   onSelectedIdChange,
   onNodeClick,
+  onHoverChange,
 }: Props) {
   const layout = useMemo(() => buildSunburstLayout(tree, { startAngle: 0, endAngle: Math.PI * 2 }), [tree]);
 
@@ -148,7 +150,8 @@ export function Sunburst({
   const clearHover = useCallback(() => {
     setHoveredId(null);
     setHoverPointer(null);
-  }, []);
+    onHoverChange?.(null);
+  }, [onHoverChange]);
 
   const handlePointerMove = useCallback(
     (arcId: string, event: ReactPointerEvent<SVGPathElement>) => {
@@ -159,8 +162,9 @@ export function Sunburst({
         : { x: event.clientX, y: event.clientY };
       setHoveredId(arcId);
       setHoverPointer(pointer);
+      onHoverChange?.({ id: arcId, pointer });
     },
-    [interactive],
+    [interactive, onHoverChange],
   );
 
   const handleClick = useCallback(
@@ -186,6 +190,16 @@ export function Sunburst({
     [arcById, interactive, onNodeClick, onSelectedIdChange, resolvedSelectedId, selectedId],
   );
 
+  const handleBackgroundClick = useCallback(() => {
+    if (!interactive) return;
+
+    clearHover();
+    if (selectedId === undefined) {
+      setUncontrolledSelectedId(null);
+    }
+    onSelectedIdChange?.(null);
+  }, [clearHover, interactive, onSelectedIdChange, selectedId]);
+
   const tooltipArc = hoveredId ? arcById.get(hoveredId) ?? null : null;
 
   return (
@@ -204,6 +218,7 @@ export function Sunburst({
         role="img"
         aria-label="Sunburst"
         className="block max-w-full"
+        onClick={interactive ? handleBackgroundClick : undefined}
       >
         <g transform={`translate(${width / 2} ${height / 2})`}>
           <circle
@@ -236,7 +251,14 @@ export function Sunburst({
                 stroke="var(--ink)"
                 strokeWidth={3}
                 onPointerMove={interactive ? (event) => handlePointerMove(arc.id, event) : undefined}
-                onClick={interactive ? () => handleClick(arc.id) : undefined}
+                onClick={
+                  interactive
+                    ? (event) => {
+                        event.stopPropagation();
+                        handleClick(arc.id);
+                      }
+                    : undefined
+                }
                 className={interactive ? "cursor-pointer" : undefined}
               />
             );

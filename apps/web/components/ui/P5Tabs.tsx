@@ -26,14 +26,9 @@ export function P5Tabs<T extends string>({
       role="group"
       aria-label={ariaLabel}
       className={[
-        "inline-flex overflow-hidden border-[var(--p5-border-width)] border-[color:var(--ink)] bg-[color:var(--paper)]",
-        "shadow-[var(--p5-shadow-ink)]",
+        "inline-flex rounded-md bg-muted p-1",
         className,
       ].join(" ")}
-      style={{
-        clipPath:
-          "polygon(0 0, calc(100% - var(--p5-cut)) 0, 100% var(--p5-cut), 100% 100%, 0 100%)",
-      }}
     >
       {tabs.map((tab) => {
         const selected = tab.value === value;
@@ -45,13 +40,12 @@ export function P5Tabs<T extends string>({
             disabled={tab.disabled}
             aria-pressed={selected}
             className={[
-              "px-3 py-1.5 text-sm font-semibold",
-              "border-r-[var(--p5-border-width)] border-[color:var(--ink)] last:border-r-0",
+              "rounded-sm px-3 py-1.5 text-sm font-medium transition-colors",
               selected
-                ? "bg-[color:var(--ink)] text-[color:var(--paper)]"
-                : "text-[color:var(--ink)] hover:bg-[color:var(--concrete-200)]",
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-background/60 hover:text-foreground",
               "disabled:opacity-60",
-              "focus-visible:outline-[3px] focus-visible:outline-[color:var(--rebel-red)] focus-visible:outline-offset-[-3px]",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
             ].join(" ")}
           >
             {tab.label}

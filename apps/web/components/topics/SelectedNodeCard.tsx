@@ -25,9 +25,9 @@ function getStanceFromScore(score: number | null): StanceType {
 export function SelectedNodeCard({ node }: Props) {
   if (!node) {
     return (
-      <div className="border-[4px] border-[color:var(--ink)] bg-[color:var(--concrete-200)] p-6 text-center text-[color:var(--ink)]/60">
+      <div className="rounded-lg border border-border/60 bg-muted/40 p-8 text-center text-muted-foreground">
         <div className="mb-2 text-2xl">◎</div>
-        <div className="font-display text-sm uppercase">点击左侧节点查看详情</div>
+        <div className="text-sm">点击左侧节点查看详情</div>
       </div>
     );
   }
@@ -37,14 +37,7 @@ export function SelectedNodeCard({ node }: Props) {
 
   return (
     <div
-      className="
-        relative
-        -rotate-[0.5deg]
-        border-[4px] border-[color:var(--ink)] bg-[color:var(--paper)]
-        shadow-[4px_4px_0_var(--rebel-red),8px_8px_0_var(--ink)]
-        transition-all duration-[var(--p5-motion-fast)]
-        animate-pop
-      "
+      className="relative overflow-hidden rounded-lg border border-border/60 bg-card text-card-foreground shadow-sm"
     >
       {/* Stance 色条 */}
       <div
@@ -55,7 +48,7 @@ export function SelectedNodeCard({ node }: Props) {
       {/* 内容 */}
       <div className="p-4 pt-5">
         {/* 正文 */}
-        <div className="mb-4 line-clamp-4 text-sm leading-relaxed text-[color:var(--ink)]">
+        <div className="mb-4 line-clamp-4 text-sm leading-relaxed text-foreground">
           {node.bodyRich ? (
             <TiptapRenderer doc={node.bodyRich} />
           ) : (
@@ -64,31 +57,31 @@ export function SelectedNodeCard({ node }: Props) {
         </div>
 
         {/* 元信息 */}
-        <div className="flex flex-wrap items-center gap-2 text-xs">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           {/* Stance */}
           <span
-            className="border-[2px] border-[color:var(--ink)] px-2 py-0.5 font-display uppercase"
+            className="rounded-full border border-border px-2 py-0.5 font-medium"
             style={{
               backgroundColor: stanceColor,
-              color: stance === "neutral" ? "var(--ink)" : "var(--paper)",
+              color: stance === "neutral" ? "var(--foreground)" : "var(--background)",
             }}
           >
             {stance}
           </span>
 
           {/* 票数 */}
-          <span className="flex items-center gap-1 border-[2px] border-[color:var(--ink)] bg-[color:var(--paper)] px-2 py-0.5 font-mono">
+          <span className="flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 font-mono text-foreground">
             ●{node.totalVotes}
           </span>
 
           {/* 作者 */}
-          <span className="font-mono text-[color:var(--ink)]/60">
+          <span className="font-mono">
             {node.authorId.slice(0, 6)}...
           </span>
 
           {/* AI 分析状态 */}
           {node.analysisStatus && node.analysisStatus !== "ready" && (
-            <span className="flex items-center gap-1 text-[color:var(--electric)]">
+            <span className="flex items-center gap-1 text-accent">
               AI: {node.analysisStatus === "pending_analysis" ? "⏳" : "▶"}
             </span>
           )}

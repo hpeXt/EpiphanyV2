@@ -9,6 +9,8 @@ const customJestConfig = {
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/$1",
   },
+  testPathIgnorePatterns: ["<rootDir>/.next/", "<rootDir>/epiphany-v2-prototype/"],
+  modulePathIgnorePatterns: ["<rootDir>/.next/", "<rootDir>/epiphany-v2-prototype/"],
 };
 
 module.exports = createJestConfig(customJestConfig);

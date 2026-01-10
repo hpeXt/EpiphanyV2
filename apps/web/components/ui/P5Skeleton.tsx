@@ -27,13 +27,11 @@ export function P5Skeleton({
       {items.map((i) => (
         <div
           key={i}
-          className={`
-            texture-stripes
-            animate-[p5-skeleton-pulse_1.5s_ease-in-out_infinite]
-            border-[4px] border-[color:var(--ink)]
-            ${VARIANT_CLASSES[variant]}
-            ${className}
-          `}
+          className={[
+            "animate-pulse rounded-md bg-muted",
+            VARIANT_CLASSES[variant],
+            className,
+          ].join(" ")}
           role="status"
           aria-label="加载中"
         />
@@ -45,7 +43,7 @@ export function P5Skeleton({
 /** 组合骨架：卡片内容 */
 export function P5SkeletonCard() {
   return (
-    <div className="space-y-3 border-[4px] border-[color:var(--ink)] bg-[color:var(--paper)] p-4 shadow-[var(--p5-shadow-md)]">
+    <div className="space-y-3 rounded-lg border border-border/60 bg-card p-4 shadow-sm">
       <P5Skeleton variant="title" />
       <P5Skeleton variant="text" />
       <P5Skeleton variant="text" className="w-4/5" />

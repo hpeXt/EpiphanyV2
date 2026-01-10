@@ -25,9 +25,9 @@ type P5ModalProps = {
 };
 
 const HEADER_VARIANT: Record<Variant, string> = {
-  default: "bg-[color:var(--ink)] text-[color:var(--paper)]",
-  danger: "bg-[color:var(--rebel-red)] text-[color:var(--paper)]",
-  success: "bg-[color:var(--acid)] text-[color:var(--ink)]",
+  default: "bg-card text-card-foreground",
+  danger: "bg-card text-card-foreground",
+  success: "bg-card text-card-foreground",
 };
 
 export function P5Modal({
@@ -101,39 +101,30 @@ export function P5Modal({
       aria-labelledby="modal-title"
     >
       {/* 遮罩 */}
-      <div className="absolute inset-0 bg-black/60" aria-hidden="true" />
+      <div className="absolute inset-0 bg-black/40" aria-hidden="true" />
 
       {/* 内容卡片 */}
       <div
         ref={modalRef}
         tabIndex={-1}
-        className="
-          relative w-full animate-pop
-          border-[6px] border-[color:var(--ink)] bg-[color:var(--paper)]
-          shadow-[var(--p5-shadow-xl)]
-          focus:outline-none
-        "
+        className="relative w-full rounded-lg border border-border/60 bg-card text-card-foreground shadow-lg focus:outline-none"
         style={{ maxWidth }}
       >
         {/* 标题栏 */}
         <div
           className={`
-            flex items-center justify-between px-5 py-3
-            font-display text-lg uppercase tracking-wide
+            flex items-center justify-between px-5 py-4
+            border-b border-border/60
             ${HEADER_VARIANT[variant]}
           `}
         >
-          <h2 id="modal-title">{title}</h2>
+          <h2 id="modal-title" className="font-serif text-xl font-semibold text-foreground">
+            {title}
+          </h2>
           <button
             type="button"
             onClick={onClose}
-            className="
-              flex h-8 w-8 items-center justify-center
-              border-[3px] border-current bg-transparent
-              text-current transition-transform
-              hover:scale-110 hover:bg-current/10
-              focus:outline-none focus:ring-2 focus:ring-current
-            "
+            className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             aria-label="关闭"
           >
             ✕
@@ -145,7 +136,7 @@ export function P5Modal({
 
         {/* Footer */}
         {footer && (
-          <div className="flex items-center justify-end gap-3 border-t-[3px] border-[color:var(--ink)] px-6 py-4">
+          <div className="flex items-center justify-end gap-3 border-t border-border/60 px-6 py-4">
             {footer}
           </div>
         )}

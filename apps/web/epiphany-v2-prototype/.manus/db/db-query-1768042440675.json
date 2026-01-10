@@ -1,0 +1,25 @@
+{
+  "query": "SELECT * FROM topics; SELECT * FROM viewpoints;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2RrEjnPbKkJW67L.root --database 4YmQKSfbtDjMNyXbQp5L36 --execute SELECT * FROM topics; SELECT * FROM viewpoints;",
+  "rows": [
+    {
+      "id": "1",
+      "slug": "ThYP1IAfEI",
+      "title": "hi",
+      "description": "NULL",
+      "creatorId": "1",
+      "status": "active",
+      "aiReport": "NULL",
+      "reportUpdatedAt": "NULL",
+      "createdAt": "2026-01-10 10:49:22",
+      "updatedAt": "2026-01-10 10:49:22"
+    }
+  ],
+  "messages": [
+    "id\ttopicId\tparentId\tauthorId\ttitle\tcontent\ttheme\tsentimentScore\tkeywords\tdepth\ttotalVotes\tcreatedAt\tupdatedAt",
+    "1\t1\tNULL\t1\t我们希望这里是一个好东西\t<p>AI 会失败。</p>\tNULL\tNULL\tNULL\t0\t0\t2026-01-10 10:49:44\t2026-01-10 10:49:44"
+  ],
+  "stdout": "id\tslug\ttitle\tdescription\tcreatorId\tstatus\taiReport\treportUpdatedAt\tcreatedAt\tupdatedAt\n1\tThYP1IAfEI\thi\tNULL\t1\tactive\tNULL\tNULL\t2026-01-10 10:49:22\t2026-01-10 10:49:22\nid\ttopicId\tparentId\tauthorId\ttitle\tcontent\ttheme\tsentimentScore\tkeywords\tdepth\ttotalVotes\tcreatedAt\tupdatedAt\n1\t1\tNULL\t1\t我们希望这里是一个好东西\t<p>AI 会失败。</p>\tNULL\tNULL\tNULL\t0\t0\t2026-01-10 10:49:44\t2026-01-10 10:49:44\n",
+  "stderr": "",
+  "execution_time_ms": 1814
+}
