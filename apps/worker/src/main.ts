@@ -23,9 +23,8 @@ import { createNodeTopicClusterEngine } from './clustering/node-topic-cluster-en
 import { createPythonTopicClusterEngine } from './clustering/python-topic-cluster-engine.js';
 import {
   processConsensusReport,
-  type ConsensusReportProvider,
-  type GenerateConsensusReportInput,
 } from './processors/consensus-report.js';
+import { createConsensusReportProvider } from './providers/consensus-report-provider.js';
 
 // Queue names per docs/stage01/ai-worker.md (using underscore instead of colon for BullMQ compatibility)
 const QUEUE_ARGUMENT_ANALYSIS = 'ai_argument-analysis';
@@ -69,35 +68,7 @@ function getTopicClusterEngine(): TopicClusterEngine {
 }
 
 const topicClusterEngine = getTopicClusterEngine();
-
-const consensusReportProvider: ConsensusReportProvider = {
-  async generate(input: GenerateConsensusReportInput) {
-    const bulletLines = input.arguments
-      .slice(0, 10)
-      .map((arg) => {
-        const title = arg.title?.trim() ? ` — ${arg.title.trim()}` : '';
-        const excerpt = arg.body.trim().slice(0, 160).replaceAll('\n', ' ');
-        return `- (${arg.totalVotes} votes) ${arg.id}${title}: ${excerpt}${arg.body.length > 160 ? '…' : ''}`;
-      })
-      .join('\n');
-
-    const contentMd = [
-      '# 共识报告',
-      '',
-      `Topic: ${input.topicTitle}`,
-      '',
-      '## 输入摘要（Top arguments）',
-      '',
-      bulletLines || '- (no arguments)',
-      '',
-      '## 结论（mock）',
-      '',
-      '- 这是 mock 报告内容；后续可替换为真实 LLM Prompt Chaining。',
-    ].join('\n');
-
-    return { contentMd, model: 'mock-report-model' };
-  },
-};
+const consensusReportProvider = createConsensusReportProvider();
 
 /**
  * Argument Analysis Job Payload

@@ -85,6 +85,10 @@ return {current, ttl}
         pubkeyLimit: parseNonNegativeInt(process.env.RISK_RL_CREATE_ARGUMENT_PUBKEY_LIMIT, 10),
         ipLimit: parseNonNegativeInt(process.env.RISK_RL_CREATE_ARGUMENT_IP_LIMIT, 20),
       },
+      editArgument: {
+        pubkeyLimit: parseNonNegativeInt(process.env.RISK_RL_EDIT_ARGUMENT_PUBKEY_LIMIT, 10),
+        ipLimit: parseNonNegativeInt(process.env.RISK_RL_EDIT_ARGUMENT_IP_LIMIT, 20),
+      },
       setVotes: {
         pubkeyLimit: parseNonNegativeInt(process.env.RISK_RL_SET_VOTES_PUBKEY_LIMIT, 30),
         ipLimit: parseNonNegativeInt(process.env.RISK_RL_SET_VOTES_IP_LIMIT, 60),

@@ -1,29 +1,35 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { zTiptapDoc, type Argument, type LedgerMe } from "@epiphany/shared-contracts";
+import { zTiptapDoc, type Argument, type LedgerMe, type TiptapDoc } from "@epiphany/shared-contracts";
 import TipTapLink from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import Typography from "@tiptap/extension-typography";
 import Underline from "@tiptap/extension-underline";
-import { EditorContent, useEditor } from "@tiptap/react";
+import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 
 import { ConsensusReportModal } from "@/components/topics/ConsensusReportModal";
+import { TopicManagePanel } from "@/components/topics/TopicManagePanel";
 import { useTopicSse } from "@/components/topics/hooks/useTopicSse";
 import { useTopicTree } from "@/components/topics/hooks/useTopicTree";
 import { P5Alert } from "@/components/ui/P5Alert";
 import { P5Badge } from "@/components/ui/P5Badge";
 import { P5Button } from "@/components/ui/P5Button";
 import { P5Input } from "@/components/ui/P5Input";
+import { P5Modal } from "@/components/ui/P5Modal";
 import { useP5Toast } from "@/components/ui/P5ToastProvider";
 import { TiptapRenderer } from "@/components/ui/TiptapRenderer";
 import { Sunburst } from "@/components/visualizations/Sunburst";
+import { createLocalStorageClaimTokenStore } from "@/lib/claimTokenStore";
+import { createLocalStorageDraftStore } from "@/lib/draftStore";
 import { authorIdFromPubkeyHex, deriveTopicKeypairFromMasterSeedHex } from "@/lib/identity";
 import { apiClient, type ApiError } from "@/lib/apiClient";
 import { createLocalStorageKeyStore } from "@/lib/signing";
+import { createLocalStorageTopicAccessKeyStore } from "@/lib/topicAccessKeyStore";
 import { buildSunburstTreeFromFlatNodes } from "@/lib/visualization/sunburst/adapters";
 import { createLocalStorageVisitedTopicsStore } from "@/lib/visitedTopicsStore";
 
@@ -49,6 +55,38 @@ function toExcerpt(text: string, maxLen = 140): string {
   if (!normalized) return "";
   if (normalized.length <= maxLen) return normalized;
   return `${normalized.slice(0, Math.max(0, maxLen - 1))}…`;
+}
+
+function plainTextToTiptapDoc(text: string): TiptapDoc {
+  const normalized = text.replaceAll("\r\n", "\n");
+  const lines = normalized.split("\n");
+
+  const blocks: Array<Record<string, unknown>> = [];
+  let inline: Array<Record<string, unknown>> = [];
+
+  const flush = () => {
+    blocks.push({ type: "paragraph", content: inline.length ? inline : [] });
+    inline = [];
+  };
+
+  for (const line of lines) {
+    if (!line) {
+      if (inline.length) flush();
+      continue;
+    }
+
+    if (inline.length) inline.push({ type: "hardBreak" });
+    inline.push({ type: "text", text: line });
+  }
+
+  if (inline.length || blocks.length === 0) flush();
+  return { type: "doc", content: blocks } as TiptapDoc;
+}
+
+function formatSavedTime(iso: string): string | null {
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return null;
+  return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 const ROOT_AUTHOR_ID = "66687aadf862bd77";
@@ -197,11 +235,6 @@ function pseudonymFromAuthorId(authorId: string): string {
   return `${adjective} ${noun}`;
 }
 
-function formatAuthorFingerprint(authorId: string): string {
-  if (authorId.length <= 10) return authorId;
-  return `${authorId.slice(0, 6)}…${authorId.slice(-4)}`;
-}
-
 function toFriendlyMessage(error: ApiError): string {
   if (error.kind === "http") {
     if (error.status === 402 || error.code === "INSUFFICIENT_BALANCE") {
@@ -217,6 +250,174 @@ function toFriendlyMessage(error: ApiError): string {
 function formatDelta(value: number): string {
   if (value > 0) return `+${value}`;
   return String(value);
+}
+
+function RichTextToolbar({
+  editor,
+  onRequestHideToolbar,
+}: {
+  editor: Editor | null;
+  onRequestHideToolbar?: () => void;
+}) {
+  if (!editor) return null;
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 bg-[color:var(--muted)] px-3 py-2">
+      <div className="flex flex-wrap items-center gap-1">
+      <P5Button
+        size="sm"
+        variant="ghost"
+        className={[
+          "h-8 w-8 p-0 border border-border bg-background",
+          editor.isActive("bold") ? "bg-muted" : "",
+        ].join(" ")}
+        onClick={() => editor.chain().focus().toggleBold().run()}
+        aria-label="Bold"
+      >
+        B
+      </P5Button>
+      <P5Button
+        size="sm"
+        variant="ghost"
+        className={[
+          "h-8 w-8 p-0 border border-border bg-background italic",
+          editor.isActive("italic") ? "bg-muted" : "",
+        ].join(" ")}
+        onClick={() => editor.chain().focus().toggleItalic().run()}
+        aria-label="Italic"
+      >
+        I
+      </P5Button>
+      <P5Button
+        size="sm"
+        variant="ghost"
+        className={[
+          "h-8 w-8 p-0 border border-border bg-background underline",
+          editor.isActive("underline") ? "bg-muted" : "",
+        ].join(" ")}
+        onClick={() => editor.chain().focus().toggleUnderline().run()}
+        aria-label="Underline"
+      >
+        U
+      </P5Button>
+
+      <div className="mx-1 h-4 w-px bg-border/80" />
+
+      <P5Button
+        size="sm"
+        variant="ghost"
+        className={[
+          "h-8 px-2 border border-border bg-background",
+          editor.isActive("heading", { level: 2 }) ? "bg-muted" : "",
+        ].join(" ")}
+        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+        aria-label="Heading 2"
+      >
+        H2
+      </P5Button>
+      <P5Button
+        size="sm"
+        variant="ghost"
+        className={[
+          "h-8 px-2 border border-border bg-background",
+          editor.isActive("heading", { level: 3 }) ? "bg-muted" : "",
+        ].join(" ")}
+        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+        aria-label="Heading 3"
+      >
+        H3
+      </P5Button>
+
+      <div className="mx-1 h-4 w-px bg-border/80" />
+
+      <P5Button
+        size="sm"
+        variant="ghost"
+        className={[
+          "h-8 px-2 border border-border bg-background",
+          editor.isActive("bulletList") ? "bg-muted" : "",
+        ].join(" ")}
+        onClick={() => editor.chain().focus().toggleBulletList().run()}
+        aria-label="Bullet list"
+      >
+        •
+      </P5Button>
+      <P5Button
+        size="sm"
+        variant="ghost"
+        className={[
+          "h-8 px-2 border border-border bg-background",
+          editor.isActive("orderedList") ? "bg-muted" : "",
+        ].join(" ")}
+        onClick={() => editor.chain().focus().toggleOrderedList().run()}
+        aria-label="Ordered list"
+      >
+        1.
+      </P5Button>
+      <P5Button
+        size="sm"
+        variant="ghost"
+        className={[
+          "h-8 px-2 border border-border bg-background",
+          editor.isActive("blockquote") ? "bg-muted" : "",
+        ].join(" ")}
+        onClick={() => editor.chain().focus().toggleBlockquote().run()}
+        aria-label="Blockquote"
+      >
+        “
+      </P5Button>
+      <P5Button
+        size="sm"
+        variant="ghost"
+        className={[
+          "h-8 px-2 border border-border bg-background font-mono",
+          editor.isActive("codeBlock") ? "bg-muted" : "",
+        ].join(" ")}
+        onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+        aria-label="Code block"
+      >
+        {"</>"}
+      </P5Button>
+
+      <div className="mx-1 h-4 w-px bg-border/80" />
+
+      <P5Button
+        size="sm"
+        variant="ghost"
+        className={[
+          "h-8 px-2 border border-border bg-background",
+          editor.isActive("link") ? "bg-muted" : "",
+        ].join(" ")}
+        onClick={() => {
+          const previousUrl = editor.getAttributes("link").href as string | undefined;
+          const nextUrl = window.prompt("Link URL", previousUrl ?? "");
+          if (nextUrl === null) return;
+          const trimmed = nextUrl.trim();
+          if (!trimmed) {
+            editor.chain().focus().unsetLink().run();
+            return;
+          }
+          editor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run();
+        }}
+        aria-label="Link"
+      >
+        ↗
+      </P5Button>
+      </div>
+
+      {onRequestHideToolbar ? (
+        <P5Button
+          size="sm"
+          variant="ghost"
+          className="h-8 px-3 border border-border bg-background"
+          onClick={onRequestHideToolbar}
+          aria-label="隐藏工具栏"
+        >
+          隐藏
+        </P5Button>
+      ) : null}
+    </div>
+  );
 }
 
 function VoteStepper(props: {
@@ -365,23 +566,67 @@ function VoteStepper(props: {
 
 export function TopicStage({ topicId }: Props) {
   const { toast } = useP5Toast();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const keyStore = useMemo(() => createLocalStorageKeyStore(), []);
   const visitedStore = useMemo(() => createLocalStorageVisitedTopicsStore(), []);
+  const claimTokenStore = useMemo(() => createLocalStorageClaimTokenStore(), []);
+  const draftStore = useMemo(() => createLocalStorageDraftStore(), []);
   const leftColumnRef = useRef<HTMLDivElement | null>(null);
   const lastPointerSideRef = useRef<"left" | "right" | null>(null);
+  const readerContentRef = useRef<HTMLDivElement | null>(null);
 
   const [hasIdentity, setHasIdentity] = useState<boolean | null>(null);
   const [identityFingerprint, setIdentityFingerprint] = useState<string | null>(null);
   const [identityPubkeyHex, setIdentityPubkeyHex] = useState<string | null>(null);
   const [myAuthorId, setMyAuthorId] = useState<string | null>(null);
   const [topicDisplayName, setTopicDisplayName] = useState("");
+  const topicDisplayNameRef = useRef(topicDisplayName);
+  topicDisplayNameRef.current = topicDisplayName;
+  const topicDisplayNameDirtyRef = useRef(false);
+  const topicDisplayNameServerRef = useRef("");
+  const topicDisplayNameSaveTimerRef = useRef<number | null>(null);
+  const topicDisplayNameSaveSeqRef = useRef(0);
+  type TopicDisplayNameSaveState =
+    | { kind: "idle" }
+    | { kind: "saving" }
+    | { kind: "saved" }
+    | { kind: "error"; message: string };
+  const [topicDisplayNameSave, setTopicDisplayNameSave] = useState<TopicDisplayNameSaveState>({
+    kind: "idle",
+  });
 
   const [refreshToken, setRefreshToken] = useState(0);
   const invalidate = useCallback(() => setRefreshToken((prev) => prev + 1), []);
 
   const [reloadRequired, setReloadRequired] = useState(false);
   const handleReloadRequired = useCallback(() => setReloadRequired(true), []);
+
+  // Private topic share links use URL hash (#k=...) so the secret isn't sent to the server.
+  // On first load, store the key locally and then clear the hash.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
+    if (!raw) return;
+
+    const params = new URLSearchParams(raw);
+    const accessKey = params.get("k");
+    if (!accessKey) return;
+
+    try {
+      createLocalStorageTopicAccessKeyStore().set(topicId, accessKey);
+    } catch {
+      return;
+    }
+
+    try {
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    } catch {
+      // ignore
+    }
+  }, [topicId]);
 
   useTopicSse({
     topicId,
@@ -390,27 +635,76 @@ export function TopicStage({ topicId }: Props) {
     onReloadRequired: handleReloadRequired,
   });
 
-  const tree = useTopicTree(topicId, 6, refreshToken);
+  const tree = useTopicTree(topicId, 10, refreshToken, { loadFullTree: true });
   const topicStatus = tree.status === "success" ? tree.topic.status : "active";
 
-  const [selectedArgumentId, setSelectedArgumentId] = useState<string | null>(null);
+  const argFromUrl = searchParams.get("arg");
+  const [selectedArgumentId, setSelectedArgumentId] = useState<string | null>(() => argFromUrl || null);
+  const [selectedArgumentDetail, setSelectedArgumentDetail] = useState<Argument | null>(null);
+  const [selectedArgumentDetailError, setSelectedArgumentDetailError] = useState("");
+  const [isLoadingSelectedArgumentDetail, setIsLoadingSelectedArgumentDetail] = useState(false);
   const [activeSide, setActiveSide] = useState<"left" | "right" | null>(null);
   const [hoverCard, setHoverCard] = useState<HoverCardState | null>(null);
+  const [quoteHint, setQuoteHint] = useState<{ text: string; x: number; y: number } | null>(null);
+  const selectedArgumentIdRef = useRef<string | null>(null);
+  selectedArgumentIdRef.current = selectedArgumentId;
+
+  // Keep URL arg=<argumentId> in sync with selection (and support deep-links).
+  useEffect(() => {
+    const next = argFromUrl || null;
+    if (next === selectedArgumentIdRef.current) return;
+    setSelectedArgumentId(next);
+  }, [argFromUrl]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    const current = params.get("arg");
+
+    if (selectedArgumentIdRef.current) {
+      if (current === selectedArgumentIdRef.current) return;
+      params.set("arg", selectedArgumentIdRef.current);
+    } else {
+      if (!current) return;
+      params.delete("arg");
+    }
+
+    const nextQuery = params.toString();
+    const nextUrl = nextQuery ? `${pathname}?${nextQuery}` : pathname;
+    router.replace(nextUrl, { scroll: false });
+  }, [pathname, router, searchParams, selectedArgumentId]);
 
   const [ledger, setLedger] = useState<LedgerMe | null>(null);
   const [ledgerError, setLedgerError] = useState("");
 
   const [stakesByArgumentId, setStakesByArgumentId] = useState<Record<string, number>>({});
+  const [isManageOpen, setIsManageOpen] = useState(false);
   const [isReportOpen, setIsReportOpen] = useState(false);
+  const [claimError, setClaimError] = useState("");
+  const [isClaiming, setIsClaiming] = useState(false);
+
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isEditEditorMode, setIsEditEditorMode] = useState(true);
+  const [editTitle, setEditTitle] = useState("");
+  const [editText, setEditText] = useState("");
+  const [editError, setEditError] = useState("");
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const authorLabel = useCallback(
-    (authorId: string) => {
+    (authorId: string, authorDisplayName?: string | null) => {
       const custom = topicDisplayName.trim();
       if (myAuthorId && authorId === myAuthorId && custom) return custom;
+      const published = authorDisplayName?.trim();
+      if (published) return published;
       return pseudonymFromAuthorId(authorId);
     },
     [myAuthorId, topicDisplayName],
   );
+
+  const handleTopicDisplayNameChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    topicDisplayNameDirtyRef.current = true;
+    setTopicDisplayNameSave((prev) => (prev.kind === "error" ? { kind: "idle" } : prev));
+    setTopicDisplayName(event.target.value);
+  };
 
   // Identity presence
   useEffect(() => {
@@ -425,6 +719,41 @@ export function TopicStage({ topicId }: Props) {
   useEffect(() => {
     visitedStore.addTopic(topicId);
   }, [topicId, visitedStore]);
+
+  useEffect(() => {
+    topicDisplayNameDirtyRef.current = false;
+    topicDisplayNameServerRef.current = "";
+    topicDisplayNameSaveSeqRef.current += 1;
+    if (topicDisplayNameSaveTimerRef.current !== null) {
+      window.clearTimeout(topicDisplayNameSaveTimerRef.current);
+      topicDisplayNameSaveTimerRef.current = null;
+    }
+    setTopicDisplayName("");
+    setTopicDisplayNameSave({ kind: "idle" });
+  }, [topicId]);
+
+  useEffect(() => {
+    if (hasIdentity === true) return;
+    topicDisplayNameDirtyRef.current = false;
+    topicDisplayNameServerRef.current = "";
+    topicDisplayNameSaveSeqRef.current += 1;
+    if (topicDisplayNameSaveTimerRef.current !== null) {
+      window.clearTimeout(topicDisplayNameSaveTimerRef.current);
+      topicDisplayNameSaveTimerRef.current = null;
+    }
+    setTopicDisplayName("");
+    setTopicDisplayNameSave({ kind: "idle" });
+  }, [hasIdentity]);
+
+  useEffect(() => {
+    return () => {
+      topicDisplayNameSaveSeqRef.current += 1;
+      if (topicDisplayNameSaveTimerRef.current !== null) {
+        window.clearTimeout(topicDisplayNameSaveTimerRef.current);
+        topicDisplayNameSaveTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // Derive topic identity fingerprint
   useEffect(() => {
@@ -473,25 +802,74 @@ export function TopicStage({ topicId }: Props) {
     };
   }, [identityPubkeyHex]);
 
-  // Topic-scoped display name (local only for now)
+  // Topic-scoped display name (server-stored, autosaved)
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(`tm:topic-display-name:v1:${topicId}`);
-      setTopicDisplayName(raw ?? "");
-    } catch {
-      setTopicDisplayName("");
+    if (hasIdentity !== true) return;
+    if (topicDisplayNameSaveTimerRef.current !== null) {
+      window.clearTimeout(topicDisplayNameSaveTimerRef.current);
+      topicDisplayNameSaveTimerRef.current = null;
     }
-  }, [topicId]);
 
-  useEffect(() => {
-    try {
-      const key = `tm:topic-display-name:v1:${topicId}`;
-      if (topicDisplayName) localStorage.setItem(key, topicDisplayName);
-      else localStorage.removeItem(key);
-    } catch {
-      // ignore storage errors
+    if (!topicDisplayNameDirtyRef.current) return;
+
+    const desired = topicDisplayName.trim() ? topicDisplayName.trim() : null;
+    const onServer = topicDisplayNameServerRef.current.trim()
+      ? topicDisplayNameServerRef.current.trim()
+      : null;
+
+    if (desired === onServer) {
+      setTopicDisplayNameSave({ kind: "idle" });
+      return;
     }
-  }, [topicDisplayName, topicId]);
+
+    setTopicDisplayNameSave({ kind: "saving" });
+    const requestId = (topicDisplayNameSaveSeqRef.current += 1);
+
+    topicDisplayNameSaveTimerRef.current = window.setTimeout(() => {
+      topicDisplayNameSaveTimerRef.current = null;
+
+      (async () => {
+        const latestDesired = topicDisplayNameRef.current.trim()
+          ? topicDisplayNameRef.current.trim()
+          : null;
+        const serverNow = topicDisplayNameServerRef.current.trim()
+          ? topicDisplayNameServerRef.current.trim()
+          : null;
+
+        if (latestDesired === serverNow) {
+          setTopicDisplayNameSave({ kind: "idle" });
+          return;
+        }
+
+        const result = await apiClient.setTopicProfileMe(topicId, { displayName: latestDesired });
+        if (topicDisplayNameSaveSeqRef.current !== requestId) return;
+
+        if (!result.ok) {
+          setTopicDisplayNameSave({ kind: "error", message: toFriendlyMessage(result.error) });
+          return;
+        }
+
+        const saved = result.data.displayName ?? "";
+        topicDisplayNameServerRef.current = saved;
+        if ((topicDisplayNameRef.current.trim() || "") === saved) {
+          topicDisplayNameDirtyRef.current = false;
+        }
+
+        setTopicDisplayNameSave({ kind: "saved" });
+        invalidate();
+        window.setTimeout(() => {
+          setTopicDisplayNameSave((prev) => (prev.kind === "saved" ? { kind: "idle" } : prev));
+        }, 1400);
+      })();
+    }, 650);
+
+    return () => {
+      if (topicDisplayNameSaveTimerRef.current !== null) {
+        window.clearTimeout(topicDisplayNameSaveTimerRef.current);
+        topicDisplayNameSaveTimerRef.current = null;
+      }
+    };
+  }, [hasIdentity, invalidate, topicDisplayName, topicId]);
 
   // Ledger
   useEffect(() => {
@@ -515,6 +893,12 @@ export function TopicStage({ topicId }: Props) {
       }
 
       setLedger(result.data);
+
+      const nextDisplayName = result.data.displayName ?? "";
+      topicDisplayNameServerRef.current = nextDisplayName;
+      if (!topicDisplayNameDirtyRef.current) {
+        setTopicDisplayName(nextDisplayName);
+      }
     })();
 
     return () => {
@@ -558,7 +942,85 @@ export function TopicStage({ topicId }: Props) {
     return argumentById.get(selectedArgumentId) ?? null;
   }, [argumentById, selectedArgumentId]);
 
+  // Fetch full argument detail (includes bodyRich) for the reader/edit flows.
+  useEffect(() => {
+    if (!selectedArgumentId) {
+      setSelectedArgumentDetail(null);
+      setSelectedArgumentDetailError("");
+      setIsLoadingSelectedArgumentDetail(false);
+      return;
+    }
+
+    let cancelled = false;
+    setSelectedArgumentDetail(null);
+    setSelectedArgumentDetailError("");
+    setIsLoadingSelectedArgumentDetail(true);
+
+    (async () => {
+      const result = await apiClient.getArgument(selectedArgumentId, topicId);
+      if (cancelled) return;
+      setIsLoadingSelectedArgumentDetail(false);
+
+      if (!result.ok) {
+        setSelectedArgumentDetailError(result.error.message);
+        setSelectedArgumentDetail(null);
+        return;
+      }
+
+      setSelectedArgumentDetail(result.data.argument);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshToken, selectedArgumentId]);
+
+  useEffect(() => {
+    setIsEditOpen(false);
+    setEditError("");
+    setIsSavingEdit(false);
+    setEditTitle("");
+  }, [selectedArgumentId]);
+
+  const readArgument = useMemo(() => {
+    if (!selectedArgumentId) return null;
+    if (selectedArgumentDetail?.id === selectedArgumentId) return selectedArgumentDetail;
+    return selectedArgument;
+  }, [selectedArgument, selectedArgumentDetail, selectedArgumentId]);
+
+  const canEditSelectedArgument =
+    hasIdentity === true &&
+    topicStatus === "active" &&
+    myAuthorId !== null &&
+    readArgument !== null &&
+    readArgument.authorId === myAuthorId;
+
+  const canOpenEdit =
+    canEditSelectedArgument &&
+    selectedArgumentDetail?.id === selectedArgumentId &&
+    !isLoadingSelectedArgumentDetail &&
+    !selectedArgumentDetailError;
+
   const rootArgumentId = tree.status === "success" ? tree.topic.rootArgumentId : null;
+  const hasRestoredReplySelectionRef = useRef(false);
+  const hasAutoOpenedManageRef = useRef(false);
+
+  useEffect(() => {
+    if (hasRestoredReplySelectionRef.current) return;
+    if (tree.status !== "success") return;
+
+    try {
+      const lastParentId = draftStore.getReplyMeta(topicId)?.lastParentId ?? null;
+      if (lastParentId && argumentById.has(lastParentId)) {
+        setSelectedArgumentId(lastParentId);
+      }
+    } catch {
+      // ignore
+    }
+
+    setIsReplyDraftHydrated(true);
+    hasRestoredReplySelectionRef.current = true;
+  }, [argumentById, draftStore, topicId, tree.status]);
 
   const isOwner =
     hasIdentity === true &&
@@ -566,6 +1028,17 @@ export function TopicStage({ topicId }: Props) {
     tree.status === "success" &&
     tree.topic.ownerPubkey !== null &&
     identityPubkeyHex === tree.topic.ownerPubkey;
+
+  useEffect(() => {
+    if (hasAutoOpenedManageRef.current) return;
+
+    const wantsManage = searchParams.get("manage");
+    if (wantsManage !== "1" && wantsManage !== "true") return;
+    if (!isOwner) return;
+
+    hasAutoOpenedManageRef.current = true;
+    setIsManageOpen(true);
+  }, [isOwner, searchParams]);
 
   const sunburstTree = useMemo(() => {
     if (tree.status !== "success") return null;
@@ -583,13 +1056,14 @@ export function TopicStage({ topicId }: Props) {
   // Hide hover card when entering read mode
   useEffect(() => {
     lastPointerSideRef.current = null;
+    setQuoteHint(null);
     if (selectedArgumentId) {
       setHoverCard(null);
       setActiveSide(null);
     }
   }, [selectedArgumentId]);
 
-  const handleMouseMove = (event: React.MouseEvent<HTMLElement>) => {
+  const handlePointerMove = (event: React.PointerEvent<HTMLElement>) => {
     if (selectedArgumentId) return;
 
     const rect = leftColumnRef.current?.getBoundingClientRect();
@@ -607,6 +1081,69 @@ export function TopicStage({ topicId }: Props) {
     lastPointerSideRef.current = side;
     setActiveSide(side);
   };
+
+  useEffect(() => {
+    if (!selectedArgumentId) return;
+
+    const clear = () => setQuoteHint(null);
+
+    const handleSelectionChange = () => {
+      const container = readerContentRef.current;
+      if (!container) {
+        clear();
+        return;
+      }
+
+      const selection = document.getSelection();
+      if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+        clear();
+        return;
+      }
+
+      const text = selection.toString();
+      if (!text.trim()) {
+        clear();
+        return;
+      }
+
+      const anchorNode = selection.anchorNode;
+      const focusNode = selection.focusNode;
+      if (!anchorNode || !focusNode) {
+        clear();
+        return;
+      }
+      if (!container.contains(anchorNode) || !container.contains(focusNode)) {
+        clear();
+        return;
+      }
+
+      let rect: DOMRect | null = null;
+      try {
+        rect = selection.getRangeAt(0).getBoundingClientRect();
+      } catch {
+        rect = null;
+      }
+      if (!rect || (rect.width === 0 && rect.height === 0)) {
+        clear();
+        return;
+      }
+
+      const padding = 12;
+      const x = Math.min(window.innerWidth - padding, Math.max(padding, rect.right));
+      const y = Math.min(window.innerHeight - padding, Math.max(padding, rect.top));
+      setQuoteHint({ text: text.trim(), x, y });
+    };
+
+    document.addEventListener("selectionchange", handleSelectionChange);
+    document.addEventListener("scroll", clear, true);
+    window.addEventListener("resize", clear);
+
+    return () => {
+      document.removeEventListener("selectionchange", handleSelectionChange);
+      document.removeEventListener("scroll", clear, true);
+      window.removeEventListener("resize", clear);
+    };
+  }, [selectedArgumentId]);
 
   const sunburstSize = selectedArgumentId ? 240 : 360;
 
@@ -628,10 +1165,96 @@ export function TopicStage({ topicId }: Props) {
   };
 
   // Reply editor (shared for Explore + Read)
+  const [replyTitle, setReplyTitle] = useState("");
   const [replyText, setReplyText] = useState("");
   const [replyError, setReplyError] = useState("");
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
-  const [isReplyEditorMode, setIsReplyEditorMode] = useState(false);
+  const [isReplyEditorMode, setIsReplyEditorMode] = useState(true);
+  const [isReplyDraftHydrated, setIsReplyDraftHydrated] = useState(false);
+  const replyTitleRef = useRef(replyTitle);
+  replyTitleRef.current = replyTitle;
+
+  type AutosaveState =
+    | { kind: "idle" }
+    | { kind: "saving" }
+    | { kind: "saved"; savedAt: string }
+    | { kind: "error"; message: string };
+
+  const [replyAutosave, setReplyAutosave] = useState<AutosaveState>({ kind: "idle" });
+  const replyAutosaveTimerRef = useRef<number | null>(null);
+  const replyAutosavePendingRef = useRef<{
+    parentId: string;
+    selectionId: string | null;
+    title: string;
+    body: string;
+    bodyRich: TiptapDoc | null;
+  } | null>(null);
+  const skipReplyAutosaveRef = useRef(false);
+
+  const replyDraftParentId = selectedArgumentId ?? rootArgumentId;
+  const replyDraftParentIdRef = useRef<string | null>(null);
+  replyDraftParentIdRef.current = replyDraftParentId;
+
+  const commitPendingReplyDraft = useCallback((options?: { silent?: boolean }) => {
+    if (replyAutosaveTimerRef.current !== null) {
+      window.clearTimeout(replyAutosaveTimerRef.current);
+      replyAutosaveTimerRef.current = null;
+    }
+
+    const pending = replyAutosavePendingRef.current;
+    if (!pending) return;
+    replyAutosavePendingRef.current = null;
+
+    try {
+      const saved = draftStore.setReplyDraft(topicId, pending.parentId, {
+        title: pending.title,
+        body: pending.body,
+        bodyRich: pending.bodyRich,
+      });
+      draftStore.setReplyMeta(topicId, { lastParentId: pending.selectionId });
+
+      if (!saved) {
+        if (!options?.silent) {
+          setReplyAutosave({ kind: "idle" });
+        }
+        return;
+      }
+
+      if (!options?.silent) {
+        setReplyAutosave({ kind: "saved", savedAt: saved.updatedAt });
+      }
+    } catch {
+      if (!options?.silent) {
+        setReplyAutosave({ kind: "error", message: "本地缓存不可用" });
+      }
+    }
+  }, [draftStore, topicId]);
+
+  const enqueueReplyDraftSave = useCallback(
+    (input: { title: string; body: string; bodyRich: TiptapDoc | null }) => {
+      if (skipReplyAutosaveRef.current) return;
+      const parentId = replyDraftParentIdRef.current;
+      if (!parentId) return;
+
+      replyAutosavePendingRef.current = {
+        parentId,
+        selectionId: selectedArgumentIdRef.current,
+        title: input.title,
+        body: input.body,
+        bodyRich: input.bodyRich,
+      };
+      setReplyAutosave({ kind: "saving" });
+
+      if (replyAutosaveTimerRef.current !== null) {
+        window.clearTimeout(replyAutosaveTimerRef.current);
+      }
+      replyAutosaveTimerRef.current = window.setTimeout(() => {
+        replyAutosaveTimerRef.current = null;
+        commitPendingReplyDraft({ silent: false });
+      }, 800);
+    },
+    [commitPendingReplyDraft],
+  );
 
   const canCreateArgument = hasIdentity === true && topicStatus === "active";
 
@@ -668,12 +1291,138 @@ export function TopicStage({ topicId }: Props) {
     onUpdate: ({ editor }) => {
       setReplyError("");
       setReplyText(editor.getText());
+
+      const body = editor.getText();
+      const bodyRich = editor.getJSON() as unknown as TiptapDoc;
+      enqueueReplyDraftSave({
+        title: replyTitleRef.current,
+        body,
+        bodyRich: bodyRich ?? null,
+      });
     },
   });
 
   useEffect(() => {
     replyEditor?.setEditable(canCreateArgument);
   }, [replyEditor, canCreateArgument]);
+
+  const handleReplyTitleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const nextTitle = event.target.value;
+    replyTitleRef.current = nextTitle;
+    setReplyTitle(nextTitle);
+
+    const body = replyEditor?.getText() ?? replyText;
+    const bodyRich = replyEditor ? (replyEditor.getJSON() as unknown as TiptapDoc) : null;
+    enqueueReplyDraftSave({
+      title: nextTitle,
+      body,
+      bodyRich: bodyRich ?? null,
+    });
+  };
+
+  useEffect(() => {
+    if (!isReplyDraftHydrated) return;
+    if (!replyEditor) return;
+    if (!replyDraftParentId) return;
+
+    commitPendingReplyDraft({ silent: true });
+    setReplyError("");
+
+    let draft = null;
+    try {
+      draft = draftStore.getReplyDraft(topicId, replyDraftParentId);
+    } catch {
+      draft = null;
+    }
+
+    const nextDoc = (() => {
+      if (!draft) return null;
+      const parsed = draft.bodyRich ? zTiptapDoc.safeParse(draft.bodyRich) : null;
+      if (parsed?.success) return parsed.data;
+      return draft.body.trim() ? plainTextToTiptapDoc(draft.body) : null;
+    })();
+
+    skipReplyAutosaveRef.current = true;
+
+    if (nextDoc) {
+      replyEditor.commands.setContent(nextDoc as any, true);
+      setReplyAutosave({ kind: "saved", savedAt: draft?.updatedAt ?? new Date().toISOString() });
+      setReplyTitle(draft?.title ?? "");
+    } else {
+      replyEditor.commands.clearContent(true);
+      setReplyAutosave({ kind: "idle" });
+      setReplyTitle(draft?.title ?? "");
+    }
+
+    window.setTimeout(() => {
+      skipReplyAutosaveRef.current = false;
+    }, 0);
+  }, [
+    commitPendingReplyDraft,
+    draftStore,
+    isReplyDraftHydrated,
+    replyDraftParentId,
+    replyEditor,
+    topicId,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      commitPendingReplyDraft({ silent: true });
+    };
+  }, [commitPendingReplyDraft]);
+
+  const editEditor = useEditor({
+    extensions: [
+      StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
+      Placeholder.configure({
+        placeholder: "修改你的观点…",
+      }),
+      Typography,
+      Underline,
+      TipTapLink.configure({ openOnClick: false }),
+    ],
+    content: "",
+    editorProps: {
+      attributes: {
+        "aria-label": "Edit argument",
+        class: [
+          "w-full min-h-[220px] p-4 text-foreground outline-none",
+          "prose prose-base max-w-none",
+          "prose-headings:font-serif prose-headings:tracking-tight",
+          "prose-a:text-accent prose-a:underline prose-a:decoration-border/70 hover:prose-a:text-foreground",
+          "prose-blockquote:border-l-border prose-blockquote:text-muted-foreground",
+          "prose-code:before:content-none prose-code:after:content-none",
+          "prose-pre:rounded-md prose-pre:border prose-pre:border-border/60 prose-pre:bg-[color:var(--muted)]",
+          "[&>p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)]",
+          "[&>p.is-editor-empty:first-child::before]:text-muted-foreground",
+          "[&>p.is-editor-empty:first-child::before]:float-left",
+          "[&>p.is-editor-empty:first-child::before]:h-0",
+          "[&>p.is-editor-empty:first-child::before]:pointer-events-none",
+        ].join(" "),
+      },
+    },
+    onUpdate: ({ editor }) => {
+      setEditError("");
+      setEditText(editor.getText());
+    },
+  });
+
+  useEffect(() => {
+    editEditor?.setEditable(canEditSelectedArgument);
+  }, [editEditor, canEditSelectedArgument]);
+
+  useEffect(() => {
+    if (!isEditOpen) return;
+    if (!editEditor) return;
+    if (!readArgument) return;
+
+    const doc = readArgument.bodyRich ?? plainTextToTiptapDoc(readArgument.body);
+    editEditor.commands.setContent(doc as any, true);
+    setEditText(editEditor.getText());
+    setEditTitle(readArgument.title ?? "");
+    setEditError("");
+  }, [editEditor, isEditOpen, readArgument?.id]);
 
   async function submitReply() {
     if (!replyEditor) return;
@@ -697,7 +1446,7 @@ export function TopicStage({ topicId }: Props) {
 
     const result = await apiClient.createArgument(topicId, {
       parentId,
-      title: null,
+      title: replyTitle.trim() ? replyTitle.trim() : null,
       body,
       bodyRich,
       initialVotes: 0,
@@ -712,10 +1461,100 @@ export function TopicStage({ topicId }: Props) {
 
     setLedger(result.data.ledger);
     invalidate();
+    try {
+      draftStore.removeReplyDraft(topicId, parentId);
+      draftStore.setReplyMeta(topicId, { lastParentId: selectedArgumentId });
+    } catch {
+      // ignore
+    }
+    setReplyAutosave({ kind: "idle" });
+    skipReplyAutosaveRef.current = true;
+    setReplyTitle("");
     replyEditor.commands.clearContent(true);
+    window.setTimeout(() => {
+      skipReplyAutosaveRef.current = false;
+    }, 0);
     setReplyText("");
     toast({ variant: "success", title: "post", message: "观点提交成功" });
   }
+
+  async function submitEdit() {
+    if (!editEditor) return;
+    if (!canOpenEdit) return;
+    if (!readArgument) return;
+
+    const body = editEditor.getText().trim();
+    if (!body) {
+      setEditError("请输入观点内容");
+      return;
+    }
+
+    setEditError("");
+    setIsSavingEdit(true);
+
+    const bodyRichResult = zTiptapDoc.safeParse(editEditor.getJSON());
+    const bodyRich = bodyRichResult.success ? bodyRichResult.data : null;
+
+    const result = await apiClient.editArgument(topicId, readArgument.id, {
+      title: editTitle.trim() ? editTitle.trim() : null,
+      body,
+      bodyRich,
+    });
+
+    setIsSavingEdit(false);
+
+    if (!result.ok) {
+      setEditError(toFriendlyMessage(result.error));
+      return;
+    }
+
+    setSelectedArgumentDetail(result.data.argument);
+    invalidate();
+    setIsEditOpen(false);
+    toast({ variant: "success", title: "edit", message: "已更新" });
+  }
+
+  const insertQuote = useCallback(
+    (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+
+      const targetEditor = isEditOpen ? editEditor : replyEditor;
+      if (!targetEditor) return;
+
+      if (!targetEditor.isEditable) {
+        toast({ variant: "warn", title: "quote", message: "当前不可编辑" });
+        return;
+      }
+
+      const quoteDoc = plainTextToTiptapDoc(trimmed);
+      const quoteContent = quoteDoc.content ?? [];
+
+      targetEditor
+        .chain()
+        .focus("end")
+        .insertContent(
+          [
+            { type: "blockquote", content: quoteContent },
+            { type: "paragraph", content: [] },
+          ] as any,
+          { updateSelection: true } as any,
+        )
+        .run();
+    },
+    [editEditor, isEditOpen, replyEditor, toast],
+  );
+
+  const handleInsertQuote = useCallback(() => {
+    if (!quoteHint) return;
+    insertQuote(quoteHint.text);
+    setQuoteHint(null);
+    try {
+      document.getSelection()?.removeAllRanges();
+    } catch {
+      // ignore
+    }
+  }, [insertQuote, quoteHint]);
 
   if (tree.status === "loading") {
     return (
@@ -739,12 +1578,74 @@ export function TopicStage({ topicId }: Props) {
   const argumentCount = Math.max(0, tree.arguments.length - 1);
   const currentVotes = selectedArgumentId ? stakesByArgumentId[selectedArgumentId] ?? 0 : 0;
 
+  const claimInfo =
+    hasIdentity === true && topic.ownerPubkey === null
+      ? (() => {
+          try {
+            return claimTokenStore.get(topicId);
+          } catch {
+            return null;
+          }
+        })()
+      : null;
+
+  async function claimOwner() {
+    if (hasIdentity !== true) return;
+    if (topic.ownerPubkey !== null) return;
+    if (!claimInfo) return;
+
+    setClaimError("");
+    setIsClaiming(true);
+    const result = await apiClient.executeTopicCommand(
+      topicId,
+      { type: "CLAIM_OWNER", payload: {} },
+      { "x-claim-token": claimInfo.claimToken },
+    );
+    setIsClaiming(false);
+
+    if (!result.ok) {
+      setClaimError(result.error.message);
+      toast({ variant: "error", title: "claim", message: result.error.message });
+      if (
+        result.error.kind === "http" &&
+        (result.error.code === "CLAIM_TOKEN_EXPIRED" || result.error.code === "CLAIM_TOKEN_INVALID")
+      ) {
+        try {
+          claimTokenStore.remove(topicId);
+        } catch {
+          // ignore
+        }
+      }
+      return;
+    }
+
+    try {
+      claimTokenStore.remove(topicId);
+    } catch {
+      // ignore
+    }
+    toast({ variant: "success", title: "host", message: "Host claimed for this topic." });
+    invalidate();
+  }
+
   return (
     <>
+      {quoteHint ? (
+        <P5Button
+          size="sm"
+          variant="ghost"
+          className="fixed z-50 h-8 px-3 border border-border bg-background shadow-lg"
+          style={{ left: quoteHint.x, top: quoteHint.y, transform: "translate(-100%, -120%)" }}
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={handleInsertQuote}
+        >
+          引用
+        </P5Button>
+      ) : null}
       <div
         className="flex min-h-0 flex-1 flex-col gap-4 p-4 md:p-6"
-        onMouseMove={handleMouseMove}
-        onMouseLeave={() => {
+        onPointerMoveCapture={handlePointerMove}
+        onPointerLeave={() => {
           if (!selectedArgumentId) {
             lastPointerSideRef.current = null;
             setActiveSide(null);
@@ -848,7 +1749,7 @@ export function TopicStage({ topicId }: Props) {
 
                         <div className="mt-3 flex items-center justify-between border-t border-border/60 pt-2 text-[10px] text-muted-foreground">
                           <span title={hoverCard.argument.authorId}>
-                            {authorLabel(hoverCard.argument.authorId)}
+                            {authorLabel(hoverCard.argument.authorId, hoverCard.argument.authorDisplayName)}
                           </span>
                           <span>{hoverCard.argument.totalVotes} votes</span>
                         </div>
@@ -870,6 +1771,41 @@ export function TopicStage({ topicId }: Props) {
               >
                 查看 AI 分析报告
               </P5Button>
+
+              {claimError ? (
+                <div className="mt-3">
+                  <P5Alert role="alert" variant="error" title="claim">
+                    {claimError}
+                  </P5Alert>
+                </div>
+              ) : null}
+
+              {claimInfo ? (
+                <div className="mt-3">
+                  <P5Button
+                    variant="primary"
+                    size="sm"
+                    className="w-full justify-center border border-border"
+                    onClick={claimOwner}
+                    disabled={isClaiming}
+                  >
+                    {isClaiming ? "Claiming…" : "Claim Host"}
+                  </P5Button>
+                </div>
+              ) : null}
+
+              {isOwner ? (
+                <div className="mt-3">
+                  <P5Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-center border border-border bg-background"
+                    onClick={() => setIsManageOpen(true)}
+                  >
+                    Host 管理
+                  </P5Button>
+                </div>
+              ) : null}
 
               <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
                 <Link href="/" className="hover:text-foreground">
@@ -895,49 +1831,71 @@ export function TopicStage({ topicId }: Props) {
 
           {/* Right: Reader */}
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
-            {selectedArgument ? (
+            {readArgument ? (
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <div className="border-b border-border/60 px-6 py-6">
                   <h1 className="font-serif text-2xl leading-tight text-foreground">
-                    {toTitle(selectedArgument)}
+                    {toTitle(readArgument)}
                   </h1>
-                  <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                    <span title={selectedArgument.authorId}>
-                      {authorLabel(selectedArgument.authorId)}
-                      <span className="ml-2 font-mono text-xs text-muted-foreground/80">
-                        {formatAuthorFingerprint(selectedArgument.authorId)}
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                      <span title={readArgument.authorId}>
+                        {authorLabel(readArgument.authorId, readArgument.authorDisplayName)}
                       </span>
-                    </span>
-                    <span aria-hidden className="text-border">
-                      ·
-                    </span>
-                    <span>{new Date(selectedArgument.createdAt).toLocaleDateString()}</span>
-                    <span aria-hidden className="text-border">
-                      ·
-                    </span>
-                    <span>{selectedArgument.totalVotes} votes</span>
+                      <span aria-hidden className="text-border">
+                        ·
+                      </span>
+                      <span>{new Date(readArgument.createdAt).toLocaleDateString()}</span>
+                      <span aria-hidden className="text-border">
+                        ·
+                      </span>
+                      <span>{readArgument.totalVotes} votes</span>
+                    </div>
+
+                    {canEditSelectedArgument ? (
+                      <P5Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 px-3 border border-border bg-background"
+                        onClick={() => {
+                          if (!canOpenEdit) return;
+                          setIsEditOpen(true);
+                        }}
+                        disabled={!canOpenEdit}
+                        title={
+                          selectedArgumentDetailError
+                            ? "加载失败"
+                            : isLoadingSelectedArgumentDetail
+                              ? "加载中…"
+                              : "编辑"
+                        }
+                      >
+                        {isLoadingSelectedArgumentDetail ? "加载中…" : "编辑"}
+                      </P5Button>
+                    ) : null}
                   </div>
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-y-auto px-6 py-8">
-                  <div className="mx-auto w-full max-w-[760px]">
-                    <div
-                      className={[
-                        "prose prose-lg max-w-none",
-                        "prose-headings:font-serif prose-headings:tracking-tight",
-                        "prose-a:text-accent prose-a:underline prose-a:decoration-border/70 hover:prose-a:text-foreground",
+	                  <div className="mx-auto w-full max-w-[760px]">
+	                    <div
+	                      ref={readerContentRef}
+	                      className={[
+	                        "prose prose-lg max-w-none",
+	                        "prose-headings:font-serif prose-headings:tracking-tight",
+	                        "prose-a:text-accent prose-a:underline prose-a:decoration-border/70 hover:prose-a:text-foreground",
                         "prose-blockquote:border-l-border prose-blockquote:text-muted-foreground",
                         "prose-code:before:content-none prose-code:after:content-none",
                         "prose-pre:rounded-md prose-pre:border prose-pre:border-border/60 prose-pre:bg-[color:var(--muted)]",
                       ].join(" ")}
                     >
-                      {selectedArgument.bodyRich ? (
+                      {readArgument.bodyRich ? (
                         <TiptapRenderer
-                          doc={selectedArgument.bodyRich}
-                          fallback={selectedArgument.body}
+                          doc={readArgument.bodyRich}
+                          fallback={readArgument.body}
                         />
                       ) : (
-                        <p className="whitespace-pre-wrap">{selectedArgument.body}</p>
+                        <p className="whitespace-pre-wrap">{readArgument.body}</p>
                       )}
                     </div>
                   </div>
@@ -954,173 +1912,51 @@ export function TopicStage({ topicId }: Props) {
                 {hasIdentity ? (
                   <VoteStepper
                     topicId={topicId}
-                    argument={selectedArgument}
+                    argument={readArgument}
                     topicStatus={topic.status}
                     ledger={ledger}
                     currentVotes={currentVotes}
                     onLedgerUpdated={setLedger}
                     onVotesUpdated={(votes) => {
-                      setStakesByArgumentId((prev) => ({ ...prev, [selectedArgument.id]: votes }));
+                      setStakesByArgumentId((prev) => ({ ...prev, [readArgument.id]: votes }));
                     }}
                     onInvalidate={invalidate}
                   />
                 ) : null}
 
-                <div className="border-t border-border/60 px-6 py-4">
-                  <div className="mx-auto w-full max-w-[760px]">
-                    <div className="overflow-hidden rounded-lg border border-border/60 bg-background">
-                      {isReplyEditorMode ? (
-                        <div className="flex flex-wrap items-center gap-1 border-b border-border/60 bg-[color:var(--muted)] px-3 py-2">
-                          <P5Button
-                            size="sm"
-                            variant="ghost"
-                            className={[
-                              "h-8 w-8 p-0 border border-border bg-background",
-                              replyEditor?.isActive("bold") ? "bg-muted" : "",
-                            ].join(" ")}
-                            onClick={() => replyEditor?.chain().focus().toggleBold().run()}
-                            aria-label="Bold"
-                          >
-                            B
-                          </P5Button>
-                          <P5Button
-                            size="sm"
-                            variant="ghost"
-                            className={[
-                              "h-8 w-8 p-0 border border-border bg-background italic",
-                              replyEditor?.isActive("italic") ? "bg-muted" : "",
-                            ].join(" ")}
-                            onClick={() => replyEditor?.chain().focus().toggleItalic().run()}
-                            aria-label="Italic"
-                          >
-                            I
-                          </P5Button>
-                          <P5Button
-                            size="sm"
-                            variant="ghost"
-                            className={[
-                              "h-8 w-8 p-0 border border-border bg-background underline",
-                              replyEditor?.isActive("underline") ? "bg-muted" : "",
-                            ].join(" ")}
-                            onClick={() => replyEditor?.chain().focus().toggleUnderline().run()}
-                            aria-label="Underline"
-                          >
-                            U
-                          </P5Button>
+	                <div className="border-t border-border/60 px-6 py-4">
+	                  <div className="mx-auto w-full max-w-[760px]">
+	                    <div className="overflow-hidden rounded-lg border border-border/60 bg-background">
+	                      <div className="border-b border-border/60 bg-background">
+	                        <P5Input
+	                          value={replyTitle}
+	                          onChange={handleReplyTitleChange}
+	                          placeholder="标题（可选）"
+	                          className="h-11 border-0 rounded-none shadow-none font-serif text-base"
+	                          maxLength={160}
+	                          disabled={!canCreateArgument || isSubmittingReply}
+	                        />
+	                      </div>
+	                      {isReplyEditorMode ? (
+	                        <RichTextToolbar
+	                          editor={replyEditor}
+	                          onRequestHideToolbar={() => setIsReplyEditorMode(false)}
+	                        />
+	                      ) : (
+	                        <div className="border-b border-border/60 bg-[color:var(--muted)] px-3 py-2">
+	                          <P5Button
+	                            size="sm"
+	                            variant="ghost"
+	                            className="h-8 px-3 border border-border bg-background"
+	                            onClick={() => setIsReplyEditorMode(true)}
+	                          >
+	                            显示工具栏
+	                          </P5Button>
+	                        </div>
+	                      )}
 
-                          <div className="mx-1 h-4 w-px bg-border/80" />
-
-                          <P5Button
-                            size="sm"
-                            variant="ghost"
-                            className={[
-                              "h-8 px-2 border border-border bg-background",
-                              replyEditor?.isActive("heading", { level: 2 }) ? "bg-muted" : "",
-                            ].join(" ")}
-                            onClick={() => replyEditor?.chain().focus().toggleHeading({ level: 2 }).run()}
-                            aria-label="Heading 2"
-                          >
-                            H2
-                          </P5Button>
-                          <P5Button
-                            size="sm"
-                            variant="ghost"
-                            className={[
-                              "h-8 px-2 border border-border bg-background",
-                              replyEditor?.isActive("heading", { level: 3 }) ? "bg-muted" : "",
-                            ].join(" ")}
-                            onClick={() => replyEditor?.chain().focus().toggleHeading({ level: 3 }).run()}
-                            aria-label="Heading 3"
-                          >
-                            H3
-                          </P5Button>
-
-                          <div className="mx-1 h-4 w-px bg-border/80" />
-
-                          <P5Button
-                            size="sm"
-                            variant="ghost"
-                            className={[
-                              "h-8 px-2 border border-border bg-background",
-                              replyEditor?.isActive("bulletList") ? "bg-muted" : "",
-                            ].join(" ")}
-                            onClick={() => replyEditor?.chain().focus().toggleBulletList().run()}
-                            aria-label="Bullet list"
-                          >
-                            •
-                          </P5Button>
-                          <P5Button
-                            size="sm"
-                            variant="ghost"
-                            className={[
-                              "h-8 px-2 border border-border bg-background",
-                              replyEditor?.isActive("orderedList") ? "bg-muted" : "",
-                            ].join(" ")}
-                            onClick={() => replyEditor?.chain().focus().toggleOrderedList().run()}
-                            aria-label="Ordered list"
-                          >
-                            1.
-                          </P5Button>
-                          <P5Button
-                            size="sm"
-                            variant="ghost"
-                            className={[
-                              "h-8 px-2 border border-border bg-background",
-                              replyEditor?.isActive("blockquote") ? "bg-muted" : "",
-                            ].join(" ")}
-                            onClick={() => replyEditor?.chain().focus().toggleBlockquote().run()}
-                            aria-label="Blockquote"
-                          >
-                            “
-                          </P5Button>
-                          <P5Button
-                            size="sm"
-                            variant="ghost"
-                            className={[
-                              "h-8 px-2 border border-border bg-background font-mono",
-                              replyEditor?.isActive("codeBlock") ? "bg-muted" : "",
-                            ].join(" ")}
-                            onClick={() => replyEditor?.chain().focus().toggleCodeBlock().run()}
-                            aria-label="Code block"
-                          >
-                            {"</>"}
-                          </P5Button>
-
-                          <div className="mx-1 h-4 w-px bg-border/80" />
-
-                          <P5Button
-                            size="sm"
-                            variant="ghost"
-                            className={[
-                              "h-8 px-2 border border-border bg-background",
-                              replyEditor?.isActive("link") ? "bg-muted" : "",
-                            ].join(" ")}
-                            onClick={() => {
-                              if (!replyEditor) return;
-                              const previousUrl = replyEditor.getAttributes("link").href as string | undefined;
-                              const nextUrl = window.prompt("Link URL", previousUrl ?? "");
-                              if (nextUrl === null) return;
-                              const trimmed = nextUrl.trim();
-                              if (!trimmed) {
-                                replyEditor.chain().focus().unsetLink().run();
-                                return;
-                              }
-                              replyEditor
-                                .chain()
-                                .focus()
-                                .extendMarkRange("link")
-                                .setLink({ href: trimmed })
-                                .run();
-                            }}
-                            aria-label="Link"
-                          >
-                            ↗
-                          </P5Button>
-                        </div>
-                      ) : null}
-
-                      <EditorContent editor={replyEditor} />
-                    </div>
+	                      <EditorContent editor={replyEditor} />
+	                    </div>
 
                     {replyError ? (
                       <p role="alert" className="mt-2 text-xs text-destructive">
@@ -1128,34 +1964,58 @@ export function TopicStage({ topicId }: Props) {
                       </p>
                     ) : null}
 
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                      <P5Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 px-3 border border-border bg-background"
-                        onClick={() => setIsReplyEditorMode((prev) => !prev)}
-                      >
-                        {isReplyEditorMode ? "简洁" : "编辑器"}
-                      </P5Button>
-
-                      <div className="flex items-center gap-2">
-                        <P5Input
-                          value={topicDisplayName}
-                          onChange={(e) => setTopicDisplayName(e.target.value)}
-                          placeholder="你在此议题的名字"
-                          className="h-8 w-[180px] py-0 text-xs"
-                          maxLength={40}
-                          disabled={!hasIdentity}
-                        />
-                        <P5Button
-                          variant="ink"
-                          size="sm"
-                          onClick={submitReply}
-                          disabled={!canCreateArgument || isSubmittingReply || !replyText.trim()}
+	                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+	                      {replyAutosave.kind !== "idle" ? (
+	                        <span
+	                          className={[
+	                            "text-xs",
+                            replyAutosave.kind === "error" ? "text-destructive" : "text-muted-foreground",
+                          ].join(" ")}
                         >
-                          {isSubmittingReply ? "提交中…" : "提交"}
-                        </P5Button>
-                      </div>
+                          {replyAutosave.kind === "saving"
+                            ? "自动保存中…"
+                            : replyAutosave.kind === "saved"
+                              ? `已自动保存 ${formatSavedTime(replyAutosave.savedAt) ?? ""}`.trim()
+                              : replyAutosave.message}
+                        </span>
+                      ) : (
+	                        <span />
+	                      )}
+
+	                      <div className="flex flex-col items-end gap-1">
+	                        <div className="flex items-center gap-2">
+                            <P5Input
+                              value={topicDisplayName}
+                              onChange={handleTopicDisplayNameChange}
+                              placeholder="你在此议题的名字"
+                              className="h-8 w-[180px] py-0 text-xs"
+                              maxLength={40}
+                              disabled={!hasIdentity}
+                            />
+                            <P5Button
+                              variant="ink"
+                              size="sm"
+                              onClick={submitReply}
+                              disabled={!canCreateArgument || isSubmittingReply || !replyText.trim()}
+                            >
+                              {isSubmittingReply ? "提交中…" : "提交"}
+                            </P5Button>
+                          </div>
+                          {topicDisplayNameSave.kind !== "idle" ? (
+                            <span
+                              className={[
+                                "text-[10px]",
+                                topicDisplayNameSave.kind === "error" ? "text-destructive" : "text-muted-foreground",
+                              ].join(" ")}
+                            >
+                              {topicDisplayNameSave.kind === "saving"
+                                ? "名字保存中…"
+                                : topicDisplayNameSave.kind === "saved"
+                                  ? "名字已保存"
+                                  : topicDisplayNameSave.message}
+                            </span>
+                          ) : null}
+                        </div>
                     </div>
                   </div>
                 </div>
@@ -1167,160 +2027,38 @@ export function TopicStage({ topicId }: Props) {
                   点击旭日图中的任意区块来查看详情并参与讨论。你也可以直接在下方提出一个新观点（默认发布在 root 下）。
                 </p>
 
-                <div className="mt-8 w-full max-w-[760px]">
-                  <div className="overflow-hidden rounded-lg border border-border/60 bg-background">
-                    {isReplyEditorMode ? (
-                      <div className="flex flex-wrap items-center gap-1 border-b border-border/60 bg-[color:var(--muted)] px-3 py-2">
-                        <P5Button
-                          size="sm"
-                          variant="ghost"
-                          className={[
-                            "h-8 w-8 p-0 border border-border bg-background",
-                            replyEditor?.isActive("bold") ? "bg-muted" : "",
-                          ].join(" ")}
-                          onClick={() => replyEditor?.chain().focus().toggleBold().run()}
-                          aria-label="Bold"
-                        >
-                          B
-                        </P5Button>
-                        <P5Button
-                          size="sm"
-                          variant="ghost"
-                          className={[
-                            "h-8 w-8 p-0 border border-border bg-background italic",
-                            replyEditor?.isActive("italic") ? "bg-muted" : "",
-                          ].join(" ")}
-                          onClick={() => replyEditor?.chain().focus().toggleItalic().run()}
-                          aria-label="Italic"
-                        >
-                          I
-                        </P5Button>
-                        <P5Button
-                          size="sm"
-                          variant="ghost"
-                          className={[
-                            "h-8 w-8 p-0 border border-border bg-background underline",
-                            replyEditor?.isActive("underline") ? "bg-muted" : "",
-                          ].join(" ")}
-                          onClick={() => replyEditor?.chain().focus().toggleUnderline().run()}
-                          aria-label="Underline"
-                        >
-                          U
-                        </P5Button>
+	                <div className="mt-8 w-full max-w-[760px]">
+	                  <div className="overflow-hidden rounded-lg border border-border/60 bg-background">
+	                    <div className="border-b border-border/60 bg-background">
+	                      <P5Input
+	                        value={replyTitle}
+	                        onChange={handleReplyTitleChange}
+	                        placeholder="标题（可选）"
+	                        className="h-11 border-0 rounded-none shadow-none font-serif text-base"
+	                        maxLength={160}
+	                        disabled={!canCreateArgument || isSubmittingReply}
+	                      />
+	                    </div>
+	                    {isReplyEditorMode ? (
+	                      <RichTextToolbar
+	                        editor={replyEditor}
+	                        onRequestHideToolbar={() => setIsReplyEditorMode(false)}
+	                      />
+	                    ) : (
+	                      <div className="border-b border-border/60 bg-[color:var(--muted)] px-3 py-2">
+	                        <P5Button
+	                          size="sm"
+	                          variant="ghost"
+	                          className="h-8 px-3 border border-border bg-background"
+	                          onClick={() => setIsReplyEditorMode(true)}
+	                        >
+	                          显示工具栏
+	                        </P5Button>
+	                      </div>
+	                    )}
 
-                        <div className="mx-1 h-4 w-px bg-border/80" />
-
-                        <P5Button
-                          size="sm"
-                          variant="ghost"
-                          className={[
-                            "h-8 px-2 border border-border bg-background",
-                            replyEditor?.isActive("heading", { level: 2 }) ? "bg-muted" : "",
-                          ].join(" ")}
-                          onClick={() => replyEditor?.chain().focus().toggleHeading({ level: 2 }).run()}
-                          aria-label="Heading 2"
-                        >
-                          H2
-                        </P5Button>
-                        <P5Button
-                          size="sm"
-                          variant="ghost"
-                          className={[
-                            "h-8 px-2 border border-border bg-background",
-                            replyEditor?.isActive("heading", { level: 3 }) ? "bg-muted" : "",
-                          ].join(" ")}
-                          onClick={() => replyEditor?.chain().focus().toggleHeading({ level: 3 }).run()}
-                          aria-label="Heading 3"
-                        >
-                          H3
-                        </P5Button>
-
-                        <div className="mx-1 h-4 w-px bg-border/80" />
-
-                        <P5Button
-                          size="sm"
-                          variant="ghost"
-                          className={[
-                            "h-8 px-2 border border-border bg-background",
-                            replyEditor?.isActive("bulletList") ? "bg-muted" : "",
-                          ].join(" ")}
-                          onClick={() => replyEditor?.chain().focus().toggleBulletList().run()}
-                          aria-label="Bullet list"
-                        >
-                          •
-                        </P5Button>
-                        <P5Button
-                          size="sm"
-                          variant="ghost"
-                          className={[
-                            "h-8 px-2 border border-border bg-background",
-                            replyEditor?.isActive("orderedList") ? "bg-muted" : "",
-                          ].join(" ")}
-                          onClick={() => replyEditor?.chain().focus().toggleOrderedList().run()}
-                          aria-label="Ordered list"
-                        >
-                          1.
-                        </P5Button>
-                        <P5Button
-                          size="sm"
-                          variant="ghost"
-                          className={[
-                            "h-8 px-2 border border-border bg-background",
-                            replyEditor?.isActive("blockquote") ? "bg-muted" : "",
-                          ].join(" ")}
-                          onClick={() => replyEditor?.chain().focus().toggleBlockquote().run()}
-                          aria-label="Blockquote"
-                        >
-                          “
-                        </P5Button>
-                        <P5Button
-                          size="sm"
-                          variant="ghost"
-                          className={[
-                            "h-8 px-2 border border-border bg-background font-mono",
-                            replyEditor?.isActive("codeBlock") ? "bg-muted" : "",
-                          ].join(" ")}
-                          onClick={() => replyEditor?.chain().focus().toggleCodeBlock().run()}
-                          aria-label="Code block"
-                        >
-                          {"</>"}
-                        </P5Button>
-
-                        <div className="mx-1 h-4 w-px bg-border/80" />
-
-                        <P5Button
-                          size="sm"
-                          variant="ghost"
-                          className={[
-                            "h-8 px-2 border border-border bg-background",
-                            replyEditor?.isActive("link") ? "bg-muted" : "",
-                          ].join(" ")}
-                          onClick={() => {
-                            if (!replyEditor) return;
-                            const previousUrl = replyEditor.getAttributes("link").href as string | undefined;
-                            const nextUrl = window.prompt("Link URL", previousUrl ?? "");
-                            if (nextUrl === null) return;
-                            const trimmed = nextUrl.trim();
-                            if (!trimmed) {
-                              replyEditor.chain().focus().unsetLink().run();
-                              return;
-                            }
-                            replyEditor
-                              .chain()
-                              .focus()
-                              .extendMarkRange("link")
-                              .setLink({ href: trimmed })
-                              .run();
-                          }}
-                          aria-label="Link"
-                        >
-                          ↗
-                        </P5Button>
-                      </div>
-                    ) : null}
-
-                    <EditorContent editor={replyEditor} />
-                  </div>
+	                    <EditorContent editor={replyEditor} />
+	                  </div>
 
                   {replyError ? (
                     <p role="alert" className="mt-2 text-xs text-destructive">
@@ -1328,38 +2066,62 @@ export function TopicStage({ topicId }: Props) {
                     </p>
                   ) : null}
 
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                    <P5Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 px-3 border border-border bg-background"
-                      onClick={() => setIsReplyEditorMode((prev) => !prev)}
-                    >
-                      {isReplyEditorMode ? "简洁" : "编辑器"}
-                    </P5Button>
-
-                    <div className="flex items-center gap-2">
-                      <P5Input
-                        value={topicDisplayName}
-                        onChange={(e) => setTopicDisplayName(e.target.value)}
-                        placeholder="你在此议题的名字"
-                        className="h-8 w-[180px] py-0 text-xs"
-                        maxLength={40}
-                        disabled={!hasIdentity}
-                      />
-                      <P5Button
-                        variant="ink"
-                        size="sm"
-                        onClick={submitReply}
-                        disabled={
-                          !canCreateArgument ||
-                          isSubmittingReply ||
-                          !replyText.trim() ||
-                          !rootArgumentId
-                        }
+	                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+	                    {replyAutosave.kind !== "idle" ? (
+	                      <span
+	                        className={[
+	                          "text-xs",
+                          replyAutosave.kind === "error" ? "text-destructive" : "text-muted-foreground",
+                        ].join(" ")}
                       >
-                        {isSubmittingReply ? "提交中…" : "提交观点"}
-                      </P5Button>
+                        {replyAutosave.kind === "saving"
+                          ? "自动保存中…"
+                          : replyAutosave.kind === "saved"
+                            ? `已自动保存 ${formatSavedTime(replyAutosave.savedAt) ?? ""}`.trim()
+                            : replyAutosave.message}
+                      </span>
+                    ) : (
+                      <span />
+                    )}
+
+                    <div className="flex flex-col items-end gap-1">
+                      <div className="flex items-center gap-2">
+                        <P5Input
+                          value={topicDisplayName}
+                          onChange={handleTopicDisplayNameChange}
+                          placeholder="你在此议题的名字"
+                          className="h-8 w-[180px] py-0 text-xs"
+                          maxLength={40}
+                          disabled={!hasIdentity}
+                        />
+                        <P5Button
+                          variant="ink"
+                          size="sm"
+                          onClick={submitReply}
+                          disabled={
+                            !canCreateArgument ||
+                            isSubmittingReply ||
+                            !replyText.trim() ||
+                            !rootArgumentId
+                          }
+                        >
+                          {isSubmittingReply ? "提交中…" : "提交观点"}
+                        </P5Button>
+                      </div>
+                      {topicDisplayNameSave.kind !== "idle" ? (
+                        <span
+                          className={[
+                            "text-[10px]",
+                            topicDisplayNameSave.kind === "error" ? "text-destructive" : "text-muted-foreground",
+                          ].join(" ")}
+                        >
+                          {topicDisplayNameSave.kind === "saving"
+                            ? "名字保存中…"
+                            : topicDisplayNameSave.kind === "saved"
+                              ? "名字已保存"
+                              : topicDisplayNameSave.message}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
 
@@ -1374,6 +2136,85 @@ export function TopicStage({ topicId }: Props) {
           </div>
         </div>
       </div>
+
+      <P5Modal
+        open={isEditOpen}
+        onClose={() => setIsEditOpen(false)}
+        title="修改评论"
+        maxWidth="760px"
+        footer={
+          <>
+            <P5Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-3 border border-border bg-background"
+              onClick={() => setIsEditOpen(false)}
+              disabled={isSavingEdit}
+            >
+              取消
+            </P5Button>
+            <P5Button
+              variant="ink"
+              size="sm"
+              onClick={submitEdit}
+              disabled={!canOpenEdit || isSavingEdit || !editText.trim()}
+            >
+              {isSavingEdit ? "保存中…" : "保存修改"}
+            </P5Button>
+          </>
+        }
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span className="text-xs text-muted-foreground">修改后会重新触发 AI 分析</span>
+        </div>
+
+        <div className="mt-3 overflow-hidden rounded-lg border border-border/60 bg-background">
+          <div className="border-b border-border/60 bg-background">
+            <P5Input
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              placeholder="标题（可选）"
+              className="h-11 border-0 rounded-none shadow-none font-serif text-base"
+              maxLength={160}
+              disabled={isSavingEdit}
+            />
+          </div>
+          {isEditEditorMode ? (
+            <RichTextToolbar editor={editEditor} onRequestHideToolbar={() => setIsEditEditorMode(false)} />
+          ) : (
+            <div className="border-b border-border/60 bg-[color:var(--muted)] px-3 py-2">
+              <P5Button
+                size="sm"
+                variant="ghost"
+                className="h-8 px-3 border border-border bg-background"
+                onClick={() => setIsEditEditorMode(true)}
+              >
+                显示工具栏
+              </P5Button>
+            </div>
+          )}
+          <EditorContent editor={editEditor} />
+        </div>
+
+        {editError ? (
+          <p role="alert" className="mt-2 text-xs text-destructive">
+            {editError}
+          </p>
+        ) : null}
+      </P5Modal>
+
+      {isOwner && isManageOpen ? (
+        <TopicManagePanel
+          topicId={topicId}
+          topicTitle={topic.title}
+          topicStatus={topic.status}
+          topicVisibility={topic.visibility}
+          rootBody={topic.rootBody}
+          defaultArgumentId={selectedArgumentId}
+          onInvalidate={invalidate}
+          onClose={() => setIsManageOpen(false)}
+        />
+      ) : null}
 
       {isReportOpen ? (
         <ConsensusReportModal

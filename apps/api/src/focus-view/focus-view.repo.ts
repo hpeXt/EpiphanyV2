@@ -27,12 +27,17 @@ function deriveAuthorId(authorPubkey: Uint8Array): string {
   return createHash('sha256').update(authorPubkey).digest('hex').slice(0, 16);
 }
 
+function toPubkeyHex(pubkey: Uint8Array): string {
+  return Buffer.from(pubkey).toString('hex');
+}
+
 function mapTopicSummary(row: {
   id: string;
   title: string;
   rootArgumentId: string | null;
   status: 'active' | 'frozen' | 'archived';
   ownerPubkey: Uint8Array | null;
+  visibility: 'public' | 'unlisted' | 'private';
   createdAt: Date;
   updatedAt: Date;
 }): TopicSummary {
@@ -42,6 +47,7 @@ function mapTopicSummary(row: {
     rootArgumentId: row.rootArgumentId ?? '',
     status: row.status,
     ownerPubkey: row.ownerPubkey ? Buffer.from(row.ownerPubkey).toString('hex') : null,
+    visibility: row.visibility,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -61,7 +67,7 @@ function mapArgument(row: {
   prunedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
-}): Argument {
+}, authorDisplayName: string | null): Argument {
   return {
     id: row.id,
     topicId: row.topicId,
@@ -69,6 +75,7 @@ function mapArgument(row: {
     title: row.title,
     body: row.body,
     authorId: deriveAuthorId(row.authorPubkey),
+    authorDisplayName,
     analysisStatus: row.analysisStatus,
     stanceScore: row.stanceScore,
     totalVotes: row.totalVotes,
@@ -98,6 +105,7 @@ export class FocusViewRepo {
         rootArgumentId: true,
         status: true,
         ownerPubkey: true,
+        visibility: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -135,10 +143,26 @@ export class FocusViewRepo {
       currentParentIds = children.map((c) => c.id);
     }
 
+    const uniquePubkeys = Array.from(
+      new Set(all.map((row) => toPubkeyHex(row.authorPubkey))),
+    ).map((hex) => Buffer.from(hex, 'hex'));
+
+    const profiles = uniquePubkeys.length
+      ? await this.prisma.topicIdentityProfile.findMany({
+          where: { topicId, pubkey: { in: uniquePubkeys } },
+          select: { pubkey: true, displayName: true },
+        })
+      : [];
+
+    const displayNameByPubkeyHex = new Map<string, string | null>();
+    for (const profile of profiles) {
+      displayNameByPubkeyHex.set(toPubkeyHex(profile.pubkey), profile.displayName);
+    }
+
     return {
       topic: mapTopicSummary(topic),
       depth,
-      arguments: all.map(mapArgument),
+      arguments: all.map((row) => mapArgument(row, displayNameByPubkeyHex.get(toPubkeyHex(row.authorPubkey)) ?? null)),
     };
   }
 
@@ -226,9 +250,25 @@ export class FocusViewRepo {
     const page = hasMore ? rows.slice(0, params.limit) : rows;
     const nextBeforeId = hasMore && page.length ? page[page.length - 1].id : null;
 
+    const uniquePubkeys = Array.from(
+      new Set(page.map((row) => toPubkeyHex(row.authorPubkey))),
+    ).map((hex) => Buffer.from(hex, 'hex'));
+
+    const profiles = uniquePubkeys.length
+      ? await this.prisma.topicIdentityProfile.findMany({
+          where: { topicId: parent.topicId, pubkey: { in: uniquePubkeys } },
+          select: { pubkey: true, displayName: true },
+        })
+      : [];
+
+    const displayNameByPubkeyHex = new Map<string, string | null>();
+    for (const profile of profiles) {
+      displayNameByPubkeyHex.set(toPubkeyHex(profile.pubkey), profile.displayName);
+    }
+
     return {
       parentArgumentId: parent.id,
-      items: page.map(mapArgument),
+      items: page.map((row) => mapArgument(row, displayNameByPubkeyHex.get(toPubkeyHex(row.authorPubkey)) ?? null)),
       nextBeforeId,
     };
   }

@@ -9,6 +9,9 @@ import { z } from 'zod';
 export const zTopicStatus = z.enum(['active', 'frozen', 'archived']);
 export type TopicStatus = z.infer<typeof zTopicStatus>;
 
+export const zTopicVisibility = z.enum(['public', 'unlisted', 'private']);
+export type TopicVisibility = z.infer<typeof zTopicVisibility>;
+
 export const zArgumentAnalysisStatus = z.enum(['pending_analysis', 'ready', 'failed']);
 export type ArgumentAnalysisStatus = z.infer<typeof zArgumentAnalysisStatus>;
 
@@ -42,6 +45,7 @@ export const zTopicSummary = z.object({
   rootArgumentId: zUuid,
   status: zTopicStatus,
   ownerPubkey: z.string().nullable(),
+  visibility: zTopicVisibility,
   createdAt: zIsoDateTime,
   updatedAt: zIsoDateTime,
 });
@@ -60,6 +64,7 @@ export const zArgument = z.object({
   body: z.string(),
   bodyRich: zTiptapDoc.nullable().optional(),
   authorId: zHex16Lowercase, // sha256(pubkey).slice(0,16) lowercase hex
+  authorDisplayName: z.string().max(40).nullable().optional(),
   analysisStatus: zArgumentAnalysisStatus,
   stanceScore: z.number().min(-1).max(1).nullable(),
   totalVotes: z.number().int(),
@@ -82,6 +87,7 @@ export const zLedgerMe = z.object({
   myTotalVotes: z.number().int(),
   myTotalCost: z.number().int(),
   lastInteractionAt: zIsoDateTime.nullable(),
+  displayName: z.string().max(40).nullable().optional(),
 });
 
 export type LedgerMe = z.infer<typeof zLedgerMe>;

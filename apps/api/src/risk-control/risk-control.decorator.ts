@@ -1,6 +1,11 @@
 import { SetMetadata } from '@nestjs/common';
 
-export type RiskControlEndpoint = 'createTopic' | 'createArgument' | 'setVotes' | 'topicCommands';
+export type RiskControlEndpoint =
+  | 'createTopic'
+  | 'createArgument'
+  | 'editArgument'
+  | 'setVotes'
+  | 'topicCommands';
 
 export type RiskControlTopicResolver =
   | { kind: 'param'; paramName: string }

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { P5Alert } from "@/components/ui/P5Alert";
 import { P5Badge } from "@/components/ui/P5Badge";
 import { P5Card } from "@/components/ui/P5Card";
+import { TopicHostControls } from "@/components/topics/TopicHostControls";
 import { apiClient } from "@/lib/apiClient";
 
 export default async function TopicsPage() {
@@ -42,20 +43,16 @@ export default async function TopicsPage() {
 
               return (
                 <li key={topic.id}>
-                  <Link
-                    href={`/topics/${topic.id}`}
-                    aria-label={topic.title}
-                    className="block rounded-lg border border-border/60 bg-card px-4 py-4 shadow-sm transition-colors hover:bg-muted/30"
-                  >
+                  <div className="rounded-lg border border-border/60 bg-card px-4 py-4 shadow-sm transition-colors hover:bg-muted/30">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
+                      <Link href={`/topics/${topic.id}`} aria-label={topic.title} className="min-w-0 flex-1">
                         <div className="truncate font-serif text-lg font-semibold text-foreground">
                           {topic.title}
                         </div>
                         <div className="mt-1 font-mono text-xs text-muted-foreground">
                           {topic.id}
                         </div>
-                      </div>
+                      </Link>
 
                       <div className="flex shrink-0 flex-col items-end gap-2">
                         <P5Badge variant={badgeVariant} aria-hidden>
@@ -66,9 +63,10 @@ export default async function TopicsPage() {
                             host
                           </P5Badge>
                         ) : null}
+                        <TopicHostControls topicId={topic.id} ownerPubkey={topic.ownerPubkey} />
                       </div>
                     </div>
-                  </Link>
+                  </div>
                 </li>
               );
             })}

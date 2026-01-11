@@ -65,6 +65,7 @@ function dedupeAppend(existing: DialogueItem[], incoming: DialogueItem[]): Dialo
 }
 
 export function useChildren(input: {
+  topicId?: string;
   parentArgumentId: string | null;
   orderBy: ChildrenOrderBy;
   limit?: number;
@@ -105,6 +106,7 @@ export function useChildren(input: {
 
     (async () => {
       const result = await apiClient.getArgumentChildren({
+        topicId: input.topicId,
         argumentId: parentArgumentId,
         orderBy: input.orderBy,
         limit,
@@ -157,6 +159,7 @@ export function useChildren(input: {
     });
 
     const result = await apiClient.getArgumentChildren({
+      topicId: input.topicId,
       argumentId: input.parentArgumentId,
       orderBy: input.orderBy,
       limit,
@@ -194,6 +197,7 @@ export function useChildren(input: {
       };
     });
   }, [
+    input.topicId,
     input.parentArgumentId,
     input.orderBy,
     limit,

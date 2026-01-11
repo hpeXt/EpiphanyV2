@@ -10,6 +10,7 @@ import {
   Param,
   Query,
   Headers,
+  UseGuards,
   HttpCode,
   HttpStatus,
   BadRequestException,
@@ -17,10 +18,13 @@ import {
 import { TopicService } from './topic.service.js';
 import { RequireSignature } from '../common/auth.guard.js';
 import { RiskControl } from '../risk-control/risk-control.decorator.js';
+import { TopicPrivacyGuard } from './topic-privacy.guard.js';
 import {
   zCreateTopicRequest,
+  zSetTopicProfileMeRequest,
   zTopicCommand,
   type CreateTopicRequest,
+  type SetTopicProfileMeRequest,
   type TopicCommand,
 } from '@epiphany/shared-contracts';
 
@@ -71,6 +75,7 @@ export class TopicController {
    * @see docs/stage01/api-contract.md#3.11
    */
   @Get(':topicId/cluster-map')
+  @UseGuards(TopicPrivacyGuard)
   async getClusterMap(@Param('topicId') topicId: string) {
     return this.topicService.getClusterMap(topicId);
   }
@@ -80,6 +85,7 @@ export class TopicController {
    * @see docs/stage01/api-contract.md#3.13
    */
   @Get(':topicId/consensus-report/latest')
+  @UseGuards(TopicPrivacyGuard)
   async getLatestConsensusReport(@Param('topicId') topicId: string) {
     return this.topicService.getLatestConsensusReport(topicId);
   }
@@ -125,6 +131,16 @@ export class TopicController {
 
       case 'SET_STATUS':
         return { topic: await this.topicService.setStatus(topicId, command.payload.status, pubkey) };
+
+      case 'SET_VISIBILITY': {
+        const result = await this.topicService.setVisibility(topicId, command.payload.visibility, pubkey);
+        return { topic: result.topic, accessKey: result.accessKey };
+      }
+
+      case 'ROTATE_ACCESS_KEY': {
+        const result = await this.topicService.rotateAccessKey(topicId, pubkey);
+        return { topic: result.topic, accessKey: result.accessKey };
+      }
 
       case 'EDIT_ROOT':
         return { topic: await this.topicService.editRoot(topicId, command.payload, pubkey) };
@@ -178,5 +194,30 @@ export class TopicController {
     @Headers('x-pubkey') pubkey: string,
   ) {
     return this.topicService.getStakesMe(topicId, pubkey);
+  }
+
+  /**
+   * POST /v1/topics/:topicId/profile/me - Set my topic-scoped display name (signature required)
+   */
+  @Post(':topicId/profile/me')
+  @RequireSignature()
+  @UseGuards(TopicPrivacyGuard)
+  @HttpCode(HttpStatus.OK)
+  async setTopicProfileMe(
+    @Param('topicId') topicId: string,
+    @Body() body: unknown,
+    @Headers('x-pubkey') pubkey: string,
+  ) {
+    const parsed = zSetTopicProfileMeRequest.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException({
+        error: {
+          code: 'BAD_REQUEST',
+          message: parsed.error.errors.map((e: { message: string }) => e.message).join(', '),
+        },
+      });
+    }
+
+    return this.topicService.setTopicProfileMe(topicId, pubkey, parsed.data as SetTopicProfileMeRequest);
   }
 }

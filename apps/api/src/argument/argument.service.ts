@@ -5,21 +5,30 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   HttpException,
   HttpStatus,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { v7 as uuidv7 } from 'uuid';
-import { createHash } from 'node:crypto';
-import type { CreateArgumentRequest } from '@epiphany/shared-contracts';
+import { createHash, timingSafeEqual } from 'node:crypto';
+import type { CreateArgumentRequest, EditArgumentRequest } from '@epiphany/shared-contracts';
 import { validateSetVotes, INITIAL_BALANCE } from '@epiphany/core-logic';
 import { PrismaService } from '../infrastructure/prisma.module.js';
 import { QueueService } from '../infrastructure/queue.module.js';
+import { TopicEventsPublisher } from '../sse/topic-events.publisher.js';
 
 export interface CreateArgumentParams {
   topicId: string;
   dto: CreateArgumentRequest & { initialVotes: number };
+  pubkeyHex: string;
+  accessKeyHex?: string;
+}
+
+export interface EditArgumentParams {
+  argumentId: string;
+  dto: EditArgumentRequest;
   pubkeyHex: string;
 }
 
@@ -28,7 +37,32 @@ export class ArgumentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly queueService: QueueService,
+    private readonly topicEvents: TopicEventsPublisher,
   ) {}
+
+  private async getAuthorDisplayName(topicId: string, authorPubkey: Uint8Array): Promise<string | null> {
+    const profile = await this.prisma.topicIdentityProfile.findUnique({
+      where: { topicId_pubkey: { topicId, pubkey: Buffer.from(authorPubkey) } },
+      select: { displayName: true },
+    });
+
+    return profile?.displayName ?? null;
+  }
+
+  private normalizeAccessKeyHex(value: string | undefined): string | null {
+    const normalized = value?.trim().toLowerCase() ?? null;
+    if (!normalized) return null;
+    if (!/^[0-9a-f]{64}$/.test(normalized)) return null;
+    return normalized;
+  }
+
+  private verifyAccessKey(accessKeyHex: string, expectedHash: Uint8Array | null): boolean {
+    if (!expectedHash) return false;
+    const digest = createHash('sha256').update(Buffer.from(accessKeyHex, 'hex')).digest();
+    const expected = Buffer.from(expectedHash);
+    if (expected.length !== digest.length) return false;
+    return timingSafeEqual(expected, digest);
+  }
 
   async getArgument(argumentId: string) {
     const argument = await this.prisma.argument.findFirst({
@@ -57,7 +91,8 @@ export class ArgumentService {
       });
     }
 
-    return { argument: this.toArgumentDto(argument) };
+    const authorDisplayName = await this.getAuthorDisplayName(argument.topicId, argument.authorPubkey);
+    return { argument: this.toArgumentDto(argument, authorDisplayName) };
   }
 
   async createArgument(params: CreateArgumentParams) {
@@ -70,7 +105,13 @@ export class ArgumentService {
 
     const topic = await this.prisma.topic.findUnique({
       where: { id: topicId },
-      select: { id: true, status: true },
+      select: {
+        id: true,
+        status: true,
+        visibility: true,
+        accessKeyHash: true,
+        ownerPubkey: true,
+      },
     });
 
     if (!topic) {
@@ -86,6 +127,28 @@ export class ArgumentService {
           message: 'Topic status disallows write',
         },
       });
+    }
+
+    if (topic.visibility === 'private') {
+      const ownerHex = topic.ownerPubkey ? Buffer.from(topic.ownerPubkey).toString('hex') : null;
+      const isOwner = ownerHex !== null && ownerHex === pubkeyHex;
+
+      if (!isOwner) {
+        const existingLedger = await this.prisma.ledger.findUnique({
+          where: { topicId_pubkey: { topicId, pubkey: pubkeyBytes } },
+          select: { topicId: true },
+        });
+
+        const accessKeyHex = this.normalizeAccessKeyHex(params.accessKeyHex);
+        const accessKeyOk = accessKeyHex ? this.verifyAccessKey(accessKeyHex, topic.accessKeyHash) : false;
+
+        if (!existingLedger && !accessKeyOk) {
+          // Hide existence for private topics.
+          throw new NotFoundException({
+            error: { code: 'TOPIC_NOT_FOUND', message: 'Topic not found' },
+          });
+        }
+      }
     }
 
     const parent = await this.prisma.argument.findUnique({
@@ -208,8 +271,116 @@ export class ArgumentService {
     });
 
     return {
-      argument: this.toArgumentDto(result.argument),
+      argument: this.toArgumentDto(
+        result.argument,
+        await this.getAuthorDisplayName(result.argument.topicId, result.argument.authorPubkey),
+      ),
       ledger: this.toLedgerDto(result.ledger),
+    };
+  }
+
+  async editArgument(params: EditArgumentParams) {
+    const { argumentId, dto, pubkeyHex } = params;
+    const pubkeyBytes = Buffer.from(pubkeyHex, 'hex');
+
+    const body = dto.body.trim();
+    if (!body) {
+      throw new BadRequestException({
+        error: { code: 'BAD_REQUEST', message: 'body is required and cannot be empty' },
+      });
+    }
+
+    const argument = await this.prisma.argument.findUnique({
+      where: { id: argumentId },
+      select: {
+        id: true,
+        topicId: true,
+        parentId: true,
+        prunedAt: true,
+        authorPubkey: true,
+        topic: { select: { status: true } },
+      },
+    });
+
+    if (!argument || argument.prunedAt) {
+      throw new NotFoundException({
+        error: { code: 'ARGUMENT_NOT_FOUND', message: 'Argument not found' },
+      });
+    }
+
+    // Root argument is edited via host TopicCommand EDIT_ROOT (has no author).
+    if (argument.parentId === null) {
+      throw new BadRequestException({
+        error: { code: 'BAD_REQUEST', message: 'Root argument must be edited via topic commands' },
+      });
+    }
+
+    if (argument.topic.status !== 'active') {
+      throw new ConflictException({
+        error: { code: 'TOPIC_STATUS_DISALLOWS_WRITE', message: 'Topic status disallows write' },
+      });
+    }
+
+    if (!Buffer.from(argument.authorPubkey).equals(pubkeyBytes)) {
+      throw new ForbiddenException({
+        error: { code: 'NOT_ARGUMENT_AUTHOR', message: 'Only the author can edit this argument' },
+      });
+    }
+
+    const updateData: Record<string, unknown> = {
+      body,
+      analysisStatus: 'pending_analysis',
+      stanceScore: null,
+      embeddingModel: null,
+    };
+
+    if (dto.title !== undefined) {
+      updateData.title = dto.title;
+    }
+
+    if (dto.bodyRich !== undefined) {
+      updateData.bodyRich = (dto.bodyRich ?? null) as any;
+    }
+
+    const updated = await this.prisma.argument.update({
+      where: { topicId_id: { topicId: argument.topicId, id: argumentId } },
+      data: updateData as any,
+      select: {
+        id: true,
+        topicId: true,
+        parentId: true,
+        title: true,
+        body: true,
+        bodyRich: true,
+        authorPubkey: true,
+        analysisStatus: true,
+        stanceScore: true,
+        totalVotes: true,
+        totalCost: true,
+        prunedAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    // Re-enqueue AI analysis for updated content (fire-and-forget)
+    this.queueService.enqueueArgumentAnalysis(argumentId).catch((err) => {
+      console.error(`[argument] Failed to enqueue analysis for edit ${argumentId}:`, err);
+    });
+
+    // Best-effort SSE invalidation
+    this.topicEvents
+      .publish(argument.topicId, {
+        event: 'argument_updated',
+        data: { argumentId, reason: 'edited' },
+      })
+      .catch(() => undefined);
+
+    return {
+      argument: this.toArgumentDto(
+        updated,
+        await this.getAuthorDisplayName(updated.topicId, updated.authorPubkey),
+      ),
     };
   }
 
@@ -228,7 +399,7 @@ export class ArgumentService {
     prunedAt: Date | null;
     createdAt: Date;
     updatedAt: Date;
-  }) {
+  }, authorDisplayName: string | null) {
     const authorId = createHash('sha256')
       .update(arg.authorPubkey)
       .digest('hex')
@@ -242,6 +413,7 @@ export class ArgumentService {
       body: arg.body,
       bodyRich: arg.bodyRich ?? null,
       authorId,
+      authorDisplayName,
       analysisStatus: arg.analysisStatus as 'pending_analysis' | 'ready' | 'failed',
       stanceScore: arg.stanceScore,
       totalVotes: arg.totalVotes,

@@ -466,17 +466,34 @@ export function MyActivity() {
               <h2 className="font-display text-sm uppercase tracking-wide">
                 投票于 {selectedTopicId.slice(0, 8)}...
               </h2>
-              {stakesWithVotes.length > 0 &&
-              withdrawState.status !== "withdrawing" ? (
-                <P5Button
-                  type="button"
-                  onClick={handleWithdrawAll}
-                  variant="primary"
+              <div className="flex flex-wrap items-center gap-2">
+                <P5LinkButton
+                  href={`/topics/${selectedTopicId}`}
+                  variant="ghost"
                   size="sm"
+                  className="border border-white/60 text-white shadow-none hover:bg-white/10"
                 >
-                  全部撤回
-                </P5Button>
-              ) : null}
+                  打开议题
+                </P5LinkButton>
+                <P5LinkButton
+                  href={`/topics/${selectedTopicId}?manage=1`}
+                  variant="ghost"
+                  size="sm"
+                  className="border border-white/60 text-white shadow-none hover:bg-white/10"
+                >
+                  Host 管理
+                </P5LinkButton>
+                {stakesWithVotes.length > 0 && withdrawState.status !== "withdrawing" ? (
+                  <P5Button
+                    type="button"
+                    onClick={handleWithdrawAll}
+                    variant="primary"
+                    size="sm"
+                  >
+                    全部撤回
+                  </P5Button>
+                ) : null}
+              </div>
             </div>
           }
           bodyClassName="space-y-4"

@@ -20,15 +20,16 @@ import {
 
 describe('TopicSummary', () => {
   it('should parse a valid TopicSummary', () => {
-    const fixture: TopicSummary = {
-      id: '0193e3a6-0b7d-7a8d-9f2c-1234567890ab',
-      title: 'Test Topic',
-      rootArgumentId: '0193e3a6-0b7d-7a8d-9f2c-abcdef123456',
-      status: 'active',
-      ownerPubkey: null,
-      createdAt: '2025-12-19T12:34:56.789Z',
-      updatedAt: '2025-12-19T12:34:56.789Z',
-    };
+	    const fixture: TopicSummary = {
+	      id: '0193e3a6-0b7d-7a8d-9f2c-1234567890ab',
+	      title: 'Test Topic',
+	      rootArgumentId: '0193e3a6-0b7d-7a8d-9f2c-abcdef123456',
+	      visibility: 'public',
+	      status: 'active',
+	      ownerPubkey: null,
+	      createdAt: '2025-12-19T12:34:56.789Z',
+	      updatedAt: '2025-12-19T12:34:56.789Z',
+	    };
 
     const result = zTopicSummary.safeParse(fixture);
     expect(result.success).toBe(true);
@@ -38,42 +39,45 @@ describe('TopicSummary', () => {
     const statuses = ['active', 'frozen', 'archived'] as const;
 
     statuses.forEach((status) => {
-      const fixture = {
-        id: '0193e3a6-0b7d-7a8d-9f2c-1234567890ab',
-        title: 'Test',
-        rootArgumentId: '0193e3a6-0b7d-7a8d-9f2c-abcdef123456',
-        status,
-        ownerPubkey: null,
-        createdAt: '2025-12-19T12:34:56.789Z',
-        updatedAt: '2025-12-19T12:34:56.789Z',
-      };
+	      const fixture = {
+	        id: '0193e3a6-0b7d-7a8d-9f2c-1234567890ab',
+	        title: 'Test',
+	        rootArgumentId: '0193e3a6-0b7d-7a8d-9f2c-abcdef123456',
+	        visibility: 'public',
+	        status,
+	        ownerPubkey: null,
+	        createdAt: '2025-12-19T12:34:56.789Z',
+	        updatedAt: '2025-12-19T12:34:56.789Z',
+	      };
       expect(zTopicSummary.safeParse(fixture).success).toBe(true);
     });
   });
 
   it('should accept ownerPubkey as hex string', () => {
-    const fixture = {
-      id: '0193e3a6-0b7d-7a8d-9f2c-1234567890ab',
-      title: 'Test',
-      rootArgumentId: '0193e3a6-0b7d-7a8d-9f2c-abcdef123456',
-      status: 'active',
-      ownerPubkey: 'abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234',
-      createdAt: '2025-12-19T12:34:56.789Z',
-      updatedAt: '2025-12-19T12:34:56.789Z',
-    };
+	    const fixture = {
+	      id: '0193e3a6-0b7d-7a8d-9f2c-1234567890ab',
+	      title: 'Test',
+	      rootArgumentId: '0193e3a6-0b7d-7a8d-9f2c-abcdef123456',
+	      visibility: 'public',
+	      status: 'active',
+	      ownerPubkey: 'abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234',
+	      createdAt: '2025-12-19T12:34:56.789Z',
+	      updatedAt: '2025-12-19T12:34:56.789Z',
+	    };
     expect(zTopicSummary.safeParse(fixture).success).toBe(true);
   });
 
   it('should use ISO 8601 format for dates', () => {
-    const fixture = {
-      id: '0193e3a6-0b7d-7a8d-9f2c-1234567890ab',
-      title: 'Test',
-      rootArgumentId: '0193e3a6-0b7d-7a8d-9f2c-abcdef123456',
-      status: 'active',
-      ownerPubkey: null,
-      createdAt: '2025-12-19T12:34:56.789Z',
-      updatedAt: '2025-12-20T00:00:00.000Z',
-    };
+	    const fixture = {
+	      id: '0193e3a6-0b7d-7a8d-9f2c-1234567890ab',
+	      title: 'Test',
+	      rootArgumentId: '0193e3a6-0b7d-7a8d-9f2c-abcdef123456',
+	      visibility: 'public',
+	      status: 'active',
+	      ownerPubkey: null,
+	      createdAt: '2025-12-19T12:34:56.789Z',
+	      updatedAt: '2025-12-20T00:00:00.000Z',
+	    };
 
     const result = zTopicSummary.safeParse(fixture);
     expect(result.success).toBe(true);

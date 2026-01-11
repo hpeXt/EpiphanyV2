@@ -52,6 +52,7 @@ describe("TopicList", () => {
             rootArgumentId: "arg-1",
             status: "active",
             ownerPubkey: null,
+            visibility: "public",
             createdAt: "2025-12-19T12:34:56.789Z",
             updatedAt: "2025-12-19T12:34:56.789Z",
           },

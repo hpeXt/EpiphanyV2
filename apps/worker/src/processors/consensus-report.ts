@@ -16,10 +16,11 @@
 
 import { Prisma, type PrismaClient } from '@epiphany/database';
 import type { Redis } from 'ioredis';
+import { createHash } from 'node:crypto';
 
 const TOPIC_EVENTS_MAXLEN = 1000;
 const DEFAULT_MAX_ARGUMENTS = 30;
-const DEFAULT_PROMPT_VERSION = 'consensus-report/v1';
+const DEFAULT_PROMPT_VERSION = 'consensus-report/v2';
 
 export type ConsensusReportTrigger = 'auto' | 'host';
 
@@ -29,6 +30,7 @@ export interface SelectedArgument {
   body: string;
   totalVotes: number;
   createdAt: Date;
+  authorPubkey: Uint8Array;
 }
 
 export interface ConsensusReportParamsSnapshot {
@@ -42,11 +44,16 @@ export interface ConsensusReportParamsSnapshot {
   selectedArgumentIds: string[];
 }
 
+export interface ConsensusReportSourceForModel {
+  label: string; // S1..Sn
+  title: string | null;
+  body: string;
+  totalVotes: number;
+}
+
 export interface GenerateConsensusReportInput {
-  topicId: string;
   topicTitle: string;
-  rootArgumentId: string;
-  arguments: SelectedArgument[];
+  sources: ConsensusReportSourceForModel[];
   params: ConsensusReportParamsSnapshot;
 }
 
@@ -119,7 +126,7 @@ export async function processConsensusReport(
   let paramsSnapshot: ConsensusReportParamsSnapshot | null = null;
 
   try {
-    const { topicTitle, rootArgumentId, arguments: selectedArgs, selectedArgumentIds } =
+    const { topicTitle, arguments: selectedArgs, selectedArgumentIds } =
       await selectConsensusReportArguments(prisma, topicId, maxArguments);
 
     paramsSnapshot = {
@@ -133,11 +140,23 @@ export async function processConsensusReport(
 
     const paramsJson = paramsSnapshot as unknown as Prisma.InputJsonValue;
 
+    const sources: ConsensusReportSourceForModel[] = selectedArgs.map((arg, index) => ({
+      label: `S${index + 1}`,
+      title: arg.title,
+      body: arg.body,
+      totalVotes: arg.totalVotes,
+    }));
+
+    const sourceMap: Record<string, { argumentId: string; authorId: string }> = Object.fromEntries(
+      selectedArgs.map((arg, index) => [
+        `S${index + 1}`,
+        { argumentId: arg.id, authorId: deriveAuthorId(arg.authorPubkey) },
+      ]),
+    );
+
     const { contentMd, model } = await provider.generate({
-      topicId,
       topicTitle,
-      rootArgumentId,
-      arguments: selectedArgs,
+      sources,
       params: paramsSnapshot,
     });
 
@@ -153,7 +172,7 @@ export async function processConsensusReport(
         model,
         promptVersion,
         params: paramsJson,
-        metadata: Prisma.DbNull,
+        metadata: { sources: sourceMap },
         computedAt: startedAt,
       },
     });
@@ -205,13 +224,17 @@ export async function processConsensusReport(
   }
 }
 
+function deriveAuthorId(pubkey: Uint8Array): string {
+  // sha256(pubkey_bytes).slice(0,16) lowercase hex
+  return createHash('sha256').update(pubkey).digest('hex').slice(0, 16);
+}
+
 async function selectConsensusReportArguments(
   prisma: PrismaClient,
   topicId: string,
   maxArguments: number,
 ): Promise<{
   topicTitle: string;
-  rootArgumentId: string;
   arguments: SelectedArgument[];
   selectedArgumentIds: string[];
 }> {
@@ -223,9 +246,9 @@ async function selectConsensusReportArguments(
     },
   });
 
-  if (!topic || !topic.rootArgumentId) {
-    throw new Error('Topic not found');
-  }
+    if (!topic || !topic.rootArgumentId) {
+      throw new Error('Topic not found');
+    }
 
   const root = await prisma.argument.findUnique({
     where: { topicId_id: { topicId, id: topic.rootArgumentId } },
@@ -235,6 +258,7 @@ async function selectConsensusReportArguments(
       body: true,
       totalVotes: true,
       createdAt: true,
+      authorPubkey: true,
     },
   });
 
@@ -259,6 +283,7 @@ async function selectConsensusReportArguments(
           body: true,
           totalVotes: true,
           createdAt: true,
+          authorPubkey: true,
         },
       })
     : [];
@@ -269,13 +294,13 @@ async function selectConsensusReportArguments(
     body: arg.body,
     totalVotes: arg.totalVotes,
     createdAt: arg.createdAt,
+    authorPubkey: arg.authorPubkey,
   }));
 
   const selectedArgumentIds = selected.map((arg) => arg.id);
 
   return {
     topicTitle: topic.title,
-    rootArgumentId: root.id,
     arguments: selected,
     selectedArgumentIds,
   };

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { apiClient } from "@/lib/apiClient";
 import { createLocalStorageClaimTokenStore } from "@/lib/claimTokenStore";
+import { createLocalStorageTopicAccessKeyStore } from "@/lib/topicAccessKeyStore";
 import { P5Alert } from "@/components/ui/P5Alert";
 import { P5Button } from "@/components/ui/P5Button";
 import { P5Input } from "@/components/ui/P5Input";
@@ -18,6 +19,7 @@ export function CreateTopicForm() {
 
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [visibility, setVisibility] = useState<"public" | "unlisted" | "private">("public");
   const [errors, setErrors] = useState<{ title?: string; body?: string }>({});
   const [submitError, setSubmitError] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -41,6 +43,7 @@ export function CreateTopicForm() {
     const result = await apiClient.createTopic({
       title: title.trim(),
       body: body.trim(),
+      visibility,
     });
     setIsSubmitting(false);
 
@@ -58,13 +61,25 @@ export function CreateTopicForm() {
       // ignore localStorage errors
     }
 
+    if (result.data.accessKey) {
+      try {
+        createLocalStorageTopicAccessKeyStore().set(result.data.topicId, result.data.accessKey);
+      } catch {
+        // ignore localStorage errors
+      }
+    }
+
     toast({
       variant: "success",
       title: "created",
       message: "Topic created. Claim token saved locally for 5 minutes.",
     });
 
-    router.push(`/topics/${result.data.topicId}`);
+    if (result.data.accessKey) {
+      router.push(`/topics/${result.data.topicId}#k=${result.data.accessKey}`);
+    } else {
+      router.push(`/topics/${result.data.topicId}`);
+    }
   }
 
   return (
@@ -84,6 +99,29 @@ export function CreateTopicForm() {
             {errors.title}
           </p>
         ) : null}
+      </div>
+
+      <div className="space-y-1">
+        <label htmlFor="visibility" className="font-mono text-xs font-semibold uppercase tracking-wide">
+          Visibility
+        </label>
+        <select
+          id="visibility"
+          name="visibility"
+          value={visibility}
+          onChange={(e) => setVisibility(e.target.value as any)}
+          className={[
+            "w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+          ].join(" ")}
+        >
+          <option value="public">public</option>
+          <option value="unlisted">unlisted</option>
+          <option value="private">private</option>
+        </select>
+        <p className="text-xs text-muted-foreground">
+          private topics require a link key (#k=…) or prior participation.
+        </p>
       </div>
 
       <div className="space-y-1">

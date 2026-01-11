@@ -5,6 +5,7 @@ import type { Request, Response } from 'express';
 import { SseController } from './sse.controller';
 import { SseModule } from './sse.module';
 import { RedisService } from '../infrastructure/redis.module';
+import { TopicPrivacyGuard } from '../topic/topic-privacy.guard';
 
 type MockRedisReader = {
   xinfo: jest.Mock;
@@ -142,6 +143,8 @@ describe('GET /v1/sse/:topicId (integration)', () => {
     })
       .overrideProvider(RedisService)
       .useValue(redisServiceMock)
+      .overrideGuard(TopicPrivacyGuard)
+      .useValue({ canActivate: () => true })
       .compile();
     controller = moduleFixture.get(SseController);
   });

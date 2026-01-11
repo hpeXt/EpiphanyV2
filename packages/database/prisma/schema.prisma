@@ -13,6 +13,12 @@ enum topic_status {
   archived
 }
 
+enum topic_visibility {
+  public
+  unlisted
+  private
+}
+
 enum argument_analysis_status {
   pending_analysis
   ready
@@ -30,6 +36,9 @@ model Topic {
   rootArgumentId           String?   @map("root_argument_id") @db.Uuid
   title                    String    @db.Text
   ownerPubkey              Bytes?    @map("owner_pubkey") @db.ByteA
+  visibility               topic_visibility @default(public)
+  accessKeyHash            Bytes?    @map("access_key_hash") @db.ByteA
+  accessKeyRotatedAt       DateTime? @map("access_key_rotated_at") @db.Timestamptz(6)
   status                   topic_status @default(active)
   createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -44,6 +53,7 @@ model Topic {
   clusterData      ClusterData[]
   consensusReports ConsensusReport[]
   pubkeyBlacklist  TopicPubkeyBlacklist[]
+  identityProfiles TopicIdentityProfile[]
 
   rootArgument Argument? @relation("TopicRootArgument", fields: [id, rootArgumentId], references: [topicId, id])
 
@@ -61,6 +71,19 @@ model TopicPubkeyBlacklist {
 
   @@id([topicId, pubkey])
   @@map("topic_pubkey_blacklist")
+}
+
+model TopicIdentityProfile {
+  topicId      String   @map("topic_id") @db.Uuid
+  pubkey       Bytes    @db.ByteA
+  displayName  String?  @map("display_name") @db.Text
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  topic Topic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@id([topicId, pubkey])
+  @@map("topic_identity_profiles")
 }
 
 model Argument {

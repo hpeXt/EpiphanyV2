@@ -2,6 +2,7 @@ import {
   zCreateTopicResponse,
   zArgumentChildrenResponse,
   zArgumentResponse,
+  zEditArgumentResponse,
   zBatchBalanceResponse,
   zCreateArgumentResponse,
   zConsensusReportLatestResponse,
@@ -10,18 +11,22 @@ import {
   zLedgerMe,
   zListTopicsResponse,
   zSetVotesResponse,
+  zSetTopicProfileMeResponse,
   zTopicCommandResponse,
   zStakesMeResponse,
   zTopicTreeResponse,
   type BatchBalanceRequestItem,
   type CreateArgumentRequest,
   type CreateTopicRequest,
+  type EditArgumentRequest,
   type SetVotesRequest,
+  type SetTopicProfileMeRequest,
   type TopicCommand,
 } from "@epiphany/shared-contracts";
 import type { z } from "zod";
 
 import { createLocalStorageKeyStore, createV1Signer, type Signer, type SignedHeadersV1 } from "@/lib/signing";
+import { createLocalStorageTopicAccessKeyStore, type TopicAccessKeyStore } from "@/lib/topicAccessKeyStore";
 
 export type ApiError =
   | { kind: "config"; message: string }
@@ -122,11 +127,40 @@ function getDefaultSigner(): Signer | null {
     // Server-side: no signer available
     return null;
   }
-  if (!_defaultSigner) {
-    const keyStore = createLocalStorageKeyStore();
-    _defaultSigner = createV1Signer(keyStore);
+
+  let keyStore: ReturnType<typeof createLocalStorageKeyStore>;
+  try {
+    keyStore = createLocalStorageKeyStore();
+  } catch {
+    return null;
   }
+
+  try {
+    const seed = keyStore.getMasterSeedHex();
+    if (!seed) return null;
+  } catch {
+    return null;
+  }
+
+  _defaultSigner ??= createV1Signer(keyStore);
   return _defaultSigner;
+}
+
+let _topicAccessKeyStore: TopicAccessKeyStore | null = null;
+function getTopicAccessKeyStore(): TopicAccessKeyStore | null {
+  if (typeof window === "undefined") return null;
+  if (!_topicAccessKeyStore) {
+    _topicAccessKeyStore = createLocalStorageTopicAccessKeyStore();
+  }
+  return _topicAccessKeyStore;
+}
+
+function getTopicAccessKeyHeaders(topicId: string): Record<string, string> {
+  const store = getTopicAccessKeyStore();
+  if (!store) return {};
+  const accessKey = store.get(topicId);
+  if (!accessKey) return {};
+  return { "x-topic-access-key": accessKey };
 }
 
 /**
@@ -228,32 +262,54 @@ export function createApiClient(deps?: { signer?: Signer }) {
       );
     },
     getTopicTree(topicId: string, depth = 3) {
+      const signer = getSigner();
       const encodedTopicId = encodeURIComponent(topicId);
       const params = new URLSearchParams({ depth: String(depth) });
-      return requestJson(
-        `/v1/topics/${encodedTopicId}/tree?${params.toString()}`,
-        { method: "GET" },
-        zTopicTreeResponse,
-      );
+      const path = `/v1/topics/${encodedTopicId}/tree?${params.toString()}`;
+      const accessKeyHeaders = getTopicAccessKeyHeaders(topicId);
+
+      if (signer) {
+        return requestJsonSigned(
+          signer,
+          topicId,
+          path,
+          { method: "GET", headers: accessKeyHeaders },
+          zTopicTreeResponse,
+        );
+      }
+
+      return requestJson(path, { method: "GET", headers: accessKeyHeaders }, zTopicTreeResponse);
     },
     /**
      * God View semantic map (public read)
      * @see docs/stage01/api-contract.md#3.11
      */
     getClusterMap(topicId: string) {
+      const signer = getSigner();
       const encodedTopicId = encodeURIComponent(topicId);
-      return requestJson(
-        `/v1/topics/${encodedTopicId}/cluster-map`,
-        { method: "GET" },
-        zClusterMap,
-      );
+      const path = `/v1/topics/${encodedTopicId}/cluster-map`;
+      const accessKeyHeaders = getTopicAccessKeyHeaders(topicId);
+
+      if (signer) {
+        return requestJsonSigned(
+          signer,
+          topicId,
+          path,
+          { method: "GET", headers: accessKeyHeaders },
+          zClusterMap,
+        );
+      }
+
+      return requestJson(path, { method: "GET", headers: accessKeyHeaders }, zClusterMap);
     },
     getArgumentChildren(input: {
+      topicId?: string;
       argumentId: string;
       orderBy: "totalVotes_desc" | "createdAt_desc";
       limit: number;
       beforeId?: string;
     }) {
+      const signer = input.topicId ? getSigner() : null;
       const encodedArgumentId = encodeURIComponent(input.argumentId);
       const params = new URLSearchParams({
         orderBy: input.orderBy,
@@ -261,31 +317,88 @@ export function createApiClient(deps?: { signer?: Signer }) {
       });
       if (input.beforeId) params.set("beforeId", input.beforeId);
 
-      return requestJson(
-        `/v1/arguments/${encodedArgumentId}/children?${params.toString()}`,
-        { method: "GET" },
-        zArgumentChildrenResponse,
-      );
+      const path = `/v1/arguments/${encodedArgumentId}/children?${params.toString()}`;
+
+      if (input.topicId) {
+        const accessKeyHeaders = getTopicAccessKeyHeaders(input.topicId);
+        if (signer) {
+          return requestJsonSigned(
+            signer,
+            input.topicId,
+            path,
+            { method: "GET", headers: accessKeyHeaders },
+            zArgumentChildrenResponse,
+          );
+        }
+        return requestJson(path, { method: "GET", headers: accessKeyHeaders }, zArgumentChildrenResponse);
+      }
+
+      return requestJson(path, { method: "GET" }, zArgumentChildrenResponse);
     },
     /**
      * Argument detail (public read)
      * @see docs/stage01/api-contract.md#3.5.1
      */
-    getArgument(argumentId: string) {
+    getArgument(argumentId: string, topicId?: string) {
+      const signer = topicId ? getSigner() : null;
       const encodedArgumentId = encodeURIComponent(argumentId);
-      return requestJson(
-        `/v1/arguments/${encodedArgumentId}`,
-        { method: "GET" },
-        zArgumentResponse,
+      const path = `/v1/arguments/${encodedArgumentId}`;
+
+      if (topicId) {
+        const accessKeyHeaders = getTopicAccessKeyHeaders(topicId);
+        if (signer) {
+          return requestJsonSigned(
+            signer,
+            topicId,
+            path,
+            { method: "GET", headers: accessKeyHeaders },
+            zArgumentResponse,
+          );
+        }
+        return requestJson(path, { method: "GET", headers: accessKeyHeaders }, zArgumentResponse);
+      }
+
+      return requestJson(path, { method: "GET" }, zArgumentResponse);
+    },
+    editArgument(topicId: string, argumentId: string, input: EditArgumentRequest): Promise<ApiResult<z.infer<typeof zEditArgumentResponse>>> {
+      const signer = getSigner();
+      if (!signer) {
+        return Promise.resolve({
+          ok: false,
+          error: { kind: "config", message: "No signer available (server-side)" },
+        });
+      }
+      const encodedArgumentId = encodeURIComponent(argumentId);
+      const body = JSON.stringify(input);
+      return requestJsonSigned(
+        signer,
+        topicId,
+        `/v1/arguments/${encodedArgumentId}/edit`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json", ...getTopicAccessKeyHeaders(topicId) },
+          body,
+        },
+        zEditArgumentResponse,
       );
     },
     getLatestConsensusReport(topicId: string) {
+      const signer = getSigner();
       const encodedTopicId = encodeURIComponent(topicId);
-      return requestJson(
-        `/v1/topics/${encodedTopicId}/consensus-report/latest`,
-        { method: "GET" },
-        zConsensusReportLatestResponse,
-      );
+      const path = `/v1/topics/${encodedTopicId}/consensus-report/latest`;
+      const accessKeyHeaders = getTopicAccessKeyHeaders(topicId);
+
+      if (signer) {
+        return requestJsonSigned(
+          signer,
+          topicId,
+          path,
+          { method: "GET", headers: accessKeyHeaders },
+          zConsensusReportLatestResponse,
+        );
+      }
+
+      return requestJson(path, { method: "GET", headers: accessKeyHeaders }, zConsensusReportLatestResponse);
     },
     getLedgerMe(topicId: string): Promise<ApiResult<z.infer<typeof zLedgerMe>>> {
       const signer = getSigner();
@@ -300,8 +413,33 @@ export function createApiClient(deps?: { signer?: Signer }) {
         signer,
         topicId,
         `/v1/topics/${encodedTopicId}/ledger/me`,
-        { method: "GET" },
+        { method: "GET", headers: getTopicAccessKeyHeaders(topicId) },
         zLedgerMe,
+      );
+    },
+    setTopicProfileMe(
+      topicId: string,
+      input: SetTopicProfileMeRequest,
+    ): Promise<ApiResult<z.infer<typeof zSetTopicProfileMeResponse>>> {
+      const signer = getSigner();
+      if (!signer) {
+        return Promise.resolve({
+          ok: false,
+          error: { kind: "config", message: "No signer available (server-side)" },
+        });
+      }
+      const encodedTopicId = encodeURIComponent(topicId);
+      const body = JSON.stringify(input);
+      return requestJsonSigned(
+        signer,
+        topicId,
+        `/v1/topics/${encodedTopicId}/profile/me`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json", ...getTopicAccessKeyHeaders(topicId) },
+          body,
+        },
+        zSetTopicProfileMeResponse,
       );
     },
     createArgument(topicId: string, input: CreateArgumentRequest): Promise<ApiResult<z.infer<typeof zCreateArgumentResponse>>> {
@@ -320,7 +458,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
         `/v1/topics/${encodedTopicId}/arguments`,
         {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "application/json", ...getTopicAccessKeyHeaders(topicId) },
           body,
         },
         zCreateArgumentResponse,
@@ -342,7 +480,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
         `/v1/arguments/${encodedArgumentId}/votes`,
         {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "application/json", ...getTopicAccessKeyHeaders(topicId) },
           body,
         },
         zSetVotesResponse,
@@ -364,7 +502,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
         `/v1/topics/${encodedTopicId}/commands`,
         {
           method: "POST",
-          headers: { "content-type": "application/json", ...(extraHeaders ?? {}) },
+          headers: { "content-type": "application/json", ...getTopicAccessKeyHeaders(topicId), ...(extraHeaders ?? {}) },
           body,
         },
         zTopicCommandResponse,
@@ -387,7 +525,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
         signer,
         topicId,
         `/v1/topics/${encodedTopicId}/stakes/me`,
-        { method: "GET" },
+        { method: "GET", headers: getTopicAccessKeyHeaders(topicId) },
         zStakesMeResponse,
       );
     },

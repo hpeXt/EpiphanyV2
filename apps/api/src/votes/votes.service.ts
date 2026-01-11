@@ -11,6 +11,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { validateSetVotes } from '@epiphany/core-logic';
 import { zSetVotesResponse, type SetVotesResponse, type LedgerMe } from '@epiphany/shared-contracts';
 import { PrismaService } from '../infrastructure/prisma.module.js';
@@ -32,6 +33,21 @@ export class VotesService {
 
   private getIdempotencyKey(pubkey: string, nonce: string): string {
     return `idemp:setVotes:${pubkey}:${nonce}`;
+  }
+
+  private normalizeAccessKeyHex(value: string | undefined): string | null {
+    const normalized = value?.trim().toLowerCase() ?? null;
+    if (!normalized) return null;
+    if (!/^[0-9a-f]{64}$/.test(normalized)) return null;
+    return normalized;
+  }
+
+  private verifyAccessKey(accessKeyHex: string, expectedHash: Uint8Array | null): boolean {
+    if (!expectedHash) return false;
+    const digest = createHash('sha256').update(Buffer.from(accessKeyHex, 'hex')).digest();
+    const expected = Buffer.from(expectedHash);
+    if (expected.length !== digest.length) return false;
+    return timingSafeEqual(expected, digest);
   }
 
   private toLedgerMe(ledger: {
@@ -58,6 +74,7 @@ export class VotesService {
     pubkey: string;
     nonce: string;
     nonceReplay: boolean;
+    accessKeyHex?: string;
   }): Promise<SetVotesResponse> {
     const idempotencyKey = this.getIdempotencyKey(params.pubkey, params.nonce);
     const pubkeyBytes = Buffer.from(params.pubkey, 'hex');
@@ -129,13 +146,19 @@ export class VotesService {
           topicId: string;
           prunedAt: Date | null;
           topicStatus: string;
+          topicVisibility: string;
+          ownerPubkey: Buffer | null;
+          accessKeyHash: Buffer | null;
         }>
       >(Prisma.sql`
         SELECT
           a.id          AS "argumentId",
           a.topic_id    AS "topicId",
           a.pruned_at   AS "prunedAt",
-          t.status      AS "topicStatus"
+          t.status      AS "topicStatus",
+          t.visibility  AS "topicVisibility",
+          t.owner_pubkey AS "ownerPubkey",
+          t.access_key_hash AS "accessKeyHash"
         FROM arguments a
         JOIN topics t ON t.id = a.topic_id
         WHERE a.id = ${params.argumentId}::uuid
@@ -149,7 +172,33 @@ export class VotesService {
         });
       }
 
-      const { topicId, prunedAt, topicStatus } = row;
+      const { topicId, prunedAt, topicStatus, topicVisibility, ownerPubkey, accessKeyHash } = row;
+
+      if (topicVisibility === 'private') {
+        const ownerOk = ownerPubkey ? Buffer.from(ownerPubkey).equals(pubkeyBytes) : false;
+
+        if (!ownerOk) {
+          const participantRows = await tx.$queryRaw<Array<{ ok: number }>>(Prisma.sql`
+            SELECT 1 AS ok
+            FROM ledgers
+            WHERE topic_id = ${topicId}::uuid
+              AND pubkey = ${pubkeyBytes}
+            LIMIT 1
+          `);
+
+          const isParticipant = participantRows.length > 0;
+          const accessKeyNormalized = this.normalizeAccessKeyHex(params.accessKeyHex);
+          const accessKeyOk = accessKeyNormalized
+            ? this.verifyAccessKey(accessKeyNormalized, accessKeyHash)
+            : false;
+
+          if (!isParticipant && !accessKeyOk) {
+            throw new NotFoundException({
+              error: { code: 'ARGUMENT_NOT_FOUND', message: 'Argument not found' },
+            });
+          }
+        }
+      }
 
       // Ensure ledger exists
       await tx.$executeRaw(Prisma.sql`

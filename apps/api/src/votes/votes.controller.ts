@@ -36,6 +36,7 @@ export class VotesController {
     @Body() body: unknown,
     @Headers('x-pubkey') pubkey: string,
     @Headers('x-nonce') nonce: string,
+    @Headers('x-topic-access-key') accessKey: string | undefined,
     @Req() request: Request & { nonceReplay?: boolean },
   ) {
     const parsed = zSetVotesRequest.safeParse(body);
@@ -56,6 +57,7 @@ export class VotesController {
       pubkey,
       nonce,
       nonceReplay: request.nonceReplay ?? false,
+      accessKeyHex: accessKey,
     });
   }
 }

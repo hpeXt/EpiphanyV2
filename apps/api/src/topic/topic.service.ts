@@ -9,7 +9,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { v7 as uuidv7 } from 'uuid';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../infrastructure/prisma.module.js';
@@ -22,6 +22,7 @@ import type {
   ConsensusReportLatestResponse,
   CreateTopicRequest,
   LedgerMe,
+  SetTopicProfileMeRequest,
   StakeMeItem,
   StakesMeResponse,
   TopicSummary,
@@ -34,6 +35,7 @@ export interface CreateTopicResult {
   topicId: string;
   rootArgumentId: string;
   claimToken: string;
+  accessKey?: string;
   expiresAt: string;
 }
 
@@ -75,6 +77,8 @@ export class TopicService {
     command: {
       type:
         | 'SET_STATUS'
+        | 'SET_VISIBILITY'
+        | 'ROTATE_ACCESS_KEY'
         | 'EDIT_ROOT'
         | 'PRUNE_ARGUMENT'
         | 'UNPRUNE_ARGUMENT'
@@ -114,6 +118,28 @@ export class TopicService {
     if (typeof value !== 'object') return null;
     if (Array.isArray(value)) return null;
     return value as Record<string, unknown>;
+  }
+
+  private toTopicSummaryDto(topic: {
+    id: string;
+    title: string;
+    rootArgumentId: string | null;
+    status: 'active' | 'frozen' | 'archived';
+    ownerPubkey: Uint8Array | null;
+    visibility: 'public' | 'unlisted' | 'private';
+    createdAt: Date;
+    updatedAt: Date;
+  }): TopicSummary {
+    return {
+      id: topic.id,
+      title: topic.title,
+      rootArgumentId: topic.rootArgumentId || '',
+      status: topic.status,
+      ownerPubkey: topic.ownerPubkey ? Buffer.from(topic.ownerPubkey).toString('hex') : null,
+      visibility: topic.visibility,
+      createdAt: topic.createdAt.toISOString(),
+      updatedAt: topic.updatedAt.toISOString(),
+    };
   }
 
   private isValidHex(str: string, expectedLength: number): boolean {
@@ -320,6 +346,11 @@ export class TopicService {
     const topicId = uuidv7();
     const rootArgumentId = uuidv7();
     const claimToken = randomBytes(32).toString('hex');
+    const visibility = dto.visibility ?? 'public';
+
+    const accessKeyBytes = visibility === 'private' ? randomBytes(32) : null;
+    const accessKeyHash = accessKeyBytes ? createHash('sha256').update(accessKeyBytes).digest() : null;
+    const accessKeyHex = accessKeyBytes ? accessKeyBytes.toString('hex') : undefined;
 
     // Create topic + root argument in a transaction
     await this.prisma.$transaction(async (tx: TransactionClient) => {
@@ -329,6 +360,9 @@ export class TopicService {
           id: topicId,
           title: dto.title,
           status: 'active',
+          visibility,
+          accessKeyHash,
+          accessKeyRotatedAt: accessKeyHash ? new Date() : null,
         },
       });
 
@@ -365,6 +399,7 @@ export class TopicService {
       topicId,
       rootArgumentId,
       claimToken,
+      accessKey: accessKeyHex,
       expiresAt,
     };
   }
@@ -400,7 +435,7 @@ export class TopicService {
 
     // Query one extra to determine nextBeforeId
     const topics = await this.prisma.topic.findMany({
-      where: whereClause,
+      where: { ...whereClause, visibility: 'public' },
       orderBy: { createdAt: 'desc' },
       take: limit + 1,
       select: {
@@ -409,6 +444,7 @@ export class TopicService {
         rootArgumentId: true,
         status: true,
         ownerPubkey: true,
+        visibility: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -419,15 +455,7 @@ export class TopicService {
     const nextBeforeId = hasMore && items.length > 0 ? items[items.length - 1].id : null;
 
     return {
-      items: items.map((t) => ({
-        id: t.id,
-        title: t.title,
-        rootArgumentId: t.rootArgumentId || '',
-        status: t.status,
-        ownerPubkey: t.ownerPubkey ? Buffer.from(t.ownerPubkey).toString('hex') : null,
-        createdAt: t.createdAt.toISOString(),
-        updatedAt: t.updatedAt.toISOString(),
-      })),
+      items: items.map((t) => this.toTopicSummaryDto(t)),
       nextBeforeId,
     };
   }
@@ -444,6 +472,7 @@ export class TopicService {
         rootArgumentId: true,
         status: true,
         ownerPubkey: true,
+        visibility: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -453,15 +482,7 @@ export class TopicService {
       return null;
     }
 
-    return {
-      id: topic.id,
-      title: topic.title,
-      rootArgumentId: topic.rootArgumentId || '',
-      status: topic.status,
-      ownerPubkey: topic.ownerPubkey ? Buffer.from(topic.ownerPubkey).toString('hex') : null,
-      createdAt: topic.createdAt.toISOString(),
-      updatedAt: topic.updatedAt.toISOString(),
-    };
+    return this.toTopicSummaryDto(topic);
   }
 
   /**
@@ -512,20 +533,13 @@ export class TopicService {
         rootArgumentId: true,
         status: true,
         ownerPubkey: true,
+        visibility: true,
         createdAt: true,
         updatedAt: true,
       },
     });
 
-    return {
-      id: updated.id,
-      title: updated.title,
-      rootArgumentId: updated.rootArgumentId || '',
-      status: updated.status,
-      ownerPubkey: updated.ownerPubkey ? Buffer.from(updated.ownerPubkey).toString('hex') : null,
-      createdAt: updated.createdAt.toISOString(),
-      updatedAt: updated.updatedAt.toISOString(),
-    };
+    return this.toTopicSummaryDto(updated);
   }
 
   /**
@@ -541,6 +555,7 @@ export class TopicService {
         rootArgumentId: true,
         status: true,
         ownerPubkey: true,
+        visibility: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -567,6 +582,7 @@ export class TopicService {
         rootArgumentId: true,
         status: true,
         ownerPubkey: true,
+        visibility: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -582,15 +598,185 @@ export class TopicService {
       // ignore
     }
 
-    return {
-      id: updated.id,
-      title: updated.title,
-      rootArgumentId: updated.rootArgumentId || '',
-      status: updated.status,
-      ownerPubkey: updated.ownerPubkey ? Buffer.from(updated.ownerPubkey).toString('hex') : null,
-      createdAt: updated.createdAt.toISOString(),
-      updatedAt: updated.updatedAt.toISOString(),
-    };
+    return this.toTopicSummaryDto(updated);
+  }
+
+  /**
+   * SET_VISIBILITY host command (requires owner)
+   * - public/unlisted: clears access key hash
+   * - private: enables access key hash (only returned when newly created)
+   */
+  async setVisibility(
+    topicId: string,
+    visibility: 'public' | 'unlisted' | 'private',
+    pubkeyHex: string,
+  ): Promise<{ topic: TopicSummary; accessKey?: string }> {
+    const topic = await this.prisma.topic.findUnique({
+      where: { id: topicId },
+      select: {
+        id: true,
+        title: true,
+        rootArgumentId: true,
+        status: true,
+        ownerPubkey: true,
+        visibility: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!topic) {
+      throw new NotFoundException({
+        error: { code: 'TOPIC_NOT_FOUND', message: 'Topic not found' },
+      });
+    }
+
+    this.assertIsTopicOwner(topic, pubkeyHex);
+    this.assertTopicStatusAllowsHostCommand({
+      currentStatus: topic.status,
+      command: { type: 'SET_VISIBILITY', payload: { visibility } },
+    });
+
+    if (visibility === 'private') {
+      // Idempotent: already private -> keep current key (cannot be re-shown).
+      if (topic.visibility === 'private') {
+        return { topic: this.toTopicSummaryDto(topic) };
+      }
+
+      const accessKeyBytes = randomBytes(32);
+      const accessKeyHash = createHash('sha256').update(accessKeyBytes).digest();
+      const accessKeyHex = accessKeyBytes.toString('hex');
+
+      const updated = await this.prisma.topic.update({
+        where: { id: topicId },
+        data: {
+          visibility: 'private',
+          accessKeyHash,
+          accessKeyRotatedAt: new Date(),
+        },
+        select: {
+          id: true,
+          title: true,
+          rootArgumentId: true,
+          status: true,
+          ownerPubkey: true,
+          visibility: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      try {
+        await this.topicEvents.publish(topicId, {
+          event: 'topic_updated',
+          data: { topicId, reason: 'visibility_changed' },
+        });
+      } catch {
+        // ignore
+      }
+
+      return { topic: this.toTopicSummaryDto(updated), accessKey: accessKeyHex };
+    }
+
+    const updated = await this.prisma.topic.update({
+      where: { id: topicId },
+      data: {
+        visibility,
+        accessKeyHash: null,
+        accessKeyRotatedAt: null,
+      },
+      select: {
+        id: true,
+        title: true,
+        rootArgumentId: true,
+        status: true,
+        ownerPubkey: true,
+        visibility: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    try {
+      await this.topicEvents.publish(topicId, {
+        event: 'topic_updated',
+        data: { topicId, reason: 'visibility_changed' },
+      });
+    } catch {
+      // ignore
+    }
+
+    return { topic: this.toTopicSummaryDto(updated) };
+  }
+
+  /**
+   * ROTATE_ACCESS_KEY host command (requires owner, private only)
+   */
+  async rotateAccessKey(topicId: string, pubkeyHex: string): Promise<{ topic: TopicSummary; accessKey: string }> {
+    const topic = await this.prisma.topic.findUnique({
+      where: { id: topicId },
+      select: {
+        id: true,
+        title: true,
+        rootArgumentId: true,
+        status: true,
+        ownerPubkey: true,
+        visibility: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!topic) {
+      throw new NotFoundException({
+        error: { code: 'TOPIC_NOT_FOUND', message: 'Topic not found' },
+      });
+    }
+
+    this.assertIsTopicOwner(topic, pubkeyHex);
+    this.assertTopicStatusAllowsHostCommand({
+      currentStatus: topic.status,
+      command: { type: 'ROTATE_ACCESS_KEY', payload: {} },
+    });
+
+    if (topic.visibility !== 'private') {
+      throw new BadRequestException({
+        error: { code: 'BAD_REQUEST', message: 'Topic is not private' },
+      });
+    }
+
+    const accessKeyBytes = randomBytes(32);
+    const accessKeyHash = createHash('sha256').update(accessKeyBytes).digest();
+    const accessKeyHex = accessKeyBytes.toString('hex');
+
+    const updated = await this.prisma.topic.update({
+      where: { id: topicId },
+      data: {
+        accessKeyHash,
+        accessKeyRotatedAt: new Date(),
+      },
+      select: {
+        id: true,
+        title: true,
+        rootArgumentId: true,
+        status: true,
+        ownerPubkey: true,
+        visibility: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    try {
+      await this.topicEvents.publish(topicId, {
+        event: 'topic_updated',
+        data: { topicId, reason: 'visibility_changed' },
+      });
+    } catch {
+      // ignore
+    }
+
+    return { topic: this.toTopicSummaryDto(updated), accessKey: accessKeyHex };
   }
 
   /**
@@ -648,6 +834,7 @@ export class TopicService {
           rootArgumentId: true,
           status: true,
           ownerPubkey: true,
+          visibility: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -664,15 +851,7 @@ export class TopicService {
       // ignore
     }
 
-    return {
-      id: updatedTopic.id,
-      title: updatedTopic.title,
-      rootArgumentId: updatedTopic.rootArgumentId || '',
-      status: updatedTopic.status,
-      ownerPubkey: updatedTopic.ownerPubkey ? Buffer.from(updatedTopic.ownerPubkey).toString('hex') : null,
-      createdAt: updatedTopic.createdAt.toISOString(),
-      updatedAt: updatedTopic.updatedAt.toISOString(),
-    };
+    return this.toTopicSummaryDto(updatedTopic);
   }
 
   /**
@@ -955,6 +1134,11 @@ export class TopicService {
     }
 
     const pubkeyBytes = Buffer.from(pubkeyHex, 'hex');
+    const profile = await this.prisma.topicIdentityProfile.findUnique({
+      where: { topicId_pubkey: { topicId, pubkey: pubkeyBytes } },
+      select: { displayName: true },
+    });
+    const displayName = profile?.displayName ?? null;
 
     // Try to find existing ledger, or return default values
     const ledger = await this.prisma.ledger.findUnique({
@@ -977,6 +1161,7 @@ export class TopicService {
         myTotalVotes: ledger.totalVotesStaked,
         myTotalCost: ledger.totalCostStaked,
         lastInteractionAt: ledger.lastInteractionAt?.toISOString() ?? null,
+        displayName,
       };
     }
 
@@ -988,7 +1173,37 @@ export class TopicService {
       myTotalVotes: 0,
       myTotalCost: 0,
       lastInteractionAt: null,
+      displayName,
     };
+  }
+
+  async setTopicProfileMe(
+    topicId: string,
+    pubkeyHex: string,
+    dto: SetTopicProfileMeRequest,
+  ): Promise<{ topicId: string; displayName: string | null }> {
+    const topic = await this.prisma.topic.findUnique({
+      where: { id: topicId },
+      select: { id: true },
+    });
+
+    if (!topic) {
+      throw new NotFoundException({
+        error: { code: 'TOPIC_NOT_FOUND', message: 'Topic not found' },
+      });
+    }
+
+    const pubkeyBytes = Buffer.from(pubkeyHex, 'hex');
+    const displayName = dto.displayName?.trim() ? dto.displayName.trim() : null;
+
+    await this.prisma.topicIdentityProfile.upsert({
+      where: { topicId_pubkey: { topicId, pubkey: pubkeyBytes } },
+      update: { displayName },
+      create: { topicId, pubkey: pubkeyBytes, displayName },
+      select: { topicId: true },
+    });
+
+    return { topicId, displayName };
   }
 
   /**

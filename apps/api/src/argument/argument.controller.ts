@@ -32,6 +32,7 @@ export class ArgumentController {
     @Param('topicId') topicId: string,
     @Body() body: unknown,
     @Headers('x-pubkey') pubkey: string,
+    @Headers('x-topic-access-key') accessKey: string | undefined,
   ) {
     const parsed = zCreateArgumentRequest.safeParse(body);
     if (!parsed.success) {
@@ -59,6 +60,7 @@ export class ArgumentController {
       topicId,
       dto: { ...parsed.data, initialVotes },
       pubkeyHex: pubkey,
+      accessKeyHex: accessKey,
     });
   }
 }

@@ -16,7 +16,7 @@ function clampInt(value: number, min: number, max: number): number {
 export class FocusViewService {
   private readonly DEFAULT_TREE_DEPTH = 3;
   private readonly MIN_TREE_DEPTH = 1;
-  private readonly MAX_TREE_DEPTH = 6;
+  private readonly MAX_TREE_DEPTH = 10;
 
   private readonly DEFAULT_CHILDREN_LIMIT = 30;
   private readonly MAX_CHILDREN_LIMIT = 100;
@@ -84,4 +84,3 @@ export class FocusViewService {
     });
   }
 }
-

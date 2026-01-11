@@ -3,6 +3,14 @@ import userEvent from "@testing-library/user-event";
 
 import { deriveTopicKeypairFromMasterSeedHex } from "@/lib/identity";
 
+const mockPush = jest.fn();
+
+jest.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: mockPush,
+  }),
+}));
+
 const { TopicPage } = require("@/components/topics/TopicPage");
 
 type MockJsonResponse = { ok: boolean; status: number; json: unknown };
@@ -95,6 +103,7 @@ function createFetchMock(options: {
             rootArgumentId: "arg-root",
             status: options.topicStatus,
             ownerPubkey: options.ownerPubkey,
+            visibility: "public",
             createdAt: "2025-12-19T12:34:56.789Z",
             updatedAt: "2025-12-19T12:34:56.789Z",
           },
@@ -137,6 +146,7 @@ function createFetchMock(options: {
             rootArgumentId: "arg-root",
             status: options.topicStatus,
             ownerPubkey: options.ownerPubkey,
+            visibility: "public",
             createdAt: "2025-12-19T12:34:56.789Z",
             updatedAt: "2025-12-19T12:34:56.789Z",
           },
@@ -151,6 +161,7 @@ function createFetchMock(options: {
 describe("TopicPage (Step 22 - Consensus Report)", () => {
   beforeEach(() => {
     process.env.NEXT_PUBLIC_API_URL = "https://example.com";
+    mockPush.mockReset();
     window.localStorage.clear();
     window.localStorage.setItem("tm:master-seed:v1", "00".repeat(64));
     (globalThis.EventSource as any)?.reset?.();
@@ -189,6 +200,44 @@ describe("TopicPage (Step 22 - Consensus Report)", () => {
 
     expect(await screen.findByRole("heading", { name: "Consensus Report" })).toBeInTheDocument();
     expect(screen.getByText("one")).toBeInTheDocument();
+  });
+
+  it("renders [S#] citations as footnotes when source mapping exists", async () => {
+    global.fetch = createFetchMock({
+      topicStatus: "active",
+      ownerPubkey: null,
+      latestReport: {
+        report: {
+          id: "report-1",
+          topicId: "topic-1",
+          status: "ready",
+          contentMd: "# Consensus Report\n\nA claim. [S1]\n\n- bullet. [S2]",
+          model: "mock-report-model",
+          promptVersion: "v2",
+          params: { maxArguments: 30 },
+          metadata: {
+            sources: {
+              S1: { argumentId: "arg-a", authorId: "0123456789abcdef" },
+              S2: { argumentId: "arg-b", authorId: "fedcba9876543210" },
+            },
+          },
+          computedAt: "2025-12-19T12:35:56.789Z",
+          createdAt: "2025-12-19T12:34:56.789Z",
+        },
+      },
+    }) as unknown as typeof fetch;
+
+    const user = userEvent.setup();
+
+    render(<TopicPage topicId="topic-1" />);
+
+    await screen.findByText("Topic 1");
+    await user.click(screen.getByRole("button", { name: "Report" }));
+
+    expect(await screen.findByRole("heading", { name: "Footnotes" })).toBeInTheDocument();
+    expect(screen.getAllByText(/topic:topic-1/)).toHaveLength(2);
+    expect(screen.getByText(/author:0123456789abcdef/)).toBeInTheDocument();
+    expect(screen.getByText(/argument:arg-a/)).toBeInTheDocument();
   });
 
   it("shows generating state when latest report is generating", async () => {
@@ -299,4 +348,3 @@ describe("TopicPage (Step 22 - Consensus Report)", () => {
     expect(await screen.findByText("Generating report…")).toBeInTheDocument();
   });
 });
-

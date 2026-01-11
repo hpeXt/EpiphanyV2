@@ -113,10 +113,11 @@ describe('Consensus Report Processor', () => {
     expect(updated).not.toBeNull();
     expect(updated!.status).toBe('ready');
     expect(updated!.contentMd).toContain('Consensus Report');
-    expect(updated!.promptVersion).toBe('consensus-report/v1');
+    expect(updated!.promptVersion).toBe('consensus-report/v2');
     expect(updated!.params).toBeTruthy();
     expect((updated!.params as any).filters?.pruned).toBe(false);
     expect(Array.isArray((updated!.params as any).selectedArgumentIds)).toBe(true);
+    expect((updated!.metadata as any)?.sources).toBeTruthy();
     expect(updated!.computedAt).not.toBeNull();
 
     const events = await redis.xrange(`topic:events:${topicId}`, '-', '+');
@@ -252,10 +253,18 @@ describe('Consensus Report Processor', () => {
     });
 
     expect(captured).not.toBeNull();
-    expect(captured!.arguments.map((a) => a.id)).toContain(rootArgumentId);
-    expect(captured!.arguments.map((a) => a.id)).toContain(visibleId);
-    expect(captured!.arguments.map((a) => a.id)).not.toContain(prunedId);
     expect(captured!.params.selectedArgumentIds).not.toContain(prunedId);
+
+    const updated = await prisma.consensusReport.findUnique({ where: { id: reportId } });
+    expect(updated).not.toBeNull();
+    const sourceMap = (updated!.metadata as any)?.sources as Record<
+      string,
+      { argumentId: string; authorId: string }
+    >;
+    expect(sourceMap).toBeTruthy();
+    const sourceArgumentIds = Object.values(sourceMap).map((s) => s.argumentId);
+    expect(sourceArgumentIds).toContain(rootArgumentId);
+    expect(sourceArgumentIds).toContain(visibleId);
+    expect(sourceArgumentIds).not.toContain(prunedId);
   });
 });
-

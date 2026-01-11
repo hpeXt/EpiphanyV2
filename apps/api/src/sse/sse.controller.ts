@@ -2,15 +2,17 @@
  * @file sse.controller.ts
  * @description SSE endpoint: GET /v1/sse/:topicId
  */
-import { Controller, Get, Headers, Param, Req, Res } from '@nestjs/common';
+import { Controller, Get, Headers, Param, Req, Res, UseGuards } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { SseService } from './sse.service.js';
+import { TopicPrivacyGuard } from '../topic/topic-privacy.guard.js';
 
 @Controller('v1/sse')
 export class SseController {
   constructor(private readonly sseService: SseService) {}
 
   @Get(':topicId')
+  @UseGuards(TopicPrivacyGuard)
   async subscribe(
     @Param('topicId') topicId: string,
     @Headers('last-event-id') lastEventId: string | undefined,
@@ -42,4 +44,3 @@ export class SseController {
     }
   }
 }
-

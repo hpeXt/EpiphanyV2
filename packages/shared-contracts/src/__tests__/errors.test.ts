@@ -16,6 +16,7 @@ describe('ErrorResponse', () => {
     'TIMESTAMP_OUT_OF_RANGE',
     'NONCE_REPLAY',
     'NOT_TOPIC_OWNER',
+    'NOT_ARGUMENT_AUTHOR',
     'TOPIC_PUBKEY_BLACKLISTED',
     'TOPIC_NOT_FOUND',
     'ARGUMENT_NOT_FOUND',

@@ -22,6 +22,7 @@ import { zErrorCode } from './errors.js';
 export const zCreateTopicRequest = z.object({
   title: z.string(),
   body: z.string(),
+  visibility: z.enum(['public', 'unlisted', 'private']).optional(),
 });
 
 export type CreateTopicRequest = z.infer<typeof zCreateTopicRequest>;
@@ -30,6 +31,7 @@ export const zCreateTopicResponse = z.object({
   topicId: z.string(),
   rootArgumentId: z.string(),
   claimToken: z.string(),
+  accessKey: z.string().optional(),
   expiresAt: z.string(), // ISO datetime
 });
 
@@ -79,6 +81,24 @@ export const zArgumentResponse = z.object({
 });
 
 export type ArgumentResponse = z.infer<typeof zArgumentResponse>;
+
+// ============================================================================
+// POST /v1/arguments/:argumentId/edit - Edit Argument
+// ============================================================================
+
+export const zEditArgumentRequest = z.object({
+  title: z.string().nullable().optional(),
+  body: z.string(),
+  bodyRich: zTiptapDoc.nullable().optional(),
+});
+
+export type EditArgumentRequest = z.infer<typeof zEditArgumentRequest>;
+
+export const zEditArgumentResponse = z.object({
+  argument: zArgument,
+});
+
+export type EditArgumentResponse = z.infer<typeof zEditArgumentResponse>;
 
 // ============================================================================
 // POST /v1/topics/:topicId/arguments - Create Argument
@@ -135,6 +155,23 @@ export const zStakesMeResponse = z.object({
 });
 
 export type StakesMeResponse = z.infer<typeof zStakesMeResponse>;
+
+// ============================================================================
+// POST /v1/topics/:topicId/profile/me - Set my topic profile (display name)
+// ============================================================================
+
+export const zSetTopicProfileMeRequest = z.object({
+  displayName: z.string().max(40).nullable(),
+});
+
+export type SetTopicProfileMeRequest = z.infer<typeof zSetTopicProfileMeRequest>;
+
+export const zSetTopicProfileMeResponse = z.object({
+  topicId: z.string(),
+  displayName: z.string().max(40).nullable(),
+});
+
+export type SetTopicProfileMeResponse = z.infer<typeof zSetTopicProfileMeResponse>;
 
 // ============================================================================
 // POST /v1/user/batch-balance - Batch Balance Query
@@ -203,6 +240,18 @@ export const zTopicCommandSetStatus = z.object({
   }),
 });
 
+export const zTopicCommandSetVisibility = z.object({
+  type: z.literal('SET_VISIBILITY'),
+  payload: z.object({
+    visibility: z.enum(['public', 'unlisted', 'private']),
+  }),
+});
+
+export const zTopicCommandRotateAccessKey = z.object({
+  type: z.literal('ROTATE_ACCESS_KEY'),
+  payload: z.object({}),
+});
+
 export const zTopicCommandEditRoot = z.object({
   type: z.literal('EDIT_ROOT'),
   payload: z.object({
@@ -249,6 +298,8 @@ export const zTopicCommandGenerateConsensusReport = z.object({
 export const zTopicCommand = z.discriminatedUnion('type', [
   zTopicCommandClaimOwner,
   zTopicCommandSetStatus,
+  zTopicCommandSetVisibility,
+  zTopicCommandRotateAccessKey,
   zTopicCommandEditRoot,
   zTopicCommandPruneArgument,
   zTopicCommandUnpruneArgument,
@@ -261,6 +312,7 @@ export type TopicCommand = z.infer<typeof zTopicCommand>;
 
 export const zTopicCommandResponse = z.object({
   topic: zTopicSummary,
+  accessKey: z.string().optional(),
 });
 
 export type TopicCommandResponse = z.infer<typeof zTopicCommandResponse>;

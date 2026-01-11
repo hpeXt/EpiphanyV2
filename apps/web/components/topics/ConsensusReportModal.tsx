@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import type { ConsensusReport } from "@epiphany/shared-contracts";
 
@@ -33,6 +34,11 @@ export function ConsensusReportModal({
     errorMessage: "",
     report: null,
   });
+
+  const sourceMap = useMemo(() => {
+    const report = state.status === "success" ? state.report : null;
+    return report ? getConsensusReportSourceMap(report) : null;
+  }, [state]);
 
   const [isTriggering, setIsTriggering] = useState(false);
   const [triggerError, setTriggerError] = useState("");
@@ -131,7 +137,12 @@ export function ConsensusReportModal({
                   </p>
                 </div>
               ) : (
-                <Markdown content={report.contentMd} />
+                <Markdown
+                  content={report.contentMd}
+                  topicId={topicId}
+                  sourceMap={sourceMap}
+                  onRequestClose={onClose}
+                />
               )}
 
               {triggerError ? (
@@ -160,8 +171,101 @@ export function ConsensusReportModal({
   );
 }
 
-function Markdown(props: { content: string }) {
+type ReportSourceMap = Record<string, { argumentId: string; authorId: string }>;
+
+function getConsensusReportSourceMap(report: ConsensusReport): ReportSourceMap | null {
+  const metadata = report.metadata;
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+
+  const sources = (metadata as any).sources;
+  if (!sources || typeof sources !== "object" || Array.isArray(sources)) return null;
+
+  const map: ReportSourceMap = {};
+  for (const [label, value] of Object.entries(sources as Record<string, unknown>)) {
+    if (!/^S\d+$/.test(label)) continue;
+    const argumentId = (value as any)?.argumentId;
+    const authorId = (value as any)?.authorId;
+    if (typeof argumentId !== "string" || typeof authorId !== "string") continue;
+    map[label] = { argumentId, authorId };
+  }
+
+  return Object.keys(map).length ? map : null;
+}
+
+function extractCitationLabels(content: string): string[] {
+  const labels: string[] = [];
+  const seen = new Set<string>();
+  const regex = /\[(S\d+)\]/g;
+
+  let match: RegExpExecArray | null = null;
+  while ((match = regex.exec(content)) !== null) {
+    const label = match[1];
+    if (seen.has(label)) continue;
+    seen.add(label);
+    labels.push(label);
+  }
+
+  return labels;
+}
+
+function Markdown(props: {
+  content: string;
+  topicId: string;
+  sourceMap: ReportSourceMap | null;
+  onRequestClose: () => void;
+}) {
+  const router = useRouter();
+
   const blocks = useMemo(() => parseMarkdown(props.content), [props.content]);
+
+  const citationLabels = useMemo(() => extractCitationLabels(props.content), [props.content]);
+  const labelToIndex = useMemo(() => {
+    const map = new Map<string, number>();
+    citationLabels.forEach((label, idx) => map.set(label, idx + 1));
+    return map;
+  }, [citationLabels]);
+
+  const renderInline = useCallback((text: string) => {
+    const parts: Array<string | JSX.Element> = [];
+    const regex = /\[(S\d+)\]/g;
+
+    let lastIndex = 0;
+    let match: RegExpExecArray | null = null;
+    while ((match = regex.exec(text)) !== null) {
+      const start = match.index;
+      const end = start + match[0].length;
+      if (start > lastIndex) {
+        parts.push(text.slice(lastIndex, start));
+      }
+
+      const label = match[1];
+      const index = labelToIndex.get(label);
+      if (!index) {
+        parts.push(match[0]);
+      } else {
+        parts.push(
+          <sup key={`${label}-${start}`} className="ml-0.5 align-super text-[0.75em]">
+            <a
+              href={`#footnote-${label}`}
+              aria-label={`Footnote ${index}`}
+              className="font-mono text-[color:var(--ink)] underline decoration-dotted underline-offset-2"
+            >
+              {index}
+            </a>
+          </sup>,
+        );
+      }
+
+      lastIndex = end;
+    }
+
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex));
+    }
+
+    return parts;
+  }, [labelToIndex]);
+
   return (
     <article className="prose prose-zinc max-w-none">
       {blocks.map((block) => {
@@ -169,7 +273,7 @@ function Markdown(props: { content: string }) {
           const Tag = block.level === 1 ? "h1" : block.level === 2 ? "h2" : "h3";
           return (
             <Tag key={block.key} className="text-zinc-900">
-              {block.text}
+              {renderInline(block.text)}
             </Tag>
           );
         }
@@ -177,7 +281,7 @@ function Markdown(props: { content: string }) {
           return (
             <ul key={block.key} className="list-disc pl-5">
               {block.items.map((item, index) => (
-                <li key={`${block.key}-${index}`}>{item}</li>
+                <li key={`${block.key}-${index}`}>{renderInline(item)}</li>
               ))}
             </ul>
           );
@@ -191,10 +295,57 @@ function Markdown(props: { content: string }) {
         }
         return (
           <p key={block.key} className="whitespace-pre-wrap text-zinc-800">
-            {block.text}
+            {renderInline(block.text)}
           </p>
         );
       })}
+
+      {citationLabels.length ? (
+        <section className="mt-8">
+          <hr className="my-6 border-zinc-200" />
+          <h3 className="text-zinc-900">Footnotes</h3>
+          <ol className="space-y-2 pl-5">
+            {citationLabels.map((label) => {
+              const index = labelToIndex.get(label);
+              if (!index) return null;
+
+              const source = props.sourceMap?.[label] ?? null;
+              const href = source ? `/topics/${props.topicId}?arg=${encodeURIComponent(source.argumentId)}` : null;
+
+              return (
+                <li key={label} id={`footnote-${label}`} className="break-all">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {href ? (
+                      <button
+                        type="button"
+                        className="rounded-sm border border-zinc-300 bg-white px-2 py-1 font-mono text-xs text-zinc-900 hover:bg-zinc-50"
+                        onClick={() => {
+                          props.onRequestClose();
+                          router.push(href);
+                        }}
+                      >
+                        Open
+                      </button>
+                    ) : (
+                      <span className="font-mono text-xs text-zinc-600">{label}</span>
+                    )}
+
+                    {source ? (
+                      <span className="font-mono text-xs text-zinc-700">
+                        topic:{props.topicId} · author:{source.authorId} · argument:{source.argumentId}
+                      </span>
+                    ) : (
+                      <span className="font-mono text-xs text-zinc-600">
+                        (source mapping missing for {label})
+                      </span>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      ) : null}
     </article>
   );
 }

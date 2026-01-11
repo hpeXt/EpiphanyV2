@@ -12,6 +12,9 @@ import {
   zTopicTreeResponse,
   // GET /v1/arguments/:argumentId/children
   zArgumentChildrenResponse,
+  // POST /v1/arguments/:argumentId/edit
+  zEditArgumentRequest,
+  zEditArgumentResponse,
   // POST /v1/topics/:topicId/arguments
   zCreateArgumentRequest,
   zCreateArgumentResponse,
@@ -39,6 +42,52 @@ import {
   type BatchBalanceResponse,
   type ConsensusReportLatestResponse,
 } from '../index.js';
+
+describe('POST /v1/arguments/:argumentId/edit request', () => {
+  it('should accept bodyRich (TipTap/ProseMirror JSON) and preserve it', () => {
+    const fixture = {
+      body: 'Updated body',
+      bodyRich: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: 'Updated body' }],
+          },
+        ],
+      },
+    };
+
+    const result = zEditArgumentRequest.safeParse(fixture);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect((result.data as any).bodyRich).toEqual(fixture.bodyRich);
+  });
+
+  it('should parse a valid response', () => {
+    const fixture = {
+      argument: {
+        id: '0193e3a6-0b7d-7a8d-9f2c-abcdef123456',
+        topicId: '0193e3a6-0b7d-7a8d-9f2c-1234567890ab',
+        parentId: '0193e3a6-0b7d-7a8d-9f2c-parent123456',
+        title: null,
+        body: 'Updated body',
+        bodyRich: { type: 'doc', content: [] },
+        authorId: 'fd704b74dc0c1225',
+        analysisStatus: 'pending_analysis',
+        stanceScore: null,
+        totalVotes: 0,
+        totalCost: 0,
+        prunedAt: null,
+        createdAt: '2025-12-19T12:34:56.789Z',
+        updatedAt: '2025-12-19T12:35:56.789Z',
+      },
+    };
+
+    const result = zEditArgumentResponse.safeParse(fixture);
+    expect(result.success).toBe(true);
+  });
+});
 
 describe('POST /v1/topics/:topicId/arguments request', () => {
   it('should accept bodyRich (TipTap/ProseMirror JSON) and preserve it', () => {
@@ -98,6 +147,7 @@ describe('GET /v1/topics response', () => {
           id: '0193e3a6-0b7d-7a8d-9f2c-1234567890ab',
           title: 'First Topic',
           rootArgumentId: '0193e3a6-0b7d-7a8d-9f2c-abcdef123456',
+          visibility: 'public',
           status: 'active',
           ownerPubkey: null,
           createdAt: '2025-12-19T12:34:56.789Z',
@@ -107,6 +157,7 @@ describe('GET /v1/topics response', () => {
           id: '0193e3a6-0b7d-7a8d-9f2c-second123456',
           title: 'Second Topic',
           rootArgumentId: '0193e3a6-0b7d-7a8d-9f2c-root00000002',
+          visibility: 'public',
           status: 'frozen',
           ownerPubkey: 'abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234',
           createdAt: '2025-12-18T10:00:00.000Z',
@@ -134,15 +185,16 @@ describe('GET /v1/topics response', () => {
 describe('GET /v1/topics/:topicId/tree response', () => {
   it('should parse a valid response with topic, depth, and arguments', () => {
     const fixture: TopicTreeResponse = {
-      topic: {
-        id: '0193e3a6-0b7d-7a8d-9f2c-1234567890ab',
-        title: 'Discussion Topic',
-        rootArgumentId: '0193e3a6-0b7d-7a8d-9f2c-root00000001',
-        status: 'active',
-        ownerPubkey: null,
-        createdAt: '2025-12-19T12:34:56.789Z',
-        updatedAt: '2025-12-19T12:34:56.789Z',
-      },
+	      topic: {
+	        id: '0193e3a6-0b7d-7a8d-9f2c-1234567890ab',
+	        title: 'Discussion Topic',
+	        rootArgumentId: '0193e3a6-0b7d-7a8d-9f2c-root00000001',
+	        visibility: 'public',
+	        status: 'active',
+	        ownerPubkey: null,
+	        createdAt: '2025-12-19T12:34:56.789Z',
+	        updatedAt: '2025-12-19T12:34:56.789Z',
+	      },
       depth: 3,
       arguments: [
         {
@@ -187,15 +239,16 @@ describe('GET /v1/topics/:topicId/tree response', () => {
 
     depths.forEach((depth) => {
       const fixture = {
-        topic: {
-          id: '0193e3a6-0b7d-7a8d-9f2c-1234567890ab',
-          title: 'Test',
-          rootArgumentId: '0193e3a6-0b7d-7a8d-9f2c-root00000001',
-          status: 'active',
-          ownerPubkey: null,
-          createdAt: '2025-12-19T12:34:56.789Z',
-          updatedAt: '2025-12-19T12:34:56.789Z',
-        },
+	        topic: {
+	          id: '0193e3a6-0b7d-7a8d-9f2c-1234567890ab',
+	          title: 'Test',
+	          rootArgumentId: '0193e3a6-0b7d-7a8d-9f2c-root00000001',
+	          visibility: 'public',
+	          status: 'active',
+	          ownerPubkey: null,
+	          createdAt: '2025-12-19T12:34:56.789Z',
+	          updatedAt: '2025-12-19T12:34:56.789Z',
+	        },
         depth,
         arguments: [],
       };

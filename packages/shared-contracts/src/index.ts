@@ -20,10 +20,12 @@ export {
 export {
   // Enums
   zTopicStatus,
+  zTopicVisibility,
   zArgumentAnalysisStatus,
   zReportStatus,
   zStance,
   type TopicStatus,
+  type TopicVisibility,
   type ArgumentAnalysisStatus,
   type ReportStatus,
   type Stance,
@@ -81,6 +83,11 @@ export {
   // GET /v1/arguments/:argumentId
   zArgumentResponse,
   type ArgumentResponse,
+  // POST /v1/arguments/:argumentId/edit
+  zEditArgumentRequest,
+  zEditArgumentResponse,
+  type EditArgumentRequest,
+  type EditArgumentResponse,
   // POST /v1/topics/:topicId/arguments
   zCreateArgumentRequest,
   zCreateArgumentResponse,
@@ -94,6 +101,11 @@ export {
   // GET /v1/topics/:topicId/stakes/me
   zStakesMeResponse,
   type StakesMeResponse,
+  // POST /v1/topics/:topicId/profile/me
+  zSetTopicProfileMeRequest,
+  zSetTopicProfileMeResponse,
+  type SetTopicProfileMeRequest,
+  type SetTopicProfileMeResponse,
   // POST /v1/user/batch-balance
   zBatchBalanceRequestItem,
   zBatchBalanceRequest,
@@ -107,6 +119,8 @@ export {
   zTopicCommand,
   zTopicCommandClaimOwner,
   zTopicCommandSetStatus,
+  zTopicCommandSetVisibility,
+  zTopicCommandRotateAccessKey,
   zTopicCommandEditRoot,
   zTopicCommandPruneArgument,
   zTopicCommandUnpruneArgument,

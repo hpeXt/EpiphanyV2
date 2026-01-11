@@ -380,7 +380,9 @@ export function TopicPage({ topicId }: Props) {
           topicId={topicId}
           topicTitle={tree.topic.title}
           topicStatus={tree.topic.status}
+          topicVisibility={tree.topic.visibility}
           rootBody={tree.topic.rootBody}
+          defaultArgumentId={selectedArgumentId}
           onInvalidate={invalidate}
           onClose={() => setIsManageOpen(false)}
         />

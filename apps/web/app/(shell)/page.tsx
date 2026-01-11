@@ -3,6 +3,7 @@ import Link from "next/link";
 import { P5Badge } from "@/components/ui/P5Badge";
 import { P5LinkButton } from "@/components/ui/P5Button";
 import { P5Alert } from "@/components/ui/P5Alert";
+import { TopicHostControls } from "@/components/topics/TopicHostControls";
 import { apiClient } from "@/lib/apiClient";
 import { BRAND } from "@/lib/brand";
 
@@ -75,34 +76,34 @@ export default async function Home() {
                       : "ink";
 
                 return (
-                  <Link key={topic.id} href={`/topics/${topic.id}`}>
-                    <article className="group rounded-lg border border-border/60 bg-card p-6 shadow-sm transition-colors hover:bg-muted/30">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <h3 className="truncate font-serif text-xl text-foreground transition-colors group-hover:text-accent">
-                            {topic.title}
-                          </h3>
-                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                            <span className="font-mono">{topic.id}</span>
-                            <span aria-hidden>·</span>
-                            <span>
-                              {new Date(topic.createdAt).toLocaleDateString("en-US", {
-                                month: "short",
-                                day: "numeric",
-                                year: "numeric",
-                              })}
-                            </span>
-                          </div>
+                  <article
+                    key={topic.id}
+                    className="group rounded-lg border border-border/60 bg-card p-6 shadow-sm transition-colors hover:bg-muted/30"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <Link href={`/topics/${topic.id}`} className="min-w-0 flex-1">
+                        <h3 className="truncate font-serif text-xl text-foreground transition-colors group-hover:text-accent">
+                          {topic.title}
+                        </h3>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <span className="font-mono">{topic.id}</span>
+                          <span aria-hidden>·</span>
+                          <span>
+                            {new Date(topic.createdAt).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            })}
+                          </span>
                         </div>
-                        <div className="flex shrink-0 flex-col items-end gap-2">
-                          <P5Badge variant={badgeVariant}>{topic.status}</P5Badge>
-                          {topic.ownerPubkey ? (
-                            <P5Badge variant="ink">host</P5Badge>
-                          ) : null}
-                        </div>
+                      </Link>
+                      <div className="flex shrink-0 flex-col items-end gap-2">
+                        <P5Badge variant={badgeVariant}>{topic.status}</P5Badge>
+                        {topic.ownerPubkey ? <P5Badge variant="ink">host</P5Badge> : null}
+                        <TopicHostControls topicId={topic.id} ownerPubkey={topic.ownerPubkey} />
                       </div>
-                    </article>
-                  </Link>
+                    </div>
+                  </article>
                 );
               })}
             </div>

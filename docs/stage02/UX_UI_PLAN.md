@@ -1,5 +1,7 @@
 # EpiphanyV2 — Persona5 强风格 UX/UI 完整设计规范（Web）
 
+> ⚠️ **DEPRECATED（Stage03）**：本规划以 Persona5 为目标，与当前以 `apps/web/epiphany-v2-prototype` 为标杆的「学术阅读 / 白标 / LessWrong 体感」方向冲突；不再作为 `apps/web` 新前端的设计依据。请以 `docs/stage03/prototype-core.md`、`docs/stage03/design-system.md` 与后续 Stage03 文档为准。
+
 > **版本**: 2.0
 > **更新日期**: 2025-01-XX
 > **适用范围**: 仅 Web（`apps/web`）。API/Worker 行为以契约为准，不在本规划里改动。

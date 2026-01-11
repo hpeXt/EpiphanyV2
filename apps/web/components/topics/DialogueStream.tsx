@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
-import { zTiptapDoc, type LedgerMe } from "@epiphany/shared-contracts";
+import { zTiptapDoc, type LedgerMe, type TiptapDoc } from "@epiphany/shared-contracts";
 import Link from "@tiptap/extension-link";
 import Underline from "@tiptap/extension-underline";
 import { EditorContent, useEditor } from "@tiptap/react";
@@ -10,6 +10,8 @@ import StarterKit from "@tiptap/starter-kit";
 
 import { useChildren, type ChildrenOrderBy } from "@/components/topics/hooks/useChildren";
 import { apiClient, type ApiError } from "@/lib/apiClient";
+import { createLocalStorageDraftStore } from "@/lib/draftStore";
+import { plainTextToTiptapDoc } from "@/lib/tiptap";
 import { P5Alert } from "@/components/ui/P5Alert";
 import { P5Button } from "@/components/ui/P5Button";
 import { P5Panel } from "@/components/ui/P5Panel";
@@ -52,6 +54,12 @@ function toFriendlyMessage(error: ApiError): string {
 function formatDelta(value: number): string {
   if (value > 0) return `+${value}`;
   return String(value);
+}
+
+function formatSavedTime(iso: string): string | null {
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return null;
+  return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 function VoteControl(props: {
@@ -155,6 +163,57 @@ export function DialogueStream({
   const [replyError, setReplyError] = useState("");
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
 
+  const draftStore = useMemo(() => createLocalStorageDraftStore(), []);
+
+  type AutosaveState =
+    | { kind: "idle" }
+    | { kind: "saving" }
+    | { kind: "saved"; savedAt: string }
+    | { kind: "error"; message: string };
+
+  const [replyAutosave, setReplyAutosave] = useState<AutosaveState>({ kind: "idle" });
+  const replyAutosaveTimerRef = useRef<number | null>(null);
+  const replyAutosavePendingRef = useRef<{
+    parentId: string;
+    body: string;
+    bodyRich: TiptapDoc | null;
+  } | null>(null);
+  const skipReplyAutosaveRef = useRef(false);
+  const parentArgumentIdRef = useRef<string | null>(null);
+  parentArgumentIdRef.current = parentArgumentId;
+
+  const commitPendingReplyDraft = useCallback((options?: { silent?: boolean }) => {
+    if (replyAutosaveTimerRef.current !== null) {
+      window.clearTimeout(replyAutosaveTimerRef.current);
+      replyAutosaveTimerRef.current = null;
+    }
+
+    const pending = replyAutosavePendingRef.current;
+    if (!pending) return;
+    replyAutosavePendingRef.current = null;
+
+    try {
+      const saved = draftStore.setReplyDraft(topicId, pending.parentId, {
+        body: pending.body,
+        bodyRich: pending.bodyRich,
+      });
+      draftStore.setReplyMeta(topicId, { lastParentId: pending.parentId });
+
+      if (options?.silent) return;
+
+      if (!saved) {
+        setReplyAutosave({ kind: "idle" });
+        return;
+      }
+
+      setReplyAutosave({ kind: "saved", savedAt: saved.updatedAt });
+    } catch {
+      if (!options?.silent) {
+        setReplyAutosave({ kind: "error", message: "本地缓存不可用" });
+      }
+    }
+  }, [draftStore, topicId]);
+
   const canCreateArgument = canWrite && topicStatus === "active";
 
   const replyEditor = useEditor({
@@ -175,6 +234,23 @@ export function DialogueStream({
     },
     onUpdate: ({ editor }) => {
       setReplyText(editor.getText());
+
+      if (skipReplyAutosaveRef.current) return;
+      const parentId = parentArgumentIdRef.current;
+      if (!parentId) return;
+
+      const body = editor.getText();
+      const bodyRich = editor.getJSON() as unknown as TiptapDoc;
+      replyAutosavePendingRef.current = { parentId, body, bodyRich: bodyRich ?? null };
+      setReplyAutosave({ kind: "saving" });
+
+      if (replyAutosaveTimerRef.current !== null) {
+        window.clearTimeout(replyAutosaveTimerRef.current);
+      }
+      replyAutosaveTimerRef.current = window.setTimeout(() => {
+        replyAutosaveTimerRef.current = null;
+        commitPendingReplyDraft({ silent: false });
+      }, 800);
     },
   });
 
@@ -184,12 +260,61 @@ export function DialogueStream({
 
   useEffect(() => {
     setOrderBy("totalVotes_desc");
-    setReplyText("");
     setReplyError("");
-    replyEditor?.commands.clearContent(true);
-  }, [parentArgumentId, replyEditor]);
+
+    if (!replyEditor) return;
+
+    commitPendingReplyDraft({ silent: true });
+
+    skipReplyAutosaveRef.current = true;
+
+    if (!parentArgumentId) {
+      replyEditor.commands.clearContent(true);
+      setReplyText("");
+      setReplyAutosave({ kind: "idle" });
+      window.setTimeout(() => {
+        skipReplyAutosaveRef.current = false;
+      }, 0);
+      return;
+    }
+
+    let draft = null;
+    try {
+      draft = draftStore.getReplyDraft(topicId, parentArgumentId);
+    } catch {
+      draft = null;
+    }
+
+    const nextDoc = (() => {
+      if (!draft) return null;
+      const parsed = draft.bodyRich ? zTiptapDoc.safeParse(draft.bodyRich) : null;
+      if (parsed?.success) return parsed.data;
+      return draft.body.trim() ? plainTextToTiptapDoc(draft.body) : null;
+    })();
+
+    if (nextDoc) {
+      replyEditor.commands.setContent(nextDoc as any, true);
+      setReplyAutosave({ kind: "saved", savedAt: draft?.updatedAt ?? new Date().toISOString() });
+      setReplyText(draft?.body ?? "");
+    } else {
+      replyEditor.commands.clearContent(true);
+      setReplyText("");
+      setReplyAutosave({ kind: "idle" });
+    }
+
+    window.setTimeout(() => {
+      skipReplyAutosaveRef.current = false;
+    }, 0);
+  }, [commitPendingReplyDraft, draftStore, parentArgumentId, replyEditor, topicId]);
+
+  useEffect(() => {
+    return () => {
+      commitPendingReplyDraft({ silent: true });
+    };
+  }, [commitPendingReplyDraft]);
 
   const children = useChildren({
+    topicId,
     parentArgumentId,
     orderBy,
     limit: 30,
@@ -205,6 +330,7 @@ export function DialogueStream({
     event.preventDefault();
     if (!parentArgumentId) return;
     if (!canCreateArgument) return;
+    commitPendingReplyDraft({ silent: true });
     setReplyError("");
 
     const body = replyText.trim();
@@ -227,8 +353,12 @@ export function DialogueStream({
 
     if (!result.ok) {
       setReplyError(toFriendlyMessage(result.error));
+      skipReplyAutosaveRef.current = true;
       replyEditor?.commands.clearContent(true);
       setReplyText("");
+      window.setTimeout(() => {
+        skipReplyAutosaveRef.current = false;
+      }, 0);
       return;
     }
 
@@ -238,8 +368,19 @@ export function DialogueStream({
       label: toLabel(result.data.argument),
       prunedAt: result.data.argument.prunedAt,
     });
+    try {
+      draftStore.removeReplyDraft(topicId, parentArgumentId);
+      draftStore.setReplyMeta(topicId, { lastParentId: parentArgumentId });
+    } catch {
+      // ignore
+    }
+    setReplyAutosave({ kind: "idle" });
+    skipReplyAutosaveRef.current = true;
     replyEditor?.commands.clearContent(true);
     setReplyText("");
+    window.setTimeout(() => {
+      skipReplyAutosaveRef.current = false;
+    }, 0);
   }
 
   return (
@@ -365,6 +506,23 @@ export function DialogueStream({
                 <P5Alert role="alert" variant="error" title="error">
                   {replyError}
                 </P5Alert>
+              ) : null}
+
+              {replyAutosave.kind !== "idle" ? (
+                <p
+                  className={[
+                    "text-xs",
+                    replyAutosave.kind === "error"
+                      ? "text-[color:var(--rebel-red)]"
+                      : "text-[color:var(--ink)]/60",
+                  ].join(" ")}
+                >
+                  {replyAutosave.kind === "saving"
+                    ? "自动保存中…"
+                    : replyAutosave.kind === "saved"
+                      ? `已自动保存 ${formatSavedTime(replyAutosave.savedAt) ?? ""}`.trim()
+                      : replyAutosave.message}
+                </p>
               ) : null}
 
               <P5Button

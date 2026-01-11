@@ -199,7 +199,7 @@ function ClusterMapCanvas({ map }: { map: ClusterMap }) {
     setHoverArgument(null);
 
     (async () => {
-      const result = await apiClient.getArgument(hoverArgumentId);
+      const result = await apiClient.getArgument(hoverArgumentId, map.topicId);
       if (cancelled) return;
       if (!result.ok) return;
 
@@ -210,7 +210,7 @@ function ClusterMapCanvas({ map }: { map: ClusterMap }) {
     return () => {
       cancelled = true;
     };
-  }, [hoverArgumentId]);
+  }, [hoverArgumentId, map.topicId]);
 
   const updateHover = useCallback(
     (pointer: { x: number; y: number }) => {

@@ -8,7 +8,7 @@ import { z } from 'zod';
 const zArgumentUpdatedReason = z.enum(['new_vote', 'analysis_done', 'edited', 'pruned']);
 export type ArgumentUpdatedReason = z.infer<typeof zArgumentUpdatedReason>;
 
-const zTopicUpdatedReason = z.enum(['status_changed', 'owner_claimed', 'root_edited']);
+const zTopicUpdatedReason = z.enum(['status_changed', 'owner_claimed', 'root_edited', 'visibility_changed']);
 export type TopicUpdatedReason = z.infer<typeof zTopicUpdatedReason>;
 
 const zReloadRequiredReason = z.literal('trimmed');

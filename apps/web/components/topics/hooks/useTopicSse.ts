@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { zSseEnvelope, type SseEnvelope } from "@epiphany/shared-contracts";
 
 import { getApiBaseUrl } from "@/lib/apiClient";
+import { createLocalStorageTopicAccessKeyStore } from "@/lib/topicAccessKeyStore";
 
 type Options = {
   topicId: string;
@@ -21,7 +22,15 @@ export function useTopicSse(options: Options) {
     const baseUrl = getApiBaseUrl();
     if (!baseUrl) return;
 
-    const url = `${baseUrl}/v1/sse/${encodeURIComponent(options.topicId)}`;
+    let accessKey: string | null = null;
+    try {
+      accessKey = createLocalStorageTopicAccessKeyStore().get(options.topicId);
+    } catch {
+      accessKey = null;
+    }
+
+    const query = accessKey ? `?k=${encodeURIComponent(accessKey)}` : "";
+    const url = `${baseUrl}/v1/sse/${encodeURIComponent(options.topicId)}${query}`;
     const source = new EventSource(url);
 
     function scheduleInvalidation(envelope: SseEnvelope) {
@@ -67,4 +76,3 @@ export function useTopicSse(options: Options) {
     };
   }, [options.topicId, options.onInvalidation, options.onReloadRequired, debounceMs]);
 }
-

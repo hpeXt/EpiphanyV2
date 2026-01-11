@@ -1,5 +1,7 @@
 # 视觉与设计系统（Persona 5 对齐）
 
+> ⚠️ **DEPRECATED（Stage03）**：自 `apps/web/epiphany-v2-prototype` 引入后，新应用的 UI/UX 方向改为「学术阅读 / 白标 / LessWrong 体感」，本 Persona5 设计系统不再作为 `apps/web` 新前端的约束。请以 `docs/stage03/prototype-core.md`、`docs/stage03/design-system.md` 与 `apps/web/app/globals.css` 的 tokens 为准。
+
 本项目 UI 的目标是对齐《女神异闻录 5》（Persona 5）这类“海报化 / 漫画印刷感”的强风格化界面语言：**高对比、厚描边、斜切构图、拼贴材质、半调网点与噪点纹理**。Memphis 作为次级参考，但整体气质以 Persona5 的“反叛 UI”优先。
 
 参考实现：暂无（原 demo 已移除；以本文档规范为准）。
