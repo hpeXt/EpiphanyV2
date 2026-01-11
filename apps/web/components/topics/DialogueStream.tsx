@@ -16,6 +16,7 @@ import { P5Alert } from "@/components/ui/P5Alert";
 import { P5Button } from "@/components/ui/P5Button";
 import { P5Panel } from "@/components/ui/P5Panel";
 import { P5Tabs } from "@/components/ui/P5Tabs";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 type Props = {
   topicId: string;
@@ -28,8 +29,11 @@ type Props = {
   onLedgerUpdated: (ledger: LedgerMe) => void;
 };
 
-function toToggleLabel(orderBy: ChildrenOrderBy) {
-  return orderBy === "totalVotes_desc" ? "最热" : "最新";
+function toToggleLabel(
+  t: (key: string, params?: Record<string, string | number>) => string,
+  orderBy: ChildrenOrderBy,
+) {
+  return orderBy === "totalVotes_desc" ? t("dialogue.hottest") : t("dialogue.newest");
 }
 
 function toLabel(input: { title: string | null; body: string; id: string }): string {
@@ -39,13 +43,16 @@ function toLabel(input: { title: string | null; body: string; id: string }): str
   return input.id;
 }
 
-function toFriendlyMessage(error: ApiError): string {
+function toFriendlyMessage(
+  t: (key: string, params?: Record<string, string | number>) => string,
+  error: ApiError,
+): string {
   if (error.kind === "http") {
     if (error.status === 402 || error.code === "INSUFFICIENT_BALANCE") {
-      return "余额不足";
+      return t("errors.insufficientBalance");
     }
     if (error.status === 401 && error.code === "INVALID_SIGNATURE") {
-      return "签名验证失败，请刷新页面重试";
+      return t("errors.invalidSignature");
     }
   }
   return error.message;
@@ -69,6 +76,7 @@ function VoteControl(props: {
   argumentPrunedAt: string | null;
   onLedgerUpdated: (ledger: LedgerMe) => void;
 }) {
+  const { t } = useI18n();
   const [currentVotes, setCurrentVotes] = useState(0);
   const [targetVotes, setTargetVotes] = useState(0);
   const [submitError, setSubmitError] = useState("");
@@ -91,7 +99,7 @@ function VoteControl(props: {
     setIsSubmitting(false);
 
     if (!result.ok) {
-      setSubmitError(toFriendlyMessage(result.error));
+      setSubmitError(toFriendlyMessage(t, result.error));
       return;
     }
 
@@ -106,11 +114,11 @@ function VoteControl(props: {
         htmlFor={`votes-${props.argumentId}`}
         className="text-xs font-semibold text-[color:var(--ink)]"
       >
-        Votes
+        {t("dialogue.votes")}
       </label>
       <input
         id={`votes-${props.argumentId}`}
-        aria-label="Votes"
+        aria-label={t("dialogue.votes")}
         type="range"
         min={0}
         max={10}
@@ -122,12 +130,12 @@ function VoteControl(props: {
       {increaseForbidden ? (
         <p className="text-xs text-[color:var(--ink)]/70">
           {props.argumentPrunedAt
-            ? "This node is pruned: you can only withdraw."
-            : "Topic is read-only: you can only withdraw."}
+            ? t("dialogue.nodePruned")
+            : t("dialogue.topicReadOnly")}
         </p>
       ) : null}
       <p className="text-xs text-[color:var(--ink)]/80">
-        Cost: {targetCost} (ΔCost: {formatDelta(deltaCost)})
+        {t("dialogue.cost")}: {targetCost} ({t("dialogue.deltaCost")}: {formatDelta(deltaCost)})
       </p>
 
       {submitError ? (
@@ -143,7 +151,7 @@ function VoteControl(props: {
         size="sm"
         className="border-[3px] px-2 py-1 text-xs shadow-[2px_2px_0_var(--ink)]"
       >
-        {isSubmitting ? "Saving…" : "Save"}
+        {isSubmitting ? t("common.saving") : t("common.save")}
       </P5Button>
     </div>
   );
@@ -158,6 +166,7 @@ export function DialogueStream({
   ledger,
   onLedgerUpdated,
 }: Props) {
+  const { t } = useI18n();
   const [orderBy, setOrderBy] = useState<ChildrenOrderBy>("totalVotes_desc");
   const [replyText, setReplyText] = useState("");
   const [replyError, setReplyError] = useState("");
@@ -209,10 +218,10 @@ export function DialogueStream({
       setReplyAutosave({ kind: "saved", savedAt: saved.updatedAt });
     } catch {
       if (!options?.silent) {
-        setReplyAutosave({ kind: "error", message: "本地缓存不可用" });
+        setReplyAutosave({ kind: "error", message: t("errors.localStorageUnavailable") });
       }
     }
-  }, [draftStore, topicId]);
+  }, [draftStore, t, topicId]);
 
   const canCreateArgument = canWrite && topicStatus === "active";
 
@@ -225,7 +234,7 @@ export function DialogueStream({
     content: "",
     editorProps: {
       attributes: {
-        "aria-label": "Reply",
+        "aria-label": t("dialogue.replyLabel"),
         class: [
           "min-h-[96px] w-full px-3 py-2 text-sm text-zinc-900 outline-none",
           "prose prose-sm max-w-none",
@@ -335,7 +344,7 @@ export function DialogueStream({
 
     const body = replyText.trim();
     if (!body) {
-      setReplyError("Reply is required");
+      setReplyError(t("dialogue.replyRequired"));
       return;
     }
 
@@ -352,7 +361,7 @@ export function DialogueStream({
     setIsSubmittingReply(false);
 
     if (!result.ok) {
-      setReplyError(toFriendlyMessage(result.error));
+      setReplyError(toFriendlyMessage(t, result.error));
       skipReplyAutosaveRef.current = true;
       replyEditor?.commands.clearContent(true);
       setReplyText("");
@@ -389,17 +398,17 @@ export function DialogueStream({
       header={
         <div className="flex flex-wrap items-center justify-between gap-3 bg-[color:var(--ink)] px-4 py-3 text-[color:var(--paper)]">
           <h2 className="font-mono text-sm font-semibold uppercase tracking-wide">
-            Dialogue
+            {t("dialogue.title")}
           </h2>
 
           {parentArgumentId ? (
             <P5Tabs
-              ariaLabel="Dialogue order"
+              ariaLabel={t("dialogue.orderLabel")}
               value={orderBy}
               onValueChange={setOrderBy}
               tabs={[
-                { value: "totalVotes_desc", label: "最热" },
-                { value: "createdAt_desc", label: "最新" },
+                { value: "totalVotes_desc", label: t("dialogue.hottest") },
+                { value: "createdAt_desc", label: t("dialogue.newest") },
               ]}
               className="shadow-none"
             />
@@ -408,20 +417,20 @@ export function DialogueStream({
       }
     >
       {!parentArgumentId ? (
-        <P5Alert role="status" variant="info" title="dialogue">
-          Select a node to view replies.
+        <P5Alert role="status" variant="info" title={t("dialogue.title")}>
+          {t("dialogue.selectNodeHint")}
         </P5Alert>
       ) : null}
 
       {parentArgumentId && children.status === "error" ? (
-        <P5Alert role="alert" variant="error" title="error">
+        <P5Alert role="alert" variant="error" title={t("common.error")}>
           {children.errorMessage}
         </P5Alert>
       ) : null}
 
       {parentArgumentId && children.status === "loading" ? (
         <p className="text-sm text-[color:var(--ink)]/80">
-          Loading {toToggleLabel(orderBy)}…
+          {t("dialogue.loadingReplies", { order: toToggleLabel(t, orderBy) })}
         </p>
       ) : null}
 
@@ -430,14 +439,14 @@ export function DialogueStream({
           {canWrite ? (
             <form onSubmit={onSubmitReply} className="space-y-2">
               {topicStatus !== "active" ? (
-                <P5Alert role="status" variant="warn" title="read-only">
-                  Topic is read-only ({topicStatus}). You can still withdraw votes.
+                <P5Alert role="status" variant="warn" title={t("dialogue.readOnlyTitle")}>
+                  {t("dialogue.topicReadOnlyWithStatus", { status: t(`status.${topicStatus}`) })}
                 </P5Alert>
               ) : null}
 
               <div className="space-y-1">
                 <label className="font-mono text-xs font-semibold uppercase tracking-wide text-[color:var(--ink)]">
-                  Reply
+                  {t("dialogue.replyLabel")}
                 </label>
                 <div
                   className="overflow-hidden border-[var(--p5-border-width)] border-[color:var(--ink)] bg-[color:var(--paper)] shadow-[var(--p5-shadow-ink)]"
@@ -450,27 +459,27 @@ export function DialogueStream({
                     {(
                       [
                         {
-                          label: "Bold",
+                          label: t("editor.bold"),
                           onClick: () => replyEditor?.chain().focus().toggleBold().run(),
                         },
                         {
-                          label: "Italic",
+                          label: t("editor.italic"),
                           onClick: () => replyEditor?.chain().focus().toggleItalic().run(),
                         },
                         {
-                          label: "Underline",
+                          label: t("editor.underline"),
                           onClick: () => replyEditor?.chain().focus().toggleUnderline().run(),
                         },
                         {
-                          label: "• List",
+                          label: t("editor.bulletList"),
                           onClick: () => replyEditor?.chain().focus().toggleBulletList().run(),
                         },
                         {
-                          label: "1. List",
+                          label: t("editor.orderedList"),
                           onClick: () => replyEditor?.chain().focus().toggleOrderedList().run(),
                         },
                         {
-                          label: "Quote",
+                          label: t("editor.quote"),
                           onClick: () => replyEditor?.chain().focus().toggleBlockquote().run(),
                         },
                       ] as const
@@ -498,12 +507,12 @@ export function DialogueStream({
 
               {ledger ? (
                 <p className="text-xs text-[color:var(--ink)]/80">
-                  Balance: <span className="font-mono">{ledger.balance}</span>
+                  {t("dialogue.balance")}: <span className="font-mono">{ledger.balance}</span>
                 </p>
               ) : null}
 
               {replyError ? (
-                <P5Alert role="alert" variant="error" title="error">
+                <P5Alert role="alert" variant="error" title={t("common.error")}>
                   {replyError}
                 </P5Alert>
               ) : null}
@@ -518,9 +527,11 @@ export function DialogueStream({
                   ].join(" ")}
                 >
                   {replyAutosave.kind === "saving"
-                    ? "自动保存中…"
+                    ? t("dialogue.autosaveSaving")
                     : replyAutosave.kind === "saved"
-                      ? `已自动保存 ${formatSavedTime(replyAutosave.savedAt) ?? ""}`.trim()
+                      ? t("dialogue.autosaveSavedAt", {
+                          time: formatSavedTime(replyAutosave.savedAt) ?? "",
+                        }).trim()
                       : replyAutosave.message}
                 </p>
               ) : null}
@@ -530,17 +541,17 @@ export function DialogueStream({
                 variant="primary"
                 disabled={!canPost || isSubmittingReply || !canCreateArgument}
               >
-                {isSubmittingReply ? "Posting…" : "Post"}
+                {isSubmittingReply ? t("dialogue.posting") : t("dialogue.post")}
               </P5Button>
             </form>
           ) : (
-            <P5Alert role="status" variant="info" title="read-only">
-              Read-only mode. Set up your identity to reply or vote.
+            <P5Alert role="status" variant="info" title={t("dialogue.readOnlyTitle")}>
+              {t("dialogue.noIdentityHint")}
             </P5Alert>
           )}
 
           {children.items.length === 0 ? (
-            <p className="text-sm text-[color:var(--ink)]/80">No replies yet.</p>
+            <p className="text-sm text-[color:var(--ink)]/80">{t("dialogue.noRepliesYet")}</p>
           ) : (
             <ul
               className="divide-y-[3px] divide-[color:var(--ink)] border-[var(--p5-border-width)] border-[color:var(--ink)] bg-[color:var(--paper)] shadow-[var(--p5-shadow-ink)]"
@@ -573,7 +584,7 @@ export function DialogueStream({
               disabled={children.isLoadingMore}
               className="justify-center"
             >
-              加载更多
+              {t("common.loadMore")}
             </P5Button>
           ) : null}
         </div>

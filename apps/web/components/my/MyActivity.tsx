@@ -25,7 +25,6 @@ import {
   type WithdrawResult,
 } from "@/lib/withdrawAll";
 import {
-  deriveTopicKeypairFromMasterSeedHex,
   mnemonicToMasterSeedHex,
 } from "@/lib/identity";
 import { P5Alert } from "@/components/ui/P5Alert";
@@ -34,6 +33,7 @@ import { P5Button, P5LinkButton } from "@/components/ui/P5Button";
 import { P5Panel } from "@/components/ui/P5Panel";
 import { MnemonicDisplay } from "@/components/my/MnemonicDisplay";
 import { ImportIdentityModal } from "@/components/my/ImportIdentityModal";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 type TopicBalance = {
   topicId: string;
@@ -58,20 +58,20 @@ type WithdrawState = {
   result?: WithdrawResult;
 };
 
+function shortId(id: string): string {
+  return id.length > 12 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id;
+}
+
 export function MyActivity() {
+  const { t } = useI18n();
   const keyStore = useMemo(() => createLocalStorageKeyStore(), []);
   const visitedStore = useMemo(
     () => createLocalStorageVisitedTopicsStore(),
     []
   );
 
-  const [hasIdentity, setHasIdentity] = useState<boolean>(() => {
-    try {
-      return Boolean(keyStore.getMasterSeedHex());
-    } catch {
-      return false;
-    }
-  });
+  const [hasIdentity, setHasIdentity] = useState(false);
+  const [identityLoaded, setIdentityLoaded] = useState(false);
   const [topicBalances, setTopicBalances] = useState<TopicBalance[]>([]);
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
   const [stakes, setStakes] = useState<TopicStakes>({
@@ -83,27 +83,18 @@ export function MyActivity() {
   });
   const [isImportOpen, setIsImportOpen] = useState(false);
 
-  // 获取助记词
-  const mnemonic = useMemo(() => {
-    try {
-      return keyStore.getMnemonic() || null;
-    } catch {
-      return null;
-    }
-  }, [keyStore]);
+  const [mnemonic, setMnemonic] = useState<string | null>(null);
 
-  // 获取主身份地址
-  const masterAddress = useMemo(() => {
+  useEffect(() => {
     try {
       const seedHex = keyStore.getMasterSeedHex();
-      if (!seedHex) return null;
-      const { pubkeyHex } = deriveTopicKeypairFromMasterSeedHex(
-        seedHex,
-        "master"
-      );
-      return `${pubkeyHex.slice(0, 8)}...${pubkeyHex.slice(-8)}`;
+      setHasIdentity(Boolean(seedHex));
+      setMnemonic(keyStore.getMnemonic() || null);
     } catch {
-      return null;
+      setHasIdentity(false);
+      setMnemonic(null);
+    } finally {
+      setIdentityLoaded(true);
     }
   }, [keyStore]);
 
@@ -312,20 +303,27 @@ export function MyActivity() {
     }
   }, [selectedTopicId, withdrawState.result]);
 
-  const visitedTopicIds = visitedStore.getTopicIds();
+  const visitedTopicIds = useMemo(() => {
+    if (!identityLoaded || !hasIdentity) return [];
+    try {
+      return visitedStore.getTopicIds();
+    } catch {
+      return [];
+    }
+  }, [hasIdentity, identityLoaded, visitedStore]);
   const stakesWithVotes = stakes.items.filter((s) => s.votes > 0);
 
   return (
     <div className="space-y-6">
       <h1 className="font-display text-2xl uppercase tracking-wide text-[color:var(--ink)]">
-        My Activity
+        {t("my.title")}
       </h1>
 
       {/* 身份管理区域 */}
       <P5Panel
         header={
           <div className="bg-[color:var(--ink)] px-4 py-3 font-display text-lg uppercase tracking-wide text-[color:var(--paper)]">
-            身份管理
+            {t("my.identitySectionTitle")}
           </div>
         }
       >
@@ -333,7 +331,7 @@ export function MyActivity() {
           {/* 当前身份 */}
           <div>
             <h3 className="mb-2 font-display text-sm uppercase tracking-wide text-[color:var(--ink)]">
-              当前身份
+              {t("my.currentIdentity")}
             </h3>
             <div className="flex items-center gap-3 border-[3px] border-[color:var(--ink)] bg-[color:var(--paper)] p-3">
               {/* 指纹图标 */}
@@ -344,7 +342,11 @@ export function MyActivity() {
                 <span className="h-3 w-3 rounded-full bg-[color:var(--ink)]" />
               </div>
               <span className="font-mono text-sm">
-                {masterAddress || "未设置"}
+                {identityLoaded
+                  ? hasIdentity
+                    ? t("my.identityReady")
+                    : t("my.identityNotSet")
+                  : t("common.loading")}
               </span>
             </div>
           </div>
@@ -355,55 +357,55 @@ export function MyActivity() {
           {/* 导入按钮 */}
           <div className="border-t-[3px] border-[color:var(--concrete-200)] pt-4">
             <P5Button variant="ghost" onClick={() => setIsImportOpen(true)}>
-              导入已有身份
+              {t("my.importIdentity")}
             </P5Button>
             <p className="mt-2 text-sm text-[color:var(--ink)]/60">
-              用于跨设备同步或恢复
+              {t("my.importHint")}
             </p>
           </div>
         </div>
       </P5Panel>
 
       {/* 无身份提示 */}
-      {!hasIdentity && (
-        <P5Alert role="alert" variant="warn" title="identity">
-          身份尚未初始化，请刷新页面或导入已有身份。
+      {identityLoaded && !hasIdentity && (
+        <P5Alert role="alert" variant="warn" title={t("my.identityAlertTitle")}>
+          {t("my.identityAlertBody")}
         </P5Alert>
       )}
 
       {/* 无访问记录 */}
-      {hasIdentity && visitedTopicIds.length === 0 && (
+      {identityLoaded && hasIdentity && visitedTopicIds.length === 0 && (
         <P5Panel
           header={
             <div className="bg-[color:var(--ink)] px-4 py-3 font-display text-lg uppercase tracking-wide text-[color:var(--paper)]">
-              已访问议题
+              {t("my.visitedTopicsTitle")}
             </div>
           }
         >
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <div className="mb-4 text-4xl text-[color:var(--ink)]/30">📭</div>
             <div className="font-display text-lg uppercase text-[color:var(--ink)]">
-              暂无参与记录
+              {t("my.noHistoryTitle")}
             </div>
             <div className="mt-2 text-sm text-[color:var(--ink)]/70">
-              去参与议题讨论吧
+              {t("my.noHistoryBody")}
             </div>
             <P5LinkButton href="/" variant="primary" className="mt-4">
-              浏览议题
+              {t("my.browseTopics")}
             </P5LinkButton>
           </div>
         </P5Panel>
       )}
 
       {/* Topic List */}
-      {hasIdentity && visitedTopicIds.length > 0 && (
+      {identityLoaded && hasIdentity && visitedTopicIds.length > 0 && (
         <P5Panel
           header={
             <div className="flex flex-wrap items-center justify-between gap-3 bg-[color:var(--ink)] px-4 py-3 text-[color:var(--paper)]">
               <h2 className="font-display text-sm uppercase tracking-wide">
-                已访问议题
+                {t("my.visitedTopicsTitle")}
               </h2>
-              <div className="text-xs text-white/80">本地聚合</div>
+              <div className="text-xs text-white/80">{t("my.localAggregate")}</div>
             </div>
           }
           bodyClassName="space-y-2"
@@ -435,20 +437,20 @@ export function MyActivity() {
                 }}
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-mono text-sm">{tb.topicId}</span>
+                  <span className="font-mono text-sm">{shortId(tb.topicId)}</span>
                   {tb.status === "loading" ? (
-                    <span className="text-xs opacity-80">加载中...</span>
+                    <span className="text-xs opacity-80">{t("common.loadingDots")}</span>
                   ) : tb.status === "ok" ? (
                     <span className="text-sm">
-                      余额: <span className="font-mono">{tb.balance}</span>
+                      {t("dialogue.balance")}: <span className="font-mono">{tb.balance}</span>
                     </span>
                   ) : (
                     <span className="text-xs text-[color:var(--rebel-red)]">
                       {tb.errorCode === "TOPIC_NOT_FOUND"
-                        ? "议题不存在"
+                        ? t("my.topicNotFound")
                         : tb.errorCode === "INVALID_SIGNATURE"
-                          ? "签名错误"
-                          : tb.errorMessage ?? "错误"}
+                          ? t("my.signatureError")
+                          : tb.errorMessage ?? t("common.error")}
                     </span>
                   )}
                 </div>
@@ -464,7 +466,7 @@ export function MyActivity() {
           header={
             <div className="flex flex-wrap items-center justify-between gap-3 bg-[color:var(--ink)] px-4 py-3 text-[color:var(--paper)]">
               <h2 className="font-display text-sm uppercase tracking-wide">
-                投票于 {selectedTopicId.slice(0, 8)}...
+                {t("my.stakesTitle", { topic: shortId(selectedTopicId) })}
               </h2>
               <div className="flex flex-wrap items-center gap-2">
                 <P5LinkButton
@@ -473,7 +475,7 @@ export function MyActivity() {
                   size="sm"
                   className="border border-white/60 text-white shadow-none hover:bg-white/10"
                 >
-                  打开议题
+                  {t("my.openTopic")}
                 </P5LinkButton>
                 <P5LinkButton
                   href={`/topics/${selectedTopicId}?manage=1`}
@@ -481,7 +483,7 @@ export function MyActivity() {
                   size="sm"
                   className="border border-white/60 text-white shadow-none hover:bg-white/10"
                 >
-                  Host 管理
+                  {t("my.hostManage")}
                 </P5LinkButton>
                 {stakesWithVotes.length > 0 && withdrawState.status !== "withdrawing" ? (
                   <P5Button
@@ -490,7 +492,7 @@ export function MyActivity() {
                     variant="primary"
                     size="sm"
                   >
-                    全部撤回
+                    {t("my.withdrawAll")}
                   </P5Button>
                 ) : null}
               </div>
@@ -500,9 +502,11 @@ export function MyActivity() {
         >
           {/* Withdraw Progress */}
           {withdrawState.status === "withdrawing" && withdrawState.progress && (
-            <P5Alert role="status" variant="info" title="withdrawing">
-              撤回中... {withdrawState.progress.completed} /{" "}
-              {withdrawState.progress.total}
+            <P5Alert role="status" variant="info" title={t("my.withdrawingTitle")}>
+              {t("my.withdrawingProgress", {
+                completed: withdrawState.progress.completed,
+                total: withdrawState.progress.total,
+              })}
             </P5Alert>
           )}
 
@@ -510,14 +514,14 @@ export function MyActivity() {
           {withdrawState.status === "done" && withdrawState.result && (
             <div className="space-y-2">
               {withdrawState.result.successful.length > 0 && (
-                <P5Alert role="status" variant="info" title="success">
-                  成功撤回 {withdrawState.result.successful.length} 个投票
+                <P5Alert role="status" variant="info" title={t("toast.success")}>
+                  {t("my.withdrawSuccess", { count: withdrawState.result.successful.length })}
                 </P5Alert>
               )}
               {withdrawState.result.failed.length > 0 && (
-                <P5Alert role="alert" variant="error" title="failed">
+                <P5Alert role="alert" variant="error" title={t("my.withdrawFailedTitle")}>
                   <p className="mb-2">
-                    {withdrawState.result.failed.length} 个投票撤回失败
+                    {t("my.withdrawFailed", { count: withdrawState.result.failed.length })}
                   </p>
                   <P5Button
                     type="button"
@@ -525,7 +529,7 @@ export function MyActivity() {
                     variant="danger"
                     size="sm"
                   >
-                    重试失败项
+                    {t("my.retryFailed")}
                   </P5Button>
                 </P5Alert>
               )}
@@ -535,7 +539,7 @@ export function MyActivity() {
           {/* Stakes List */}
           {stakes.status === "loading" ? (
             <p className="p-4 text-sm text-[color:var(--ink)]/80">
-              加载投票记录...
+              {t("my.stakesLoading")}
             </p>
           ) : stakes.status === "error" ? (
             <p className="p-4 text-sm text-[color:var(--rebel-red)]">
@@ -543,7 +547,7 @@ export function MyActivity() {
             </p>
           ) : stakes.items.length === 0 ? (
             <p className="p-4 text-sm text-[color:var(--ink)]/80">
-              此议题暂无投票记录
+              {t("my.stakesEmpty")}
             </p>
           ) : (
             <div
@@ -560,7 +564,7 @@ export function MyActivity() {
                       <p className="truncate text-sm font-medium">
                         {stake.argumentTitle ??
                           stake.argumentExcerpt ??
-                          "无标题"}
+                          t("my.untitled")}
                       </p>
                       {stake.argumentExcerpt && stake.argumentTitle && (
                         <p className="mt-0.5 truncate text-xs text-[color:var(--ink)]/70">
@@ -570,13 +574,13 @@ export function MyActivity() {
                     </div>
                     <div className="flex items-center gap-2 text-sm">
                       {stake.argumentPrunedAt && (
-                        <P5Badge variant="acid">已修剪</P5Badge>
+                        <P5Badge variant="acid">{t("my.pruned")}</P5Badge>
                       )}
                       <span>
-                        票数: <span className="font-mono">{stake.votes}</span>
+                        {t("my.votesLabel")}: <span className="font-mono">{stake.votes}</span>
                       </span>
                       <span className="text-[color:var(--ink)]/70">
-                        花费: <span className="font-mono">{stake.cost}</span>
+                        {t("my.costLabel")}: <span className="font-mono">{stake.cost}</span>
                       </span>
                     </div>
                   </div>

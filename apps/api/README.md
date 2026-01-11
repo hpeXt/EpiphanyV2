@@ -57,6 +57,10 @@ $ pnpm run test:e2e
 $ pnpm run test:cov
 ```
 
+Notes for `test:e2e`:
+- It runs against an isolated Postgres DB (default: `epiphany_test`) and an isolated Redis DB index (default: `/1`), and will automatically clear them before/after the run.
+- It refuses to run if `DATABASE_URL` does not end with `_test`/`_e2e`, or if `REDIS_URL` uses Redis DB `0`.
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.

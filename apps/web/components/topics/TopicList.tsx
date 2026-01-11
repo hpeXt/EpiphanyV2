@@ -6,8 +6,10 @@ import Link from "next/link";
 import { apiClient } from "@/lib/apiClient";
 import { P5Alert } from "@/components/ui/P5Alert";
 import { P5Badge } from "@/components/ui/P5Badge";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 export function TopicList() {
+  const { t } = useI18n();
   const [status, setStatus] = useState<"loading" | "error" | "success">(
     "loading",
   );
@@ -53,14 +55,14 @@ export function TopicList() {
   if (status === "loading") {
     return (
       <p className="font-mono text-sm text-[color:var(--ink)] opacity-80">
-        Loading topics…
+        {t("common.loadingDots")}
       </p>
     );
   }
 
   if (status === "error") {
     return (
-      <P5Alert variant="error" title="Error">
+      <P5Alert variant="error" title={t("common.error")}>
         {errorMessage}
       </P5Alert>
     );
@@ -68,8 +70,8 @@ export function TopicList() {
 
   if (items.length === 0) {
     return (
-      <P5Alert variant="info" title="Empty">
-        No topics yet.
+      <P5Alert variant="info" title={t("common.empty")}>
+        {t("topics.noTopicsYet")}
       </P5Alert>
     );
   }
@@ -77,6 +79,7 @@ export function TopicList() {
   return (
     <ul className="space-y-3">
       {items.map((topic, index) => {
+        const title = topic.title.trim() ? topic.title : t("topics.untitled");
         const badgeVariant =
           topic.status === "active"
             ? "electric"
@@ -88,7 +91,7 @@ export function TopicList() {
         <li key={topic.id}>
           <Link
             href={`/topics/${topic.id}`}
-            aria-label={topic.title}
+            aria-label={title}
             className={[
               "block",
               "border-[var(--p5-border-width)] border-[color:var(--ink)] bg-[color:var(--paper)] shadow-[var(--p5-shadow-ink)]",
@@ -104,20 +107,17 @@ export function TopicList() {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="truncate text-sm font-semibold text-[color:var(--ink)]">
-                  {topic.title}
-                </div>
-                <div className="mt-1 font-mono text-xs text-[color:var(--ink)]/70">
-                  {topic.id}
+                  {title}
                 </div>
               </div>
 
               <div className="flex shrink-0 flex-col items-end gap-2">
                 <P5Badge variant={badgeVariant} aria-hidden>
-                  {topic.status}
+                  {t(`status.${topic.status}`)}
                 </P5Badge>
                 {topic.ownerPubkey ? (
                   <P5Badge variant="ink" aria-hidden>
-                    host
+                    {t("topics.host")}
                   </P5Badge>
                 ) : null}
               </div>

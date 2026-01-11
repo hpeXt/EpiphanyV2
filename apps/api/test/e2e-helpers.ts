@@ -9,17 +9,52 @@ import {
   type KeyObject,
 } from 'node:crypto';
 
-import { AppModule } from '../src/app.module';
-
 export function ensureTestEnv(): void {
   process.env.DATABASE_URL =
     process.env.DATABASE_URL ??
-    'postgresql://postgres:postgres@localhost:5432/epiphany';
-  process.env.REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379';
+    'postgresql://postgres:postgres@localhost:5432/epiphany_test';
+  process.env.REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379/1';
+
+  const dbName = (() => {
+    try {
+      const url = new URL(process.env.DATABASE_URL);
+      const name = url.pathname.startsWith('/') ? url.pathname.slice(1) : url.pathname;
+      return name || null;
+    } catch {
+      const match = (process.env.DATABASE_URL ?? '').match(/\/([^/?#]+)(?:[?#]|$)/);
+      return match?.[1] ?? null;
+    }
+  })();
+
+  if (!dbName || (!dbName.endsWith('_test') && !dbName.endsWith('_e2e'))) {
+    throw new Error(
+      `Refusing to run e2e tests against DATABASE_URL=${process.env.DATABASE_URL} (expected db name to end with _test or _e2e).`,
+    );
+  }
+
+  const redisDb = (() => {
+    try {
+      const url = new URL(process.env.REDIS_URL ?? '');
+      const raw = url.pathname.startsWith('/') ? url.pathname.slice(1) : url.pathname;
+      if (!raw) return 0;
+      const num = Number.parseInt(raw, 10);
+      return Number.isFinite(num) ? num : 0;
+    } catch {
+      return null;
+    }
+  })();
+
+  if (redisDb === null || redisDb === 0) {
+    throw new Error(
+      `Refusing to run e2e tests against REDIS_URL=${process.env.REDIS_URL} (expected redis db index != 0, e.g. redis://localhost:6379/1).`,
+    );
+  }
 }
 
 export async function createE2eApp(): Promise<INestApplication> {
   ensureTestEnv();
+
+  const { AppModule } = await import('../src/app.module');
 
   const moduleFixture: TestingModule = await Test.createTestingModule({
     imports: [AppModule],
@@ -93,4 +128,3 @@ export function makeSignedHeaders(opts: {
     'X-Nonce': nonce,
   };
 }
-

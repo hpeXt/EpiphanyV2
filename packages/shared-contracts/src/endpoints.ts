@@ -61,6 +61,18 @@ export const zTopicTreeResponse = z.object({
 export type TopicTreeResponse = z.infer<typeof zTopicTreeResponse>;
 
 // ============================================================================
+// GET /v1/topics/:topicId/arguments - Topic Arguments (paged, full topic)
+// ============================================================================
+
+export const zTopicArgumentsResponse = z.object({
+  topic: zTopicSummary,
+  items: z.array(zArgument),
+  nextBeforeId: z.string().nullable(),
+});
+
+export type TopicArgumentsResponse = z.infer<typeof zTopicArgumentsResponse>;
+
+// ============================================================================
 // GET /v1/arguments/:argumentId/children - Argument Children
 // ============================================================================
 

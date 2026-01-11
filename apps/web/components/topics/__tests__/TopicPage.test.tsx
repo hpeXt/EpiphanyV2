@@ -290,12 +290,12 @@ describe("TopicPage", () => {
 
     await screen.findByText("Child A");
 
-    await user.click(screen.getByRole("button", { name: "加载更多" }));
+    await user.click(screen.getByRole("button", { name: /Load more|加载更多/i }));
 
     expect(await screen.findByText("Child C")).toBeInTheDocument();
     expect(screen.getAllByText("Child B")).toHaveLength(1);
 
-    await user.click(screen.getByRole("button", { name: "最新" }));
+    await user.click(screen.getByRole("button", { name: /Newest|最新/i }));
 
     expect(await screen.findByText("Latest 1")).toBeInTheDocument();
     expect(screen.queryByText("Child A")).not.toBeInTheDocument();

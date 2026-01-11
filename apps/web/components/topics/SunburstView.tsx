@@ -7,6 +7,7 @@ import { Sunburst } from "@/components/visualizations/Sunburst";
 import { buildSunburstTreeFromFlatNodes } from "@/lib/visualization/sunburst/adapters";
 import { P5Alert } from "@/components/ui/P5Alert";
 import { P5Panel } from "@/components/ui/P5Panel";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 type Props = {
   rootId: string;
@@ -16,12 +17,13 @@ type Props = {
 };
 
 export function SunburstView({ rootId, nodes, selectedId, onSelect }: Props) {
+  const { t } = useI18n();
   const tree = useMemo(() => buildSunburstTreeFromFlatNodes(nodes, rootId), [nodes, rootId]);
 
   if (!tree) {
     return (
-      <P5Alert role="status" variant="warn" title="overview">
-        Sunburst overview is unavailable.
+      <P5Alert role="status" variant="warn" title={t("topic.viewMode.overview")}>
+        {t("sunburstView.unavailable")}
       </P5Alert>
     );
   }
@@ -31,11 +33,10 @@ export function SunburstView({ rootId, nodes, selectedId, onSelect }: Props) {
       header={
         <div className="flex flex-wrap items-center justify-between gap-3 bg-[color:var(--ink)] px-4 py-3 text-[color:var(--paper)]">
           <h2 className="font-mono text-sm font-semibold uppercase tracking-wide">
-            Overview
+            {t("topic.viewMode.overview")}
           </h2>
           <div className="text-xs text-white/80">
-            <span className="font-mono">Hover</span> for details ·{" "}
-            <span className="font-mono">Click</span> to select
+            {t("sunburstView.instructions")}
           </div>
         </div>
       }

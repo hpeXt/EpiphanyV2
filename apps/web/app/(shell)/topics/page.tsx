@@ -1,17 +1,17 @@
-import Link from "next/link";
-
 import { P5Alert } from "@/components/ui/P5Alert";
-import { P5Badge } from "@/components/ui/P5Badge";
 import { P5Card } from "@/components/ui/P5Card";
-import { TopicHostControls } from "@/components/topics/TopicHostControls";
+import { TopicsPageClient } from "@/components/topics/TopicsPageClient";
 import { apiClient } from "@/lib/apiClient";
+import { createTranslator } from "@/lib/i18n";
+import { getRequestLocale } from "@/lib/i18n/server";
 
 export default async function TopicsPage() {
+  const t = createTranslator(await getRequestLocale());
   const result = await apiClient.listTopics();
 
   if (!result.ok) {
     return (
-      <P5Alert variant="error" title="加载失败">
+      <P5Alert variant="error" title={t("common.loadFailed")}>
         {result.error.message}
       </P5Alert>
     );
@@ -22,56 +22,21 @@ export default async function TopicsPage() {
   return (
     <div className="space-y-6">
       <P5Card
-        title="Topics"
+        title={t("topics.title")}
         titleAs="h1"
-        subtitle="Pick a topic or start a new one."
-        actions={[{ href: "/topics/new", label: "New topic", variant: "primary" }]}
+        subtitle={t("topics.subtitle")}
+        actions={[{ href: "/topics/new", label: t("topics.newTopic"), variant: "primary" }]}
       >
-        {topics.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border/60 bg-card p-10 text-center">
-            <p className="text-sm text-muted-foreground">No topics yet.</p>
-          </div>
-        ) : (
-          <ul className="space-y-3">
-            {topics.map((topic) => {
-              const badgeVariant =
-                topic.status === "active"
-                  ? "electric"
-                  : topic.status === "frozen"
-                    ? "acid"
-                    : "ink";
-
-              return (
-                <li key={topic.id}>
-                  <div className="rounded-lg border border-border/60 bg-card px-4 py-4 shadow-sm transition-colors hover:bg-muted/30">
-                    <div className="flex items-start justify-between gap-3">
-                      <Link href={`/topics/${topic.id}`} aria-label={topic.title} className="min-w-0 flex-1">
-                        <div className="truncate font-serif text-lg font-semibold text-foreground">
-                          {topic.title}
-                        </div>
-                        <div className="mt-1 font-mono text-xs text-muted-foreground">
-                          {topic.id}
-                        </div>
-                      </Link>
-
-                      <div className="flex shrink-0 flex-col items-end gap-2">
-                        <P5Badge variant={badgeVariant} aria-hidden>
-                          {topic.status}
-                        </P5Badge>
-                        {topic.ownerPubkey ? (
-                          <P5Badge variant="ink" aria-hidden>
-                            host
-                          </P5Badge>
-                        ) : null}
-                        <TopicHostControls topicId={topic.id} ownerPubkey={topic.ownerPubkey} />
-                      </div>
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+        <TopicsPageClient
+          publicTopics={topics.map((topic) => ({
+            id: topic.id,
+            title: topic.title,
+            status: topic.status,
+            visibility: topic.visibility,
+            ownerPubkey: topic.ownerPubkey,
+            createdAt: topic.createdAt,
+          }))}
+        />
       </P5Card>
     </div>
   );

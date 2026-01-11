@@ -24,13 +24,13 @@ export type TopicHeader = {
 type Options = {
   /**
    * When enabled, starts from `depth` and then incrementally fetches all remaining
-   * descendants via `/v1/arguments/:argumentId/children` until the tree is complete.
+   * arguments via `/v1/topics/:topicId/arguments` until the tree is complete.
    */
   loadFullTree?: boolean;
   /**
-   * Page size for children fetches (1..100).
+   * Page size for topic argument fetches (1..1000).
    */
-  childrenPageSize?: number;
+  pageSize?: number;
   /**
    * Safety cap to avoid runaway loading for extremely large topics.
    */
@@ -66,7 +66,7 @@ export function useTopicTree(
   useEffect(() => {
     let cancelled = false;
     const loadFullTree = options?.loadFullTree ?? false;
-    const childrenPageSize = Math.max(1, Math.min(100, options?.childrenPageSize ?? 100));
+    const pageSize = Math.max(1, Math.min(1000, options?.pageSize ?? 500));
     const maxArguments = Math.max(100, options?.maxArguments ?? 10_000);
 
     setState((prev) => {
@@ -132,41 +132,6 @@ export function useTopicTree(
         loadedById.set(arg.id, arg);
       }
 
-      const expanded = new Set<string>();
-      const childrenByParent = new Map<string, string[]>();
-      for (const arg of baseArguments) {
-        if (!arg.parentId) continue;
-        const list = childrenByParent.get(arg.parentId) ?? [];
-        list.push(arg.id);
-        childrenByParent.set(arg.parentId, list);
-      }
-
-      const depthById = new Map<string, number>();
-      const rootId = baseTopic.rootArgumentId;
-      depthById.set(rootId, 1);
-      let frontier = [rootId];
-      let maxDepth = 1;
-
-      while (frontier.length) {
-        const next: string[] = [];
-        for (const parentId of frontier) {
-          const parentDepth = depthById.get(parentId) ?? 1;
-          const children = childrenByParent.get(parentId) ?? [];
-          for (const childId of children) {
-            if (depthById.has(childId)) continue;
-            const childDepth = parentDepth + 1;
-            depthById.set(childId, childDepth);
-            next.push(childId);
-            if (childDepth > maxDepth) maxDepth = childDepth;
-          }
-        }
-        frontier = next;
-      }
-
-      const queue = Array.from(depthById.entries())
-        .filter(([, depth]) => depth === maxDepth)
-        .map(([id]) => id);
-
       const flushState = () => {
         const merged = Array.from(loadedById.values());
         setState((prev) => {
@@ -184,55 +149,40 @@ export function useTopicTree(
         });
       };
 
-      const fetchAllChildren = async (parentArgumentId: string) => {
-        const items: Argument[] = [];
-        let beforeId: string | undefined = undefined;
-        while (!cancelled) {
-          const res = await apiClient.getArgumentChildren({
-            topicId,
-            argumentId: parentArgumentId,
-            orderBy: "createdAt_desc",
-            limit: childrenPageSize,
-            ...(beforeId ? { beforeId } : {}),
-          });
-          if (cancelled) return items;
-          if (!res.ok) return items;
+      const seenCursors = new Set<string>();
+      let beforeId: string | undefined = undefined;
 
-          items.push(...res.data.items);
-          if (!res.data.nextBeforeId) return items;
-          beforeId = res.data.nextBeforeId;
-        }
-        return items;
-      };
+      while (!cancelled && loadedById.size < maxArguments) {
+        const res = await apiClient.listTopicArguments({
+          topicId,
+          limit: pageSize,
+          ...(beforeId ? { beforeId } : {}),
+        });
 
-      while (!cancelled && queue.length > 0 && loadedById.size < maxArguments) {
-        const parentId = queue.shift();
-        if (!parentId) continue;
-        if (expanded.has(parentId)) continue;
-        expanded.add(parentId);
-
-        const children = await fetchAllChildren(parentId);
         if (cancelled) return;
-        if (!children.length) continue;
+        if (!res.ok) return;
 
         let added = 0;
-        for (const child of children) {
-          if (loadedById.has(child.id)) continue;
-          loadedById.set(child.id, child);
-          queue.push(child.id);
+        for (const arg of res.data.items) {
+          if (loadedById.has(arg.id)) continue;
+          loadedById.set(arg.id, arg);
           added += 1;
         }
 
-        if (added > 0) {
-          flushState();
-        }
+        if (added > 0) flushState();
+
+        const nextCursor = res.data.nextBeforeId;
+        if (!nextCursor) return;
+        if (seenCursors.has(nextCursor)) return;
+        seenCursors.add(nextCursor);
+        beforeId = nextCursor;
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [topicId, depth, refreshToken, options?.loadFullTree, options?.childrenPageSize, options?.maxArguments]);
+  }, [topicId, depth, refreshToken, options?.loadFullTree, options?.pageSize, options?.maxArguments]);
 
   return state;
 }

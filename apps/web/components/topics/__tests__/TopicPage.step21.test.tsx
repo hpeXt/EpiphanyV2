@@ -133,7 +133,7 @@ describe("TopicPage (Step 21 - Host + read-only semantics)", () => {
     render(<TopicPage topicId="topic-1" />);
 
     await screen.findByText("Topic 1");
-    expect(screen.getByRole("button", { name: "Manage" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Manage|管理/i })).toBeInTheDocument();
   });
 
   it("hides management entry for non-owner", async () => {
@@ -146,7 +146,7 @@ describe("TopicPage (Step 21 - Host + read-only semantics)", () => {
     render(<TopicPage topicId="topic-1" />);
 
     await screen.findByText("Topic 1");
-    expect(screen.queryByRole("button", { name: "Manage" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Manage|管理/i })).not.toBeInTheDocument();
   });
 
   it("disables createArgument and vote-increase when topic is frozen", async () => {
@@ -173,14 +173,14 @@ describe("TopicPage (Step 21 - Host + read-only semantics)", () => {
     await user.click(rootButton);
     expect(await screen.findByText("Child")).toBeInTheDocument();
 
-    const reply = screen.getByLabelText("Reply");
+    const reply = screen.getByLabelText(/Reply|回复/i);
     expect(reply).toHaveAttribute("contenteditable", "false");
 
-    const votesSlider = screen.getByLabelText("Votes");
+    const votesSlider = screen.getByLabelText(/Votes|票数/i);
     fireEvent.change(votesSlider, { target: { value: "1" } });
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: /Save|保存/i })).toBeDisabled();
     });
   });
 });

@@ -77,6 +77,9 @@ export {
   // GET /v1/topics/:topicId/tree
   zTopicTreeResponse,
   type TopicTreeResponse,
+  // GET /v1/topics/:topicId/arguments
+  zTopicArgumentsResponse,
+  type TopicArgumentsResponse,
   // GET /v1/arguments/:argumentId/children
   zArgumentChildrenResponse,
   type ArgumentChildrenResponse,

@@ -2,6 +2,8 @@
 
 import type { Argument } from "@epiphany/shared-contracts";
 import { TiptapRenderer } from "@/components/ui/TiptapRenderer";
+import { useI18n } from "@/components/i18n/I18nProvider";
+import { pseudonymFromAuthorId } from "@/lib/pseudonym";
 
 type Props = {
   node: Argument | null;
@@ -23,17 +25,22 @@ function getStanceFromScore(score: number | null): StanceType {
 }
 
 export function SelectedNodeCard({ node }: Props) {
+  const { t, locale } = useI18n();
+
   if (!node) {
     return (
       <div className="rounded-lg border border-border/60 bg-muted/40 p-8 text-center text-muted-foreground">
         <div className="mb-2 text-2xl">◎</div>
-        <div className="text-sm">点击左侧节点查看详情</div>
+        <div className="text-sm">{t("node.emptyHint")}</div>
       </div>
     );
   }
 
   const stance = getStanceFromScore(node.stanceScore);
   const stanceColor = STANCE_COLORS[stance];
+  const authorLabel = node.authorDisplayName?.trim()
+    ? node.authorDisplayName.trim()
+    : pseudonymFromAuthorId(node.authorId, locale);
 
   return (
     <div
@@ -66,7 +73,7 @@ export function SelectedNodeCard({ node }: Props) {
               color: stance === "neutral" ? "var(--foreground)" : "var(--background)",
             }}
           >
-            {stance}
+            {t(`node.stance.${stance}`)}
           </span>
 
           {/* 票数 */}
@@ -76,13 +83,13 @@ export function SelectedNodeCard({ node }: Props) {
 
           {/* 作者 */}
           <span className="font-mono">
-            {node.authorId.slice(0, 6)}...
+            {authorLabel}
           </span>
 
           {/* AI 分析状态 */}
           {node.analysisStatus && node.analysisStatus !== "ready" && (
             <span className="flex items-center gap-1 text-accent">
-              AI: {node.analysisStatus === "pending_analysis" ? "⏳" : "▶"}
+              {t("node.ai")}: {node.analysisStatus === "pending_analysis" ? "⏳" : "▶"}
             </span>
           )}
         </div>

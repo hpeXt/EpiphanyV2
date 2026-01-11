@@ -11,9 +11,11 @@ import { P5Button } from "@/components/ui/P5Button";
 import { P5Input } from "@/components/ui/P5Input";
 import { P5Textarea } from "@/components/ui/P5Textarea";
 import { useP5Toast } from "@/components/ui/P5ToastProvider";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 export function CreateTopicForm() {
   const router = useRouter();
+  const { t } = useI18n();
   const claimStore = useState(() => createLocalStorageClaimTokenStore())[0];
   const { toast } = useP5Toast();
 
@@ -26,8 +28,8 @@ export function CreateTopicForm() {
 
   function validate(nextTitle: string, nextBody: string) {
     const nextErrors: { title?: string; body?: string } = {};
-    if (!nextTitle.trim()) nextErrors.title = "Title is required";
-    if (!nextBody.trim()) nextErrors.body = "Body is required";
+    if (!nextTitle.trim()) nextErrors.title = t("createTopic.titleRequired");
+    if (!nextBody.trim()) nextErrors.body = t("createTopic.bodyRequired");
     return nextErrors;
   }
 
@@ -71,8 +73,8 @@ export function CreateTopicForm() {
 
     toast({
       variant: "success",
-      title: "created",
-      message: "Topic created. Claim token saved locally for 5 minutes.",
+      title: t("createTopic.toastTitle"),
+      message: t("createTopic.toastMessage"),
     });
 
     if (result.data.accessKey) {
@@ -86,7 +88,7 @@ export function CreateTopicForm() {
     <form onSubmit={onSubmit} className="space-y-4">
       <div className="space-y-1">
         <label htmlFor="title" className="font-mono text-xs font-semibold uppercase tracking-wide">
-          Title
+          {t("createTopic.titleLabel")}
         </label>
         <P5Input
           id="title"
@@ -103,7 +105,7 @@ export function CreateTopicForm() {
 
       <div className="space-y-1">
         <label htmlFor="visibility" className="font-mono text-xs font-semibold uppercase tracking-wide">
-          Visibility
+          {t("createTopic.visibilityLabel")}
         </label>
         <select
           id="visibility"
@@ -115,18 +117,18 @@ export function CreateTopicForm() {
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
           ].join(" ")}
         >
-          <option value="public">public</option>
-          <option value="unlisted">unlisted</option>
-          <option value="private">private</option>
+          <option value="public">{t("createTopic.visibility.public")}</option>
+          <option value="unlisted">{t("createTopic.visibility.unlisted")}</option>
+          <option value="private">{t("createTopic.visibility.private")}</option>
         </select>
         <p className="text-xs text-muted-foreground">
-          private topics require a link key (#k=…) or prior participation.
+          {t("createTopic.visibilityHelp")}
         </p>
       </div>
 
       <div className="space-y-1">
         <label htmlFor="body" className="font-mono text-xs font-semibold uppercase tracking-wide">
-          Body
+          {t("createTopic.bodyLabel")}
         </label>
         <P5Textarea
           id="body"
@@ -143,7 +145,7 @@ export function CreateTopicForm() {
       </div>
 
       {submitError ? (
-        <P5Alert variant="error" title="Error">
+        <P5Alert variant="error" title={t("common.error")}>
           {submitError}
         </P5Alert>
       ) : null}
@@ -153,7 +155,7 @@ export function CreateTopicForm() {
         disabled={isSubmitting}
         variant="primary"
       >
-        {isSubmitting ? "Creating…" : "Create"}
+        {isSubmitting ? t("createTopic.creating") : t("createTopic.create")}
       </P5Button>
     </form>
   );

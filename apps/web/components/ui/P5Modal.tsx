@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
+import { useI18n } from "@/components/i18n/I18nProvider";
+
 type Variant = "default" | "danger" | "success";
 
 type P5ModalProps = {
@@ -40,6 +42,7 @@ export function P5Modal({
   closeOnOverlayClick = true,
   maxWidth = "560px",
 }: P5ModalProps) {
+  const { t } = useI18n();
   const modalRef = useRef<HTMLDivElement>(null);
   const previousActiveElement = useRef<HTMLElement | null>(null);
 
@@ -125,7 +128,7 @@ export function P5Modal({
             type="button"
             onClick={onClose}
             className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-            aria-label="关闭"
+            aria-label={t("common.close")}
           >
             ✕
           </button>

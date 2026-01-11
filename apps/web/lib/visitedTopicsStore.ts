@@ -63,11 +63,8 @@ export function createLocalStorageVisitedTopicsStore(options?: {
     },
 
     addTopic(topicId: string): void {
-      const current = readIds();
-      // Deduplicate: only add if not already present
-      if (!current.includes(topicId)) {
-        writeIds([...current, topicId]);
-      }
+      const current = readIds().filter((id) => id !== topicId);
+      writeIds([...current, topicId]);
     },
 
     removeTopic(topicId: string): void {

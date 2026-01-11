@@ -13,6 +13,7 @@ import { useP5Confirm } from "@/components/ui/P5ConfirmProvider";
 import { P5Input } from "@/components/ui/P5Input";
 import { P5Textarea } from "@/components/ui/P5Textarea";
 import { useP5Toast } from "@/components/ui/P5ToastProvider";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 type Props = {
   topicId: string;
@@ -49,6 +50,7 @@ export function TopicManagePanel({
   onInvalidate,
   onClose,
 }: Props) {
+  const { t } = useI18n();
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { confirm } = useP5Confirm();
@@ -104,20 +106,20 @@ export function TopicManagePanel({
       setRootAutosave({ kind: "saved", savedAt: saved.updatedAt });
     } catch {
       if (!options?.silent) {
-        setRootAutosave({ kind: "error", message: "本地缓存不可用" });
+        setRootAutosave({ kind: "error", message: t("errors.localStorageUnavailable") });
       }
     }
-  }, [draftStore, topicId]);
+  }, [draftStore, t, topicId]);
 
   const statusActions = useMemo(() => {
     if (topicStatus === "active") {
       return [
         {
-          label: "Freeze",
+          label: t("managePanel.freeze"),
           command: { type: "SET_STATUS", payload: { status: "frozen" } } as const,
         },
         {
-          label: "Archive",
+          label: t("managePanel.archive"),
           command: { type: "SET_STATUS", payload: { status: "archived" } } as const,
         },
       ];
@@ -125,13 +127,13 @@ export function TopicManagePanel({
     if (topicStatus === "frozen") {
       return [
         {
-          label: "Unfreeze",
+          label: t("managePanel.unfreeze"),
           command: { type: "SET_STATUS", payload: { status: "active" } } as const,
         },
       ];
     }
     return [];
-  }, [topicStatus]);
+  }, [t, topicStatus]);
 
   useEffect(() => {
     if (topicVisibility !== "private") {
@@ -166,14 +168,14 @@ export function TopicManagePanel({
     } catch {
       setNextTitle(topicTitle);
       setNextBody(rootBody);
-      setRootAutosave({ kind: "error", message: "本地缓存不可用" });
+      setRootAutosave({ kind: "error", message: t("errors.localStorageUnavailable") });
     }
 
     setIsRootDraftHydrated(true);
     window.setTimeout(() => {
       skipRootAutosaveRef.current = false;
     }, 0);
-  }, [draftStore, rootBody, topicId, topicTitle]);
+  }, [draftStore, rootBody, t, topicId, topicTitle]);
 
   useEffect(() => {
     if (!isRootDraftHydrated) return;
@@ -203,9 +205,9 @@ export function TopicManagePanel({
 
     if (command.type === "SET_STATUS" && command.payload.status === "archived") {
       const ok = await confirm({
-        title: "Archive topic",
-        message: "This will make the topic permanently read-only.\n\nContinue?",
-        confirmLabel: "Archive",
+        title: t("managePanel.archiveConfirmTitle"),
+        message: t("managePanel.archiveConfirmBody"),
+        confirmLabel: t("managePanel.archive"),
         variant: "danger",
       });
       if (!ok) return { ok: false };
@@ -217,7 +219,7 @@ export function TopicManagePanel({
 
     if (!result.ok) {
       setSubmitError(result.error.message);
-      toast({ variant: "error", title: "host", message: result.error.message });
+      toast({ variant: "error", title: t("topics.host"), message: result.error.message });
       return { ok: false };
     }
 
@@ -238,7 +240,7 @@ export function TopicManagePanel({
     }
 
     onInvalidate();
-    toast({ variant: "success", title: "host", message: "Command applied." });
+    toast({ variant: "success", title: t("topics.host"), message: t("managePanel.commandApplied") });
     return { ok: true, ...(result.data.accessKey ? { accessKey: result.data.accessKey } : {}) };
   }
 
@@ -267,15 +269,14 @@ export function TopicManagePanel({
 
     const pubkey = normalizeHex(blacklistPubkey);
     if (!isValidPubkeyHex(pubkey)) {
-      setSubmitError("pubkey must be 64 hex chars");
+      setSubmitError(t("managePanel.pubkeyInvalid"));
       return;
     }
 
     const ok = await confirm({
-      title: "Blacklist pubkey",
-      message:
-        "This will block the pubkey from writing (createArgument/setVotes) in this topic.\n\nContinue?",
-      confirmLabel: "Blacklist",
+      title: t("managePanel.blacklistConfirmTitle"),
+      message: t("managePanel.blacklistConfirmBody"),
+      confirmLabel: t("managePanel.blacklist"),
       variant: "danger",
     });
     if (!ok) return;
@@ -294,7 +295,7 @@ export function TopicManagePanel({
 
     const pubkey = normalizeHex(blacklistPubkey);
     if (!isValidPubkeyHex(pubkey)) {
-      setSubmitError("pubkey must be 64 hex chars");
+      setSubmitError(t("managePanel.pubkeyInvalid"));
       return;
     }
 
@@ -306,24 +307,26 @@ export function TopicManagePanel({
 
   const shareUrl = useMemo(() => {
     if (typeof window === "undefined") return "";
+    const base = `${window.location.origin}/topics/${topicId}`;
+    if (topicVisibility !== "private") return base;
     if (!privateAccessKey) return "";
-    return `${window.location.origin}/topics/${topicId}#k=${privateAccessKey}`;
-  }, [privateAccessKey, topicId]);
+    return `${base}#k=${privateAccessKey}`;
+  }, [privateAccessKey, topicId, topicVisibility]);
 
   const copyShareUrl = useCallback(async () => {
     if (!shareUrl) return;
     try {
       await navigator.clipboard.writeText(shareUrl);
-      toast({ variant: "success", title: "privacy", message: "Share link copied." });
+      toast({ variant: "success", title: t("managePanel.link"), message: t("managePanel.linkCopied") });
     } catch {
-      toast({ variant: "error", title: "privacy", message: "Copy failed." });
+      toast({ variant: "error", title: t("managePanel.link"), message: t("managePanel.copyFailed") });
     }
-  }, [shareUrl, toast]);
+  }, [shareUrl, t, toast]);
 
   return (
     <div
       role="dialog"
-      aria-label="Host deck"
+      aria-label={t("managePanel.title")}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
@@ -339,7 +342,7 @@ export function TopicManagePanel({
       >
         <div className="flex flex-wrap items-center justify-between gap-3 bg-[color:var(--ink)] px-4 py-3 text-[color:var(--paper)]">
           <h2 className="font-mono text-sm font-semibold uppercase tracking-wide">
-            Host Deck
+            {t("managePanel.title")}
           </h2>
           <P5Button
             type="button"
@@ -347,14 +350,14 @@ export function TopicManagePanel({
             size="sm"
             className="border-[color:var(--paper)] text-[color:var(--paper)] shadow-none hover:bg-white/10"
           >
-            Close
+            {t("common.close")}
           </P5Button>
         </div>
 
         <div className="max-h-[80vh] space-y-4 overflow-y-auto px-5 py-4">
           <div className="space-y-2">
             <p className="text-sm text-[color:var(--ink)]">
-              Status: <span className="font-mono">{topicStatus}</span>
+              {t("managePanel.statusLabel")}: <span className="font-mono">{t(`status.${topicStatus}`)}</span>
             </p>
             <div className="flex flex-wrap gap-2">
               {statusActions.map((action) => (
@@ -371,23 +374,24 @@ export function TopicManagePanel({
               ))}
               {topicStatus === "archived" ? (
                 <span className="text-sm text-[color:var(--ink)]/70">
-                  Archived topics are read-only.
+                  {t("managePanel.archivedReadonly")}
                 </span>
               ) : null}
             </div>
             {canUnfreeze ? (
               <p className="text-sm text-[color:var(--ink)]/80">
-                Frozen topics only allow unfreeze.
+                {t("managePanel.frozenOnlyUnfreeze")}
               </p>
             ) : null}
           </div>
 
           <div className="space-y-2">
             <h3 className="font-mono text-sm font-semibold uppercase tracking-wide text-[color:var(--ink)]">
-              Visibility
+              {t("managePanel.visibilityTitle")}
             </h3>
             <p className="text-sm text-[color:var(--ink)]">
-              Current: <span className="font-mono">{topicVisibility}</span>
+              {t("managePanel.currentLabel")}:{" "}
+              <span className="font-mono">{t(`createTopic.visibility.${topicVisibility}`)}</span>
             </p>
             <div className="flex flex-wrap gap-2">
               {(["public", "unlisted", "private"] as const).map((value) => (
@@ -398,7 +402,7 @@ export function TopicManagePanel({
                   disabled={!canManagePrivacy || isSubmitting || topicVisibility === value}
                   onClick={() => runCommand({ type: "SET_VISIBILITY", payload: { visibility: value } })}
                 >
-                  {value}
+                  {t(`createTopic.visibility.${value}`)}
                 </P5Button>
               ))}
               {topicVisibility === "private" ? (
@@ -408,10 +412,10 @@ export function TopicManagePanel({
                   disabled={!canManagePrivacy || isSubmitting}
                   onClick={() => runCommand({ type: "ROTATE_ACCESS_KEY", payload: {} })}
                 >
-                  Rotate key
+                  {t("managePanel.rotateKey")}
                 </P5Button>
               ) : null}
-              {topicVisibility === "private" && shareUrl ? (
+              {shareUrl ? (
                 <P5Button
                   type="button"
                   size="sm"
@@ -419,32 +423,38 @@ export function TopicManagePanel({
                   onClick={copyShareUrl}
                   variant="primary"
                 >
-                  Copy link
+                  {t("managePanel.copyLink")}
                 </P5Button>
               ) : null}
             </div>
             {topicVisibility === "private" ? (
               shareUrl ? (
-                <p className="break-all font-mono text-xs text-[color:var(--ink)]/80">{shareUrl}</p>
+                <p className="text-sm text-[color:var(--ink)]/70">
+                  {t("managePanel.privateLinkReady")}
+                </p>
               ) : (
                 <p className="text-sm text-[color:var(--ink)]/70">
-                  Access key is only shown once (on set private / rotate).
+                  {t("managePanel.privateKeyMissing")}
                 </p>
               )
+            ) : topicVisibility === "unlisted" ? (
+              <p className="text-sm text-[color:var(--ink)]/70">
+                {t("managePanel.unlistedHelp")}
+              </p>
             ) : (
               <p className="text-sm text-[color:var(--ink)]/70">
-                public topics are listed; unlisted topics require topicId; private topics require #k=… or prior participation.
+                {t("managePanel.publicHelp")}
               </p>
             )}
           </div>
 
           <form onSubmit={onSubmitEditRoot} className="space-y-2">
             <h3 className="font-mono text-sm font-semibold uppercase tracking-wide text-[color:var(--ink)]">
-              Root
+              {t("managePanel.rootTitle")}
             </h3>
             <div className="space-y-1">
               <label htmlFor="root-title" className="text-sm font-semibold text-[color:var(--ink)]">
-                Root title
+                {t("managePanel.rootTitleLabel")}
               </label>
               <P5Input
                 id="root-title"
@@ -455,7 +465,7 @@ export function TopicManagePanel({
             </div>
             <div className="space-y-1">
               <label htmlFor="root-body" className="text-sm font-semibold text-[color:var(--ink)]">
-                Root body
+                {t("managePanel.rootBodyLabel")}
               </label>
               <P5Textarea
                 id="root-body"
@@ -466,7 +476,7 @@ export function TopicManagePanel({
               />
             </div>
             <P5Button type="submit" disabled={!canManage || isSubmitting} variant="primary">
-              Save root
+              {t("managePanel.saveRoot")}
             </P5Button>
             {rootAutosave.kind !== "idle" ? (
               <p
@@ -478,9 +488,11 @@ export function TopicManagePanel({
                 ].join(" ")}
               >
                 {rootAutosave.kind === "saving"
-                  ? "自动保存中…"
+                  ? t("dialogue.autosaveSaving")
                   : rootAutosave.kind === "saved"
-                    ? `已自动保存 ${formatSavedTime(rootAutosave.savedAt) ?? ""}`.trim()
+                    ? t("dialogue.autosaveSavedAt", {
+                        time: formatSavedTime(rootAutosave.savedAt) ?? "",
+                      }).trim()
                     : rootAutosave.message}
               </p>
             ) : null}
@@ -488,7 +500,7 @@ export function TopicManagePanel({
 
           <div className="space-y-2">
             <h3 className="font-mono text-sm font-semibold uppercase tracking-wide text-[color:var(--ink)]">
-              Pruning
+              {t("managePanel.pruningTitle")}
             </h3>
             <div className="grid gap-2 md:grid-cols-2">
               <div className="space-y-1">
@@ -496,7 +508,7 @@ export function TopicManagePanel({
                   htmlFor="prune-argument-id"
                   className="text-sm font-semibold text-[color:var(--ink)]"
                 >
-                  Argument ID
+                  {t("managePanel.argumentIdLabel")}
                 </label>
                 <P5Input
                   id="prune-argument-id"
@@ -510,7 +522,7 @@ export function TopicManagePanel({
                   htmlFor="prune-reason"
                   className="text-sm font-semibold text-[color:var(--ink)]"
                 >
-                  Prune reason (optional)
+                  {t("managePanel.pruneReasonLabel")}
                 </label>
                 <P5Input
                   id="prune-reason"
@@ -526,10 +538,9 @@ export function TopicManagePanel({
                 disabled={!canManage || isSubmitting || !pruneArgumentId.trim()}
                 onClick={async () => {
                   const ok = await confirm({
-                    title: "Prune argument",
-                    message:
-                      "This will hide the argument from public reads (stakes can still be withdrawn).\n\nContinue?",
-                    confirmLabel: "Prune",
+                    title: t("managePanel.pruneConfirmTitle"),
+                    message: t("managePanel.pruneConfirmBody"),
+                    confirmLabel: t("managePanel.prune"),
                     variant: "danger",
                   });
                   if (!ok) return;
@@ -544,7 +555,7 @@ export function TopicManagePanel({
                 variant="danger"
                 size="sm"
               >
-                Prune
+                {t("managePanel.prune")}
               </P5Button>
               <P5Button
                 type="button"
@@ -557,14 +568,14 @@ export function TopicManagePanel({
                 }
                 size="sm"
               >
-                Unprune
+                {t("managePanel.unprune")}
               </P5Button>
             </div>
           </div>
 
           <div className="space-y-2">
             <h3 className="font-mono text-sm font-semibold uppercase tracking-wide text-[color:var(--ink)]">
-              Blacklist
+              {t("managePanel.blacklistTitle")}
             </h3>
             <div className="grid gap-2 md:grid-cols-2">
               <div className="space-y-1">
@@ -572,14 +583,14 @@ export function TopicManagePanel({
                   htmlFor="blacklist-pubkey"
                   className="text-sm font-semibold text-[color:var(--ink)]"
                 >
-                  Target pubkey (hex)
+                  {t("managePanel.targetPubkeyLabel")}
                 </label>
                 <P5Input
                   id="blacklist-pubkey"
                   value={blacklistPubkey}
                   onChange={(event) => setBlacklistPubkey(event.target.value)}
                   disabled={!canManage || isSubmitting}
-                  placeholder="64 hex chars"
+                  placeholder={t("managePanel.hex64Placeholder")}
                 />
               </div>
               <div className="space-y-1">
@@ -587,7 +598,7 @@ export function TopicManagePanel({
                   htmlFor="blacklist-reason"
                   className="text-sm font-semibold text-[color:var(--ink)]"
                 >
-                  Blacklist reason (optional)
+                  {t("managePanel.blacklistReasonLabel")}
                 </label>
                 <P5Input
                   id="blacklist-reason"
@@ -605,7 +616,7 @@ export function TopicManagePanel({
                 variant="danger"
                 size="sm"
               >
-                Blacklist
+                {t("managePanel.blacklist")}
               </P5Button>
               <P5Button
                 type="button"
@@ -613,13 +624,13 @@ export function TopicManagePanel({
                 onClick={unblacklist}
                 size="sm"
               >
-                Unblacklist
+                {t("managePanel.unblacklist")}
               </P5Button>
             </div>
           </div>
 
           {submitError ? (
-            <P5Alert role="alert" variant="error" title="error">
+            <P5Alert role="alert" variant="error" title={t("common.error")}>
               {submitError}
             </P5Alert>
           ) : null}

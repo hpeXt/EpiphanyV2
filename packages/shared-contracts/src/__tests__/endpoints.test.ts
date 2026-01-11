@@ -10,6 +10,8 @@ import {
   zListTopicsResponse,
   // GET /v1/topics/:topicId/tree
   zTopicTreeResponse,
+  // GET /v1/topics/:topicId/arguments
+  zTopicArgumentsResponse,
   // GET /v1/arguments/:argumentId/children
   zArgumentChildrenResponse,
   // POST /v1/arguments/:argumentId/edit
@@ -35,6 +37,7 @@ import {
   type CreateTopicResponse,
   type ListTopicsResponse,
   type TopicTreeResponse,
+  type TopicArgumentsResponse,
   type ArgumentChildrenResponse,
   type CreateArgumentResponse,
   type SetVotesResponse,
@@ -234,8 +237,8 @@ describe('GET /v1/topics/:topicId/tree response', () => {
     expect(result.success).toBe(true);
   });
 
-  it('should accept depth values 1-6', () => {
-    const depths = [1, 2, 3, 4, 5, 6];
+  it('should accept depth values 1-10', () => {
+    const depths = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
     depths.forEach((depth) => {
       const fixture = {
@@ -255,6 +258,64 @@ describe('GET /v1/topics/:topicId/tree response', () => {
 
       expect(zTopicTreeResponse.safeParse(fixture).success).toBe(true);
     });
+  });
+});
+
+describe('GET /v1/topics/:topicId/arguments response', () => {
+  it('should parse a valid response with topic, items, and nextBeforeId', () => {
+    const fixture: TopicArgumentsResponse = {
+      topic: {
+        id: '0193e3a6-0b7d-7a8d-9f2c-1234567890ab',
+        title: 'Discussion Topic',
+        rootArgumentId: '0193e3a6-0b7d-7a8d-9f2c-root00000001',
+        visibility: 'public',
+        status: 'active',
+        ownerPubkey: null,
+        createdAt: '2025-12-19T12:34:56.789Z',
+        updatedAt: '2025-12-19T12:34:56.789Z',
+      },
+      items: [
+        {
+          id: '0193e3a6-0b7d-7a8d-9f2c-root00000001',
+          topicId: '0193e3a6-0b7d-7a8d-9f2c-1234567890ab',
+          parentId: null,
+          title: 'Root Argument',
+          body: 'This is the root argument of the topic.',
+          authorId: 'abcd1234abcd1234',
+          analysisStatus: 'ready',
+          stanceScore: 0,
+          totalVotes: 10,
+          totalCost: 100,
+          prunedAt: null,
+          createdAt: '2025-12-19T12:34:56.789Z',
+          updatedAt: '2025-12-19T12:34:56.789Z',
+        },
+      ],
+      nextBeforeId: '0193e3a6-0b7d-7a8d-9f2c-cursor123456',
+    };
+
+    const result = zTopicArgumentsResponse.safeParse(fixture);
+    expect(result.success).toBe(true);
+  });
+
+  it('should accept null nextBeforeId', () => {
+    const fixture = {
+      topic: {
+        id: '0193e3a6-0b7d-7a8d-9f2c-1234567890ab',
+        title: 'Discussion Topic',
+        rootArgumentId: '0193e3a6-0b7d-7a8d-9f2c-root00000001',
+        visibility: 'public',
+        status: 'active',
+        ownerPubkey: null,
+        createdAt: '2025-12-19T12:34:56.789Z',
+        updatedAt: '2025-12-19T12:34:56.789Z',
+      },
+      items: [],
+      nextBeforeId: null,
+    };
+
+    const result = zTopicArgumentsResponse.safeParse(fixture);
+    expect(result.success).toBe(true);
   });
 });
 

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { P5Badge } from "@/components/ui/P5Badge";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 type Props = {
   title: string;
@@ -24,6 +25,8 @@ export function TopicTopBar({
   manageButton,
   reportButton,
 }: Props) {
+  const { t } = useI18n();
+  const displayTitle = title.trim() ? title : t("topics.untitled");
   const statusVariant =
     status === "active" ? "electric" : status === "frozen" ? "acid" : "ink";
 
@@ -35,17 +38,17 @@ export function TopicTopBar({
           <Link
             href="/topics"
             className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-            aria-label="返回议题列表"
+            aria-label={t("topics.backToList")}
           >
             ←
           </Link>
         ) : null}
 
-        <h1 className="min-w-0 truncate font-serif text-xl font-semibold text-foreground" title={title}>
-          {title}
+        <h1 className="min-w-0 truncate font-serif text-xl font-semibold text-foreground" title={displayTitle}>
+          {displayTitle}
         </h1>
 
-        <P5Badge variant={statusVariant}>{status}</P5Badge>
+        <P5Badge variant={statusVariant}>{t(`status.${status}`)}</P5Badge>
       </div>
 
       {/* 右侧 */}
@@ -65,14 +68,14 @@ export function TopicTopBar({
           <Link
             href="/my"
             className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-2 py-1 font-mono text-sm text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-            title="我的身份"
+            title={t("identity.myIdentity")}
           >
             <span className="flex gap-0.5" aria-hidden>
               <span className="h-2 w-2 rounded-full bg-destructive" />
               <span className="h-2 w-2 rounded-full bg-[color:var(--chart-2)]" />
               <span className="h-2 w-2 rounded-full bg-accent" />
             </span>
-            <span className="hidden sm:inline">{identityFingerprint}</span>
+            <span className="hidden sm:inline">{t("my.identityReady")}</span>
           </Link>
         ) : null}
       </div>

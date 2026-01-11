@@ -11,6 +11,8 @@ import {
   type ReactNode,
 } from "react";
 
+import { useI18n } from "@/components/i18n/I18nProvider";
+
 type ToastVariant = "info" | "success" | "warn" | "error";
 
 export type P5ToastInput = {
@@ -48,13 +50,6 @@ function randomId(): string {
   return out || String(Date.now());
 }
 
-function titleForVariant(variant: ToastVariant): string {
-  if (variant === "error") return "error";
-  if (variant === "warn") return "warning";
-  if (variant === "success") return "success";
-  return "info";
-}
-
 function dotClass(variant: ToastVariant): string {
   if (variant === "error") return "bg-destructive";
   if (variant === "warn") return "bg-[color:var(--chart-2)]";
@@ -63,8 +58,19 @@ function dotClass(variant: ToastVariant): string {
 }
 
 export function P5ToastProvider({ children }: { children: ReactNode }) {
+  const { t } = useI18n();
   const [toasts, setToasts] = useState<Toast[]>([]);
   const timeouts = useRef<Map<string, number>>(new Map());
+
+  const titleForVariant = useCallback(
+    (variant: ToastVariant): string => {
+      if (variant === "error") return t("toast.error");
+      if (variant === "warn") return t("toast.warning");
+      if (variant === "success") return t("toast.success");
+      return t("toast.info");
+    },
+    [t],
+  );
 
   const dismiss = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -110,7 +116,7 @@ export function P5ToastProvider({ children }: { children: ReactNode }) {
 
       return id;
     },
-    [dismiss],
+    [dismiss, titleForVariant],
   );
 
   useEffect(() => {
@@ -127,10 +133,10 @@ export function P5ToastProvider({ children }: { children: ReactNode }) {
         aria-relevant="additions text"
         className="pointer-events-none fixed right-4 top-4 z-[100] flex w-[min(420px,calc(100vw-2rem))] flex-col gap-3"
       >
-        {toasts.map((t) => (
+        {toasts.map((toastItem) => (
           <div
-            key={t.id}
-            role={t.variant === "error" ? "alert" : "status"}
+            key={toastItem.id}
+            role={toastItem.variant === "error" ? "alert" : "status"}
             className={[
               "pointer-events-auto",
               "overflow-hidden rounded-lg border border-border/60 bg-card text-card-foreground shadow-lg",
@@ -139,17 +145,17 @@ export function P5ToastProvider({ children }: { children: ReactNode }) {
             <div className="flex items-start gap-3 px-4 py-3">
               <span
                 aria-hidden
-                className={["mt-1.5 h-2 w-2 rounded-full", dotClass(t.variant)].join(" ")}
+                className={["mt-1.5 h-2 w-2 rounded-full", dotClass(toastItem.variant)].join(" ")}
               />
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-foreground">{t.title}</div>
-                <div className="mt-1 text-sm text-muted-foreground">{t.message}</div>
+                <div className="text-sm font-medium text-foreground">{toastItem.title}</div>
+                <div className="mt-1 text-sm text-muted-foreground">{toastItem.message}</div>
               </div>
               <button
                 type="button"
-                onClick={() => dismiss(t.id)}
+                onClick={() => dismiss(toastItem.id)}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                aria-label="Dismiss toast"
+                aria-label={t("toast.dismiss")}
               >
                 ×
               </button>

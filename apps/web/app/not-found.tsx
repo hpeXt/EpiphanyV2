@@ -1,16 +1,20 @@
 import { P5Card } from "@/components/ui/P5Card";
+import { createTranslator } from "@/lib/i18n";
+import { getRequestLocale } from "@/lib/i18n/server";
 
-export default function NotFound() {
+export default async function NotFound() {
+  const t = createTranslator(await getRequestLocale());
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <P5Card
-        title="Not Found"
+        title={t("notFound.title")}
         titleAs="h1"
-        subtitle="This page does not exist."
-        actions={[{ href: "/topics", label: "Back to Topics" }]}
+        subtitle={t("notFound.subtitle")}
+        actions={[{ href: "/topics", label: t("notFound.backToTopics") }]}
       >
         <p className="text-sm text-muted-foreground">
-          Check the URL, or go back to the Topics list.
+          {t("notFound.body")}
         </p>
       </P5Card>
     </div>

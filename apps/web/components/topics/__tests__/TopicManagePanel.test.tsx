@@ -39,7 +39,7 @@ describe("TopicManagePanel", () => {
       />,
     );
 
-    expect(screen.getByLabelText("Argument ID")).toHaveValue("arg-123");
+    expect(screen.getByLabelText(/Argument ID|节点 ID/i)).toHaveValue("arg-123");
   });
 
   it("sends BLACKLIST_PUBKEY topic command", async () => {
@@ -86,10 +86,10 @@ describe("TopicManagePanel", () => {
       />,
     );
 
-    await user.type(screen.getByLabelText("Target pubkey (hex)"), "ab".repeat(32));
-    await user.type(screen.getByLabelText("Blacklist reason (optional)"), "spam");
+    await user.type(screen.getByLabelText(/Target pubkey \\(hex\\)|目标公钥/i), "ab".repeat(32));
+    await user.type(screen.getByLabelText(/Blacklist reason \\(optional\\)|拉黑原因/i), "spam");
 
-    await user.click(screen.getByRole("button", { name: "Blacklist" }));
+    await user.click(screen.getByRole("button", { name: /Blacklist|拉黑/i }));
 
     await waitFor(() => {
       expect(lastCommand).toEqual({

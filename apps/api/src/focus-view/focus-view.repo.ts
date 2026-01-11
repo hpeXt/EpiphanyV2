@@ -166,6 +166,93 @@ export class FocusViewRepo {
     };
   }
 
+  async listTopicArguments(params: {
+    topicId: string;
+    beforeId?: string;
+    limit: number;
+  }): Promise<{
+    topic: TopicSummary;
+    items: Argument[];
+    nextBeforeId: string | null;
+  } | null> {
+    const topic = await this.prisma.topic.findUnique({
+      where: { id: params.topicId },
+      select: {
+        id: true,
+        title: true,
+        rootArgumentId: true,
+        status: true,
+        ownerPubkey: true,
+        visibility: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!topic?.rootArgumentId) return null;
+
+    const baseWhere = {
+      topicId: params.topicId,
+      prunedAt: null as null,
+    };
+
+    let where: Record<string, unknown> = baseWhere;
+
+    if (params.beforeId) {
+      const before = await this.prisma.argument.findFirst({
+        where: {
+          id: params.beforeId,
+          topicId: params.topicId,
+          prunedAt: null,
+        },
+        select: { id: true, createdAt: true },
+      });
+
+      if (before) {
+        where = {
+          ...baseWhere,
+          OR: [
+            { createdAt: { lt: before.createdAt } },
+            { AND: [{ createdAt: before.createdAt }, { id: { lt: before.id } }] },
+          ],
+        };
+      }
+    }
+
+    const rows = await this.prisma.argument.findMany({
+      where,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: params.limit + 1,
+      select: ARGUMENT_SELECT,
+    });
+
+    const hasMore = rows.length > params.limit;
+    const page = hasMore ? rows.slice(0, params.limit) : rows;
+    const nextBeforeId = hasMore && page.length ? page[page.length - 1].id : null;
+
+    const uniquePubkeys = Array.from(
+      new Set(page.map((row) => toPubkeyHex(row.authorPubkey))),
+    ).map((hex) => Buffer.from(hex, 'hex'));
+
+    const profiles = uniquePubkeys.length
+      ? await this.prisma.topicIdentityProfile.findMany({
+          where: { topicId: params.topicId, pubkey: { in: uniquePubkeys } },
+          select: { pubkey: true, displayName: true },
+        })
+      : [];
+
+    const displayNameByPubkeyHex = new Map<string, string | null>();
+    for (const profile of profiles) {
+      displayNameByPubkeyHex.set(toPubkeyHex(profile.pubkey), profile.displayName);
+    }
+
+    return {
+      topic: mapTopicSummary(topic),
+      items: page.map((row) => mapArgument(row, displayNameByPubkeyHex.get(toPubkeyHex(row.authorPubkey)) ?? null)),
+      nextBeforeId,
+    };
+  }
+
   async getChildren(params: {
     argumentId: string;
     orderBy: ChildrenOrderBy;

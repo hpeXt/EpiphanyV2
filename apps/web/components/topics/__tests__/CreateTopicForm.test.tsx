@@ -34,10 +34,10 @@ describe("CreateTopicForm", () => {
 
     render(<CreateTopicForm />);
 
-    await user.click(screen.getByRole("button", { name: /create/i }));
+    await user.click(screen.getByRole("button", { name: /create|创建/i }));
 
-    expect(screen.getByText("Title is required")).toBeInTheDocument();
-    expect(screen.getByText("Body is required")).toBeInTheDocument();
+    expect(screen.getByText(/Title is required|需要填写标题/i)).toBeInTheDocument();
+    expect(screen.getByText(/Body is required|需要填写正文/i)).toBeInTheDocument();
   });
 
   it("submits and navigates to /topics/{topicId}", async () => {
@@ -56,9 +56,9 @@ describe("CreateTopicForm", () => {
 
     render(<CreateTopicForm />);
 
-    await user.type(screen.getByLabelText("Title"), "My topic");
-    await user.type(screen.getByLabelText("Body"), "Hello");
-    await user.click(screen.getByRole("button", { name: /create/i }));
+    await user.type(screen.getByLabelText(/Title|标题/i), "My topic");
+    await user.type(screen.getByLabelText(/Body|正文/i), "Hello");
+    await user.click(screen.getByRole("button", { name: /create|创建/i }));
 
     expect(mockPush).toHaveBeenCalledWith("/topics/topic-123");
   });

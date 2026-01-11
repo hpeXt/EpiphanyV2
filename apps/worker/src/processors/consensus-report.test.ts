@@ -113,11 +113,12 @@ describe('Consensus Report Processor', () => {
     expect(updated).not.toBeNull();
     expect(updated!.status).toBe('ready');
     expect(updated!.contentMd).toContain('Consensus Report');
-    expect(updated!.promptVersion).toBe('consensus-report/v2');
+    expect(updated!.promptVersion).toBe('consensus-report/v3-stage03');
     expect(updated!.params).toBeTruthy();
     expect((updated!.params as any).filters?.pruned).toBe(false);
     expect(Array.isArray((updated!.params as any).selectedArgumentIds)).toBe(true);
     expect((updated!.metadata as any)?.sources).toBeTruthy();
+    expect((updated!.metadata as any)?.coverage).toBeTruthy();
     expect(updated!.computedAt).not.toBeNull();
 
     const events = await redis.xrange(`topic:events:${topicId}`, '-', '+');

@@ -196,9 +196,14 @@ describe("TopicPage (Step 22 - Consensus Report)", () => {
     render(<TopicPage topicId="topic-1" />);
 
     await screen.findByText("Topic 1");
-    await user.click(screen.getByRole("button", { name: "Report" }));
+    await user.click(screen.getByRole("button", { name: /Report|报告/i }));
 
-    expect(await screen.findByRole("heading", { name: "Consensus Report" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", {
+        level: 2,
+        name: /Consensus report|共识报告/i,
+      }),
+    ).toBeInTheDocument();
     expect(screen.getByText("one")).toBeInTheDocument();
   });
 
@@ -232,12 +237,12 @@ describe("TopicPage (Step 22 - Consensus Report)", () => {
     render(<TopicPage topicId="topic-1" />);
 
     await screen.findByText("Topic 1");
-    await user.click(screen.getByRole("button", { name: "Report" }));
+    await user.click(screen.getByRole("button", { name: /Report|报告/i }));
 
-    expect(await screen.findByRole("heading", { name: "Footnotes" })).toBeInTheDocument();
-    expect(screen.getAllByText(/topic:topic-1/)).toHaveLength(2);
-    expect(screen.getByText(/author:0123456789abcdef/)).toBeInTheDocument();
-    expect(screen.getByText(/argument:arg-a/)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /Footnotes|脚注/i })).toBeInTheDocument();
+    expect(screen.getByText("S1")).toBeInTheDocument();
+    expect(screen.getByText("S2")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Open|打开/i })).toHaveLength(2);
   });
 
   it("shows generating state when latest report is generating", async () => {
@@ -264,9 +269,9 @@ describe("TopicPage (Step 22 - Consensus Report)", () => {
     render(<TopicPage topicId="topic-1" />);
 
     await screen.findByText("Topic 1");
-    await user.click(screen.getByRole("button", { name: "Report" }));
+    await user.click(screen.getByRole("button", { name: /Report|报告/i }));
 
-    expect(await screen.findByText("Generating report…")).toBeInTheDocument();
+    expect(await screen.findByText(/Generating report…|正在生成报告…/i)).toBeInTheDocument();
   });
 
   it("shows failed state when latest report is failed", async () => {
@@ -293,9 +298,9 @@ describe("TopicPage (Step 22 - Consensus Report)", () => {
     render(<TopicPage topicId="topic-1" />);
 
     await screen.findByText("Topic 1");
-    await user.click(screen.getByRole("button", { name: "Report" }));
+    await user.click(screen.getByRole("button", { name: /Report|报告/i }));
 
-    expect(await screen.findByText("Report failed")).toBeInTheDocument();
+    expect(await screen.findByText(/Report failed|报告生成失败/i)).toBeInTheDocument();
     expect(screen.getByText("Provider failed")).toBeInTheDocument();
   });
 
@@ -340,11 +345,11 @@ describe("TopicPage (Step 22 - Consensus Report)", () => {
     render(<TopicPage topicId="topic-1" />);
 
     await screen.findByText("Topic 1");
-    await user.click(screen.getByRole("button", { name: "Report" }));
+    await user.click(screen.getByRole("button", { name: /Report|报告/i }));
 
-    const button = await screen.findByRole("button", { name: "Generate report" });
+    const button = await screen.findByRole("button", { name: /Generate report|生成报告/i });
     await user.click(button);
 
-    expect(await screen.findByText("Generating report…")).toBeInTheDocument();
+    expect(await screen.findByText(/Generating report…|正在生成报告…/i)).toBeInTheDocument();
   });
 });

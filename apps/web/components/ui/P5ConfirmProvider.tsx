@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { P5Button } from "@/components/ui/P5Button";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 type ConfirmVariant = "danger" | "default";
 
@@ -37,11 +38,8 @@ type ConfirmApi = {
 
 const ConfirmContext = createContext<ConfirmApi | null>(null);
 
-function defaultConfirmLabel(variant: ConfirmVariant): string {
-  return variant === "danger" ? "Confirm" : "OK";
-}
-
 export function P5ConfirmProvider({ children }: { children: ReactNode }) {
+  const { t } = useI18n();
   const [state, setState] = useState<ConfirmState | null>(null);
 
   const close = useCallback((value: boolean) => {
@@ -57,13 +55,15 @@ export function P5ConfirmProvider({ children }: { children: ReactNode }) {
       setState({
         title: options.title,
         message: options.message,
-        confirmLabel: options.confirmLabel ?? defaultConfirmLabel(variant),
-        cancelLabel: options.cancelLabel ?? "Cancel",
+        confirmLabel:
+          options.confirmLabel ??
+          (variant === "danger" ? t("confirmModal.confirmDanger") : t("confirmModal.ok")),
+        cancelLabel: options.cancelLabel ?? t("confirmModal.cancel"),
         variant,
         resolve,
       });
     });
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!state) return;

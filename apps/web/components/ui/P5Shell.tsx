@@ -1,17 +1,22 @@
+"use client";
+
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { useI18n } from "@/components/i18n/I18nProvider";
 import { P5TopNav } from "@/components/ui/P5TopNav";
 import { BRAND } from "@/lib/brand";
 
 export function P5Shell({ children }: { children: ReactNode }) {
+  const { t } = useI18n();
+
   return (
     <div className="flex min-h-dvh flex-col bg-background text-foreground">
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[110] focus:rounded-md focus:border focus:border-border focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:shadow-sm"
       >
-        Skip to content
+        {t("common.skipToContent")}
       </a>
 
       <header className="border-b border-border/50 bg-background">

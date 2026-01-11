@@ -3,7 +3,7 @@
  * @description Focus View read-path service (tree + children)
  */
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
-import type { ArgumentChildrenResponse, TopicTreeResponse } from '@epiphany/shared-contracts';
+import type { ArgumentChildrenResponse, TopicArgumentsResponse, TopicTreeResponse } from '@epiphany/shared-contracts';
 import { FocusViewRepo, type ChildrenOrderBy } from './focus-view.repo.js';
 
 function clampInt(value: number, min: number, max: number): number {
@@ -17,6 +17,9 @@ export class FocusViewService {
   private readonly DEFAULT_TREE_DEPTH = 3;
   private readonly MIN_TREE_DEPTH = 1;
   private readonly MAX_TREE_DEPTH = 10;
+
+  private readonly DEFAULT_TOPIC_ARGUMENTS_LIMIT = 500;
+  private readonly MAX_TOPIC_ARGUMENTS_LIMIT = 1000;
 
   private readonly DEFAULT_CHILDREN_LIMIT = 30;
   private readonly MAX_CHILDREN_LIMIT = 100;
@@ -32,6 +35,33 @@ export class FocusViewService {
     );
 
     const result = await this.repo.getTopicTree(topicId, depth);
+    if (!result) {
+      throw new NotFoundException({
+        error: { code: 'TOPIC_NOT_FOUND', message: 'Topic not found' },
+      });
+    }
+
+    return result;
+  }
+
+  async listTopicArguments(params: {
+    topicId: string;
+    beforeId?: string;
+    limitRaw?: string;
+  }): Promise<TopicArgumentsResponse> {
+    const limitParsed = params.limitRaw ? parseInt(params.limitRaw, 10) : this.DEFAULT_TOPIC_ARGUMENTS_LIMIT;
+    const limit = clampInt(
+      Number.isFinite(limitParsed) ? limitParsed : this.DEFAULT_TOPIC_ARGUMENTS_LIMIT,
+      1,
+      this.MAX_TOPIC_ARGUMENTS_LIMIT,
+    );
+
+    const result = await this.repo.listTopicArguments({
+      topicId: params.topicId,
+      beforeId: params.beforeId,
+      limit,
+    });
+
     if (!result) {
       throw new NotFoundException({
         error: { code: 'TOPIC_NOT_FOUND', message: 'Topic not found' },

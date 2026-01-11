@@ -9,12 +9,14 @@ import { P5Button } from "@/components/ui/P5Button";
 import { P5Panel } from "@/components/ui/P5Panel";
 import { P5Tabs } from "@/components/ui/P5Tabs";
 import { P5Textarea } from "@/components/ui/P5Textarea";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 function normalizeMnemonicInput(input: string): string {
   return input.trim().split(/\s+/).join(" ");
 }
 
 export function IdentityOnboarding(props: { onComplete: () => void }) {
+  const { t } = useI18n();
   const keyStore = useMemo(() => createLocalStorageKeyStore(), []);
   const [mode, setMode] = useState<"generate" | "import">("generate");
   const [generatedMnemonic, setGeneratedMnemonic] = useState("");
@@ -24,7 +26,7 @@ export function IdentityOnboarding(props: { onComplete: () => void }) {
   function saveMnemonic(mnemonic: string) {
     const normalized = normalizeMnemonicInput(mnemonic);
     if (!validateMnemonic(normalized)) {
-      setError("Invalid mnemonic");
+      setError(t("identity.invalidMnemonic"));
       return;
     }
 
@@ -38,25 +40,25 @@ export function IdentityOnboarding(props: { onComplete: () => void }) {
       header={
         <div className="bg-[color:var(--ink)] px-4 py-3 text-[color:var(--paper)]">
           <h2 className="font-mono text-sm font-semibold uppercase tracking-wide">
-            Set up your identity
+            {t("identity.setupTitle")}
           </h2>
           <p className="mt-1 text-xs text-white/80">
-            This device stores your master seed locally. Back up the mnemonic before continuing.
+            {t("identity.setupSubtitle")}
           </p>
         </div>
       }
       bodyClassName="space-y-3"
     >
       <P5Tabs
-        ariaLabel="Identity mode"
+        ariaLabel={t("identity.modeLabel")}
         value={mode}
         onValueChange={(next) => {
           setMode(next);
           setError("");
         }}
         tabs={[
-          { value: "generate", label: "Generate" },
-          { value: "import", label: "Import" },
+          { value: "generate", label: t("identity.generate") },
+          { value: "import", label: t("identity.import") },
         ]}
       />
 
@@ -70,13 +72,13 @@ export function IdentityOnboarding(props: { onComplete: () => void }) {
             }}
             variant="primary"
           >
-            Generate 12-word mnemonic
+            {t("identity.generateMnemonic")}
           </P5Button>
 
           {generatedMnemonic ? (
             <div className="space-y-2">
               <P5Textarea
-                aria-label="Generated mnemonic"
+                aria-label={t("identity.generatedMnemonic")}
                 readOnly
                 value={generatedMnemonic}
                 rows={3}
@@ -87,7 +89,7 @@ export function IdentityOnboarding(props: { onComplete: () => void }) {
                 onClick={() => saveMnemonic(generatedMnemonic)}
                 variant="ghost"
               >
-                I have backed it up
+                {t("identity.backedUp")}
               </P5Button>
             </div>
           ) : null}
@@ -95,21 +97,21 @@ export function IdentityOnboarding(props: { onComplete: () => void }) {
       ) : (
         <div className="space-y-2">
           <P5Textarea
-            aria-label="Mnemonic"
+            aria-label={t("identity.mnemonic")}
             value={importMnemonic}
             onChange={(event) => setImportMnemonic(event.target.value)}
             rows={3}
             className="font-mono text-xs"
-            placeholder="Paste your 12/24-word mnemonic"
+            placeholder={t("identity.pasteMnemonic")}
           />
           <P5Button type="button" onClick={() => saveMnemonic(importMnemonic)} variant="primary">
-            Import mnemonic
+            {t("identity.importMnemonic")}
           </P5Button>
         </div>
       )}
 
       {error ? (
-        <P5Alert role="alert" variant="error" title="error">
+        <P5Alert role="alert" variant="error" title={t("common.error")}>
           {error}
         </P5Alert>
       ) : null}

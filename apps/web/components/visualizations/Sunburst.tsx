@@ -5,6 +5,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 
 import { buildSunburstLayout, type SunburstNode } from "@/lib/visualization/sunburst/layout";
 import { CallingCard } from "@/components/ui/CallingCard";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 type Props = {
   tree: SunburstNode;
@@ -114,6 +115,7 @@ export function Sunburst({
   onNodeClick,
   onHoverChange,
 }: Props) {
+  const { t } = useI18n();
   const layout = useMemo(() => buildSunburstLayout(tree, { startAngle: 0, endAngle: Math.PI * 2 }), [tree]);
 
   const radius = Math.max(8, Math.min(width, height) / 2 - 6);
@@ -216,7 +218,7 @@ export function Sunburst({
         height={height}
         viewBox={`0 0 ${width} ${height}`}
         role="img"
-        aria-label="Sunburst"
+        aria-label={t("sunburst.ariaLabel")}
         className="block max-w-full"
         onClick={interactive ? handleBackgroundClick : undefined}
       >
@@ -285,11 +287,9 @@ export function Sunburst({
         >
           <CallingCard title={tooltipArc.label} titleTestId="sunburst-tooltip-title">
             <dl className="grid grid-cols-[90px_1fr] gap-x-2 gap-y-1 font-mono">
-              <dt className="text-zinc-500">id</dt>
-              <dd className="text-zinc-900">{tooltipArc.id}</dd>
-              <dt className="text-zinc-500">depth</dt>
+              <dt className="text-zinc-500">{t("sunburst.tooltip.depth")}</dt>
               <dd className="text-zinc-900">{tooltipArc.depth}</dd>
-              <dt className="text-zinc-500">children</dt>
+              <dt className="text-zinc-500">{t("sunburst.tooltip.children")}</dt>
               <dd className="text-zinc-900">{tooltipArc.childCount}</dd>
             </dl>
           </CallingCard>

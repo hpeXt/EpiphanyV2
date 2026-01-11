@@ -16,17 +16,14 @@ import { ConsensusReportModal } from "@/components/topics/ConsensusReportModal";
 import { TopicManagePanel } from "@/components/topics/TopicManagePanel";
 import { useTopicSse } from "@/components/topics/hooks/useTopicSse";
 import { useTopicTree } from "@/components/topics/hooks/useTopicTree";
-import { P5Alert } from "@/components/ui/P5Alert";
-import { P5Badge } from "@/components/ui/P5Badge";
-import { P5Button } from "@/components/ui/P5Button";
-import { P5Input } from "@/components/ui/P5Input";
-import { P5Modal } from "@/components/ui/P5Modal";
-import { useP5Toast } from "@/components/ui/P5ToastProvider";
+import { Alert, Badge, Button, Input, useToast } from "@/components/ui/kit";
 import { TiptapRenderer } from "@/components/ui/TiptapRenderer";
+import { useI18n } from "@/components/i18n/I18nProvider";
 import { Sunburst } from "@/components/visualizations/Sunburst";
 import { createLocalStorageClaimTokenStore } from "@/lib/claimTokenStore";
 import { createLocalStorageDraftStore } from "@/lib/draftStore";
 import { authorIdFromPubkeyHex, deriveTopicKeypairFromMasterSeedHex } from "@/lib/identity";
+import { pseudonymFromAuthorId } from "@/lib/pseudonym";
 import { apiClient, type ApiError } from "@/lib/apiClient";
 import { createLocalStorageKeyStore } from "@/lib/signing";
 import { createLocalStorageTopicAccessKeyStore } from "@/lib/topicAccessKeyStore";
@@ -41,20 +38,121 @@ type HoverCardState = {
   argument: Argument;
   x: number;
   y: number;
+  phase: "compact" | "expanded";
 };
 
+function stripLeadMarkdownPrefix(input: string): string {
+  let out = input.trimStart();
+  let prev: string | null = null;
+
+  while (prev !== out) {
+    prev = out;
+    out = out.replace(/^>\s+/, "");
+    out = out.replace(/^[-*•]\s+/, "");
+    out = out.replace(/^\d+[.)]\s+/, "");
+    out = out.replace(/^#+\s+/, "");
+    out = out.trimStart();
+  }
+
+  return out;
+}
+
+function isLikelyCjk(text: string): boolean {
+  return /[\u4E00-\u9FFF]/.test(text);
+}
+
+function trimTrailingDanglingPunctuation(text: string): string {
+  let out = text.trimEnd();
+  out = out.replace(/[([【“「『]+$/g, "");
+  out = out.replace(/[:：—–\-、，,]+$/g, "");
+  return out.trimEnd();
+}
+
+function truncateNicely(
+  text: string,
+  {
+    minLen = 12,
+    targetLen = 48,
+    hardMax = 80,
+  }: { minLen?: number; targetLen?: number; hardMax?: number } = {},
+): string {
+  const input = text.trim();
+  if (!input) return "";
+  if (input.length <= hardMax) return input;
+
+  const upper = Math.min(hardMax, input.length);
+  const lower = Math.min(Math.max(minLen, 1), upper);
+
+  const punctuation = /[。！？!?…\.]/g;
+  const punctPositions: number[] = [];
+  for (const match of input.slice(0, upper).matchAll(punctuation)) {
+    if (match.index === undefined) continue;
+    const idx = match.index;
+    if (idx + 1 < lower) continue;
+    punctPositions.push(idx + 1);
+  }
+
+  if (punctPositions.length > 0) {
+    let best = punctPositions[0]!;
+    let bestDist = Math.abs(best - targetLen);
+    for (const pos of punctPositions) {
+      const dist = Math.abs(pos - targetLen);
+      if (dist < bestDist) {
+        best = pos;
+        bestDist = dist;
+      }
+    }
+    const cut = trimTrailingDanglingPunctuation(input.slice(0, best));
+    return cut ? `${cut}…` : `${input.slice(0, upper).trimEnd()}…`;
+  }
+
+  const within = input.slice(0, upper);
+  if (!isLikelyCjk(within)) {
+    const spaceAfterTarget = within.slice(targetLen).search(/[\s,.;:：，]/);
+    if (spaceAfterTarget >= 0) {
+      const cutIdx = Math.min(upper, targetLen + spaceAfterTarget);
+      const cut = trimTrailingDanglingPunctuation(within.slice(0, cutIdx));
+      return cut ? `${cut}…` : `${within.slice(0, cutIdx).trimEnd()}…`;
+    }
+
+    const lastSpaceBefore = within.lastIndexOf(" ");
+    if (lastSpaceBefore >= lower) {
+      const cut = trimTrailingDanglingPunctuation(within.slice(0, lastSpaceBefore));
+      return cut ? `${cut}…` : `${within.slice(0, lastSpaceBefore).trimEnd()}…`;
+    }
+  }
+
+  const cut = trimTrailingDanglingPunctuation(within);
+  return cut ? `${cut}…` : `${within.trimEnd()}…`;
+}
+
+function extractLeadSentence(body: string): string {
+  const normalized = body.replaceAll("\r\n", "\n").trim();
+  if (!normalized) return "";
+
+  const firstLine = normalized.split("\n")[0] ?? "";
+  const cleanedFirstLine = stripLeadMarkdownPrefix(firstLine).trim();
+
+  const minLen = 12;
+  const base =
+    cleanedFirstLine.length >= minLen
+      ? cleanedFirstLine
+      : stripLeadMarkdownPrefix(normalized).replaceAll(/\s+/g, " ").trim();
+
+  return truncateNicely(base, { minLen, targetLen: 48, hardMax: 80 });
+}
+
 function toTitle(arg: Argument): string {
-  if (arg.title) return arg.title;
-  const trimmed = arg.body.trim();
-  if (trimmed) return trimmed.length > 80 ? `${trimmed.slice(0, 77)}…` : trimmed;
+  const title = arg.title?.trim() ?? "";
+  if (title) return title;
+
+  const extracted = extractLeadSentence(arg.body);
+  if (extracted) return extracted;
   return arg.id;
 }
 
-function toExcerpt(text: string, maxLen = 140): string {
-  const normalized = text.replaceAll(/\s+/g, " ").trim();
-  if (!normalized) return "";
-  if (normalized.length <= maxLen) return normalized;
-  return `${normalized.slice(0, Math.max(0, maxLen - 1))}…`;
+function toExcerpt(text: string): string {
+  return text.replaceAll(/\s+/g, " ").trim();
 }
 
 function plainTextToTiptapDoc(text: string): TiptapDoc {
@@ -89,159 +187,16 @@ function formatSavedTime(iso: string): string | null {
   return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-const ROOT_AUTHOR_ID = "66687aadf862bd77";
-
-const AUTHOR_ADJECTIVES = [
-  "Adept",
-  "Amber",
-  "Arcane",
-  "Breezy",
-  "Calm",
-  "Candid",
-  "Careful",
-  "Cobalt",
-  "Curious",
-  "Daring",
-  "Deep",
-  "Discrete",
-  "Earnest",
-  "Elder",
-  "Exact",
-  "Faint",
-  "Feral",
-  "Fluent",
-  "Gentle",
-  "Glassy",
-  "Golden",
-  "Grand",
-  "Hardy",
-  "Humble",
-  "Icy",
-  "Keen",
-  "Kind",
-  "Liminal",
-  "Lucid",
-  "Mild",
-  "Mirthful",
-  "Modern",
-  "Narrow",
-  "Nimble",
-  "Noisy",
-  "Oblique",
-  "Patient",
-  "Plain",
-  "Proud",
-  "Quiet",
-  "Rare",
-  "Rational",
-  "Ready",
-  "Sincere",
-  "Slow",
-  "Solid",
-  "Sparse",
-  "Steady",
-  "Swift",
-  "Tender",
-  "Terse",
-  "True",
-  "Vast",
-  "Vivid",
-  "Warm",
-  "Wary",
-  "Witty",
-  "Young",
-  "Zesty",
-] as const;
-
-const AUTHOR_NOUNS = [
-  "Anchor",
-  "Apricot",
-  "Atlas",
-  "Beacon",
-  "Birch",
-  "Bridge",
-  "Cipher",
-  "Comet",
-  "Cortex",
-  "Crane",
-  "Delta",
-  "Dune",
-  "Echo",
-  "Ember",
-  "Fable",
-  "Fjord",
-  "Flint",
-  "Folio",
-  "Grove",
-  "Harbor",
-  "Horizon",
-  "Juniper",
-  "Kernel",
-  "Lattice",
-  "Ledger",
-  "Loom",
-  "Maple",
-  "Meadow",
-  "Meridian",
-  "Mirror",
-  "Nexus",
-  "Oak",
-  "Opal",
-  "Orbit",
-  "Parcel",
-  "Pillar",
-  "Pine",
-  "Prism",
-  "Quarry",
-  "Quill",
-  "Reed",
-  "Relay",
-  "Ridge",
-  "River",
-  "Rune",
-  "Saffron",
-  "Sail",
-  "Shell",
-  "Signal",
-  "Slate",
-  "Spark",
-  "Stone",
-  "Thread",
-  "Thistle",
-  "Vessel",
-  "Violet",
-  "Wave",
-  "Willow",
-  "Wren",
-] as const;
-
-function hexToBytes(hex: string): Uint8Array | null {
-  if (typeof hex !== "string" || !/^[0-9a-f]+$/i.test(hex) || hex.length % 2 !== 0) return null;
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < bytes.length; i += 1) {
-    bytes[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-  }
-  return bytes;
-}
-
-function pseudonymFromAuthorId(authorId: string): string {
-  if (authorId === ROOT_AUTHOR_ID) return "Topic";
-
-  const bytes = hexToBytes(authorId);
-  if (!bytes || bytes.length < 2) return authorId;
-
-  const adjective = AUTHOR_ADJECTIVES[bytes[0] % AUTHOR_ADJECTIVES.length];
-  const noun = AUTHOR_NOUNS[bytes[1] % AUTHOR_NOUNS.length];
-  return `${adjective} ${noun}`;
-}
-
-function toFriendlyMessage(error: ApiError): string {
+function toFriendlyMessage(
+  t: (key: string, params?: Record<string, string | number>) => string,
+  error: ApiError,
+): string {
   if (error.kind === "http") {
     if (error.status === 402 || error.code === "INSUFFICIENT_BALANCE") {
-      return "余额不足";
+      return t("errors.insufficientBalance");
     }
     if (error.status === 401 && error.code === "INVALID_SIGNATURE") {
-      return "签名验证失败，请刷新页面重试";
+      return t("errors.invalidSignature");
     }
   }
   return error.message;
@@ -260,11 +215,12 @@ function RichTextToolbar({
   onRequestHideToolbar?: () => void;
 }) {
   if (!editor) return null;
+  const { t } = useI18n();
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 bg-[color:var(--muted)] px-3 py-2">
       <div className="flex flex-wrap items-center gap-1">
-      <P5Button
+      <Button
         size="sm"
         variant="ghost"
         className={[
@@ -272,11 +228,11 @@ function RichTextToolbar({
           editor.isActive("bold") ? "bg-muted" : "",
         ].join(" ")}
         onClick={() => editor.chain().focus().toggleBold().run()}
-        aria-label="Bold"
+        aria-label={t("editor.bold")}
       >
         B
-      </P5Button>
-      <P5Button
+      </Button>
+      <Button
         size="sm"
         variant="ghost"
         className={[
@@ -284,11 +240,11 @@ function RichTextToolbar({
           editor.isActive("italic") ? "bg-muted" : "",
         ].join(" ")}
         onClick={() => editor.chain().focus().toggleItalic().run()}
-        aria-label="Italic"
+        aria-label={t("editor.italic")}
       >
         I
-      </P5Button>
-      <P5Button
+      </Button>
+      <Button
         size="sm"
         variant="ghost"
         className={[
@@ -296,14 +252,14 @@ function RichTextToolbar({
           editor.isActive("underline") ? "bg-muted" : "",
         ].join(" ")}
         onClick={() => editor.chain().focus().toggleUnderline().run()}
-        aria-label="Underline"
+        aria-label={t("editor.underline")}
       >
         U
-      </P5Button>
+      </Button>
 
       <div className="mx-1 h-4 w-px bg-border/80" />
 
-      <P5Button
+      <Button
         size="sm"
         variant="ghost"
         className={[
@@ -311,11 +267,11 @@ function RichTextToolbar({
           editor.isActive("heading", { level: 2 }) ? "bg-muted" : "",
         ].join(" ")}
         onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-        aria-label="Heading 2"
+        aria-label={t("editor.heading2")}
       >
         H2
-      </P5Button>
-      <P5Button
+      </Button>
+      <Button
         size="sm"
         variant="ghost"
         className={[
@@ -323,14 +279,14 @@ function RichTextToolbar({
           editor.isActive("heading", { level: 3 }) ? "bg-muted" : "",
         ].join(" ")}
         onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-        aria-label="Heading 3"
+        aria-label={t("editor.heading3")}
       >
         H3
-      </P5Button>
+      </Button>
 
       <div className="mx-1 h-4 w-px bg-border/80" />
 
-      <P5Button
+      <Button
         size="sm"
         variant="ghost"
         className={[
@@ -338,11 +294,11 @@ function RichTextToolbar({
           editor.isActive("bulletList") ? "bg-muted" : "",
         ].join(" ")}
         onClick={() => editor.chain().focus().toggleBulletList().run()}
-        aria-label="Bullet list"
+        aria-label={t("editor.bulletList")}
       >
         •
-      </P5Button>
-      <P5Button
+      </Button>
+      <Button
         size="sm"
         variant="ghost"
         className={[
@@ -350,11 +306,11 @@ function RichTextToolbar({
           editor.isActive("orderedList") ? "bg-muted" : "",
         ].join(" ")}
         onClick={() => editor.chain().focus().toggleOrderedList().run()}
-        aria-label="Ordered list"
+        aria-label={t("editor.orderedList")}
       >
         1.
-      </P5Button>
-      <P5Button
+      </Button>
+      <Button
         size="sm"
         variant="ghost"
         className={[
@@ -362,11 +318,11 @@ function RichTextToolbar({
           editor.isActive("blockquote") ? "bg-muted" : "",
         ].join(" ")}
         onClick={() => editor.chain().focus().toggleBlockquote().run()}
-        aria-label="Blockquote"
+        aria-label={t("editor.quote")}
       >
         “
-      </P5Button>
-      <P5Button
+      </Button>
+      <Button
         size="sm"
         variant="ghost"
         className={[
@@ -374,14 +330,14 @@ function RichTextToolbar({
           editor.isActive("codeBlock") ? "bg-muted" : "",
         ].join(" ")}
         onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-        aria-label="Code block"
+        aria-label={t("editor.codeBlock")}
       >
         {"</>"}
-      </P5Button>
+      </Button>
 
       <div className="mx-1 h-4 w-px bg-border/80" />
 
-      <P5Button
+      <Button
         size="sm"
         variant="ghost"
         className={[
@@ -390,7 +346,7 @@ function RichTextToolbar({
         ].join(" ")}
         onClick={() => {
           const previousUrl = editor.getAttributes("link").href as string | undefined;
-          const nextUrl = window.prompt("Link URL", previousUrl ?? "");
+          const nextUrl = window.prompt(t("editor.linkUrlPrompt"), previousUrl ?? "");
           if (nextUrl === null) return;
           const trimmed = nextUrl.trim();
           if (!trimmed) {
@@ -399,22 +355,22 @@ function RichTextToolbar({
           }
           editor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run();
         }}
-        aria-label="Link"
+        aria-label={t("editor.link")}
       >
         ↗
-      </P5Button>
+      </Button>
       </div>
 
       {onRequestHideToolbar ? (
-        <P5Button
+        <Button
           size="sm"
           variant="ghost"
           className="h-8 px-3 border border-border bg-background"
           onClick={onRequestHideToolbar}
-          aria-label="隐藏工具栏"
+          aria-label={t("stage.hideToolbarAria")}
         >
-          隐藏
-        </P5Button>
+          {t("common.hide")}
+        </Button>
       ) : null}
     </div>
   );
@@ -430,7 +386,8 @@ function VoteStepper(props: {
   onVotesUpdated: (votes: number) => void;
   onInvalidate: () => void;
 }) {
-  const { toast } = useP5Toast();
+  const { t } = useI18n();
+  const { toast } = useToast();
 
   const [targetVotes, setTargetVotes] = useState(props.currentVotes);
   const [submitError, setSubmitError] = useState("");
@@ -459,8 +416,8 @@ function VoteStepper(props: {
     if (increaseForbidden && next > props.currentVotes) {
       toast({
         variant: "warn",
-        title: "read-only",
-        message: props.argument.prunedAt ? "节点已被隐藏：只能撤回投票。" : "议题只读：只能撤回投票。",
+        title: t("dialogue.readOnlyTitle"),
+        message: props.argument.prunedAt ? t("dialogue.nodePruned") : t("dialogue.topicReadOnly"),
       });
       return;
     }
@@ -469,7 +426,7 @@ function VoteStepper(props: {
       const nextCost = next * next;
       const nextDeltaCost = nextCost - currentCost;
       if (nextDeltaCost > availableBalance) {
-        toast({ variant: "error", title: "votes", message: "投票力不足" });
+        toast({ variant: "error", title: t("dialogue.votes"), message: t("errors.insufficientBalance") });
         return;
       }
     }
@@ -486,72 +443,72 @@ function VoteStepper(props: {
     setIsSubmitting(false);
 
     if (!result.ok) {
-      setSubmitError(toFriendlyMessage(result.error));
+      setSubmitError(toFriendlyMessage(t, result.error));
       return;
     }
 
     props.onLedgerUpdated(result.data.ledger);
     props.onVotesUpdated(result.data.targetVotes);
     props.onInvalidate();
-    toast({ variant: "success", title: "votes", message: "投票已记录" });
+    toast({ variant: "success", title: t("dialogue.votes"), message: t("stage.votesRecorded") });
   };
 
   return (
     <div className="border-t border-border/60 bg-[color:var(--muted)] px-6 py-4">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-4">
-          <span className="text-sm text-muted-foreground">支持度:</span>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-4">
+          <span className="text-sm text-muted-foreground">{t("stage.supportLabel")}:</span>
           <div className="flex items-center gap-2">
-            <P5Button
+            <Button
               size="sm"
               variant="ghost"
               className="h-8 w-8 p-0 border border-border bg-background"
               onClick={() => setByDelta(-1)}
               disabled={targetVotes === 0 || isSubmitting}
-              aria-label="Decrease votes"
+              aria-label={t("stage.decreaseVotes")}
             >
               −
-            </P5Button>
+            </Button>
             <div className="w-10 text-center">
               <span className="text-lg font-medium text-foreground">{targetVotes}</span>
             </div>
-            <P5Button
+            <Button
               size="sm"
               variant="ghost"
               className="h-8 w-8 p-0 border border-border bg-background"
               onClick={() => setByDelta(1)}
               disabled={targetVotes === 10 || isSubmitting}
-              aria-label="Increase votes"
+              aria-label={t("stage.increaseVotes")}
             >
               +
-            </P5Button>
+            </Button>
           </div>
 
           <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">
             <span>
-              消耗: {targetCost} (Δ{formatDelta(deltaCost)})
+              {t("dialogue.cost")}: {targetCost} ({t("dialogue.deltaCost")}: {formatDelta(deltaCost)})
             </span>
             {availableBalance !== null ? (
-              <span>余额: {availableBalance}</span>
+              <span>
+                {t("dialogue.balance")}: {availableBalance}
+              </span>
             ) : null}
           </div>
         </div>
 
-        <P5Button
+        <Button
           size="sm"
           variant="ink"
           onClick={submit}
           disabled={disableSubmit || targetVotes === props.currentVotes}
         >
-          {isSubmitting ? "保存中…" : "确认投票"}
-        </P5Button>
+          {isSubmitting ? t("common.saving") : t("stage.confirmVotes")}
+        </Button>
       </div>
 
       {increaseForbidden ? (
         <p className="mt-2 text-xs text-muted-foreground">
-          {props.argument.prunedAt
-            ? "该节点已被隐藏：只能撤回投票。"
-            : "该议题为只读：只能撤回投票。"}
+          {props.argument.prunedAt ? t("dialogue.nodePruned") : t("dialogue.topicReadOnly")}
         </p>
       ) : null}
 
@@ -565,7 +522,8 @@ function VoteStepper(props: {
 }
 
 export function TopicStage({ topicId }: Props) {
-  const { toast } = useP5Toast();
+  const { t, locale } = useI18n();
+  const { toast } = useToast();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -645,15 +603,95 @@ export function TopicStage({ topicId }: Props) {
   const [isLoadingSelectedArgumentDetail, setIsLoadingSelectedArgumentDetail] = useState(false);
   const [activeSide, setActiveSide] = useState<"left" | "right" | null>(null);
   const [hoverCard, setHoverCard] = useState<HoverCardState | null>(null);
+  const hoverCardRef = useRef<HoverCardState | null>(null);
+  hoverCardRef.current = hoverCard;
+  const hoverCardHoverIdRef = useRef<string | null>(null);
+  const hoverCardPendingRef = useRef<{ id: string; x: number; y: number } | null>(null);
+  const hoverCardShowTimerRef = useRef<number | null>(null);
+  const hoverCardHideTimerRef = useRef<number | null>(null);
+  const hoverCardExpandTimerRef = useRef<number | null>(null);
   const [quoteHint, setQuoteHint] = useState<{ text: string; x: number; y: number } | null>(null);
   const selectedArgumentIdRef = useRef<string | null>(null);
   selectedArgumentIdRef.current = selectedArgumentId;
+
+  const clearHoverCardTimers = useCallback(() => {
+    if (hoverCardShowTimerRef.current !== null) {
+      window.clearTimeout(hoverCardShowTimerRef.current);
+      hoverCardShowTimerRef.current = null;
+    }
+    if (hoverCardHideTimerRef.current !== null) {
+      window.clearTimeout(hoverCardHideTimerRef.current);
+      hoverCardHideTimerRef.current = null;
+    }
+    if (hoverCardExpandTimerRef.current !== null) {
+      window.clearTimeout(hoverCardExpandTimerRef.current);
+      hoverCardExpandTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clearHoverCardTimers();
+    };
+  }, [clearHoverCardTimers]);
+
+  const [isEditingSelectedArgument, setIsEditingSelectedArgument] = useState(false);
+  const [isEditEditorMode, setIsEditEditorMode] = useState(true);
+  const [editTitle, setEditTitle] = useState("");
+  const [editText, setEditText] = useState("");
+  const [editError, setEditError] = useState("");
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [isEditDirty, setIsEditDirty] = useState(false);
+  const isSeedingEditRef = useRef(false);
+  const isEditDirtyRef = useRef(false);
+  const shouldFocusEditRef = useRef(false);
+  const submitEditRef = useRef<(() => void) | null>(null);
+  const isEditingSelectedArgumentRef = useRef(false);
+  isEditingSelectedArgumentRef.current = isEditingSelectedArgument;
+  const isSavingEditRef = useRef(false);
+  isSavingEditRef.current = isSavingEdit;
+
+  const confirmDiscardEdits = useCallback((message: string): boolean => {
+    try {
+      return window.confirm(message);
+    } catch {
+      return true;
+    }
+  }, []);
+
+  const requestSelectArgumentId = useCallback(
+    (nextId: string | null) => {
+      if (isSavingEditRef.current) return;
+
+      const currentId = selectedArgumentIdRef.current;
+      const isEditing = isEditingSelectedArgumentRef.current;
+      if (isEditing && isEditDirtyRef.current && nextId !== currentId) {
+        const ok = confirmDiscardEdits(t("stage.confirmLeaveEdit"));
+        if (!ok) return;
+      }
+
+      if (isEditing) {
+        isEditDirtyRef.current = false;
+        setIsEditDirty(false);
+        shouldFocusEditRef.current = false;
+        setIsEditingSelectedArgument(false);
+        setEditError("");
+        setIsSavingEdit(false);
+      }
+
+      setSelectedArgumentId(nextId);
+    },
+    [confirmDiscardEdits],
+  );
+
+  const requestSelectArgumentIdRef = useRef(requestSelectArgumentId);
+  requestSelectArgumentIdRef.current = requestSelectArgumentId;
 
   // Keep URL arg=<argumentId> in sync with selection (and support deep-links).
   useEffect(() => {
     const next = argFromUrl || null;
     if (next === selectedArgumentIdRef.current) return;
-    setSelectedArgumentId(next);
+    requestSelectArgumentIdRef.current(next);
   }, [argFromUrl]);
 
   useEffect(() => {
@@ -673,6 +711,19 @@ export function TopicStage({ topicId }: Props) {
     router.replace(nextUrl, { scroll: false });
   }, [pathname, router, searchParams, selectedArgumentId]);
 
+  useEffect(() => {
+    if (!isEditingSelectedArgument) return;
+    if (!isEditDirty) return;
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isEditDirty, isEditingSelectedArgument]);
+
   const [ledger, setLedger] = useState<LedgerMe | null>(null);
   const [ledgerError, setLedgerError] = useState("");
 
@@ -682,22 +733,15 @@ export function TopicStage({ topicId }: Props) {
   const [claimError, setClaimError] = useState("");
   const [isClaiming, setIsClaiming] = useState(false);
 
-  const [isEditOpen, setIsEditOpen] = useState(false);
-  const [isEditEditorMode, setIsEditEditorMode] = useState(true);
-  const [editTitle, setEditTitle] = useState("");
-  const [editText, setEditText] = useState("");
-  const [editError, setEditError] = useState("");
-  const [isSavingEdit, setIsSavingEdit] = useState(false);
-
   const authorLabel = useCallback(
     (authorId: string, authorDisplayName?: string | null) => {
       const custom = topicDisplayName.trim();
       if (myAuthorId && authorId === myAuthorId && custom) return custom;
       const published = authorDisplayName?.trim();
       if (published) return published;
-      return pseudonymFromAuthorId(authorId);
+      return pseudonymFromAuthorId(authorId, locale);
     },
-    [myAuthorId, topicDisplayName],
+    [locale, myAuthorId, topicDisplayName],
   );
 
   const handleTopicDisplayNameChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -845,7 +889,7 @@ export function TopicStage({ topicId }: Props) {
         if (topicDisplayNameSaveSeqRef.current !== requestId) return;
 
         if (!result.ok) {
-          setTopicDisplayNameSave({ kind: "error", message: toFriendlyMessage(result.error) });
+          setTopicDisplayNameSave({ kind: "error", message: toFriendlyMessage(t, result.error) });
           return;
         }
 
@@ -937,14 +981,12 @@ export function TopicStage({ topicId }: Props) {
     return new Map(tree.arguments.map((arg) => [arg.id, arg]));
   }, [tree]);
 
-  const selectedArgument = useMemo(() => {
-    if (!selectedArgumentId) return null;
-    return argumentById.get(selectedArgumentId) ?? null;
-  }, [argumentById, selectedArgumentId]);
+  const rootArgumentId = tree.status === "success" ? tree.topic.rootArgumentId : null;
+  const readArgumentId = selectedArgumentId ?? rootArgumentId;
 
   // Fetch full argument detail (includes bodyRich) for the reader/edit flows.
   useEffect(() => {
-    if (!selectedArgumentId) {
+    if (!readArgumentId) {
       setSelectedArgumentDetail(null);
       setSelectedArgumentDetailError("");
       setIsLoadingSelectedArgumentDetail(false);
@@ -957,7 +999,7 @@ export function TopicStage({ topicId }: Props) {
     setIsLoadingSelectedArgumentDetail(true);
 
     (async () => {
-      const result = await apiClient.getArgument(selectedArgumentId, topicId);
+      const result = await apiClient.getArgument(readArgumentId, topicId);
       if (cancelled) return;
       setIsLoadingSelectedArgumentDetail(false);
 
@@ -973,20 +1015,23 @@ export function TopicStage({ topicId }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [refreshToken, selectedArgumentId]);
+  }, [readArgumentId, refreshToken, topicId]);
 
   useEffect(() => {
-    setIsEditOpen(false);
+    setIsEditingSelectedArgument(false);
+    isEditDirtyRef.current = false;
+    setIsEditDirty(false);
+    shouldFocusEditRef.current = false;
     setEditError("");
     setIsSavingEdit(false);
     setEditTitle("");
   }, [selectedArgumentId]);
 
   const readArgument = useMemo(() => {
-    if (!selectedArgumentId) return null;
-    if (selectedArgumentDetail?.id === selectedArgumentId) return selectedArgumentDetail;
-    return selectedArgument;
-  }, [selectedArgument, selectedArgumentDetail, selectedArgumentId]);
+    if (!readArgumentId) return null;
+    if (selectedArgumentDetail?.id === readArgumentId) return selectedArgumentDetail;
+    return argumentById.get(readArgumentId) ?? null;
+  }, [argumentById, readArgumentId, selectedArgumentDetail]);
 
   const canEditSelectedArgument =
     hasIdentity === true &&
@@ -995,13 +1040,33 @@ export function TopicStage({ topicId }: Props) {
     readArgument !== null &&
     readArgument.authorId === myAuthorId;
 
-  const canOpenEdit =
-    canEditSelectedArgument &&
-    selectedArgumentDetail?.id === selectedArgumentId &&
-    !isLoadingSelectedArgumentDetail &&
-    !selectedArgumentDetailError;
+  const startEditingSelectedArgument = useCallback(() => {
+    if (!canEditSelectedArgument) return;
+    if (isSavingEdit) return;
+    isEditDirtyRef.current = false;
+    setIsEditDirty(false);
+    shouldFocusEditRef.current = true;
+    setEditError("");
+    setIsEditEditorMode(true);
+    setIsEditingSelectedArgument(true);
+  }, [canEditSelectedArgument, isSavingEdit]);
 
-  const rootArgumentId = tree.status === "success" ? tree.topic.rootArgumentId : null;
+  const cancelEditingSelectedArgument = useCallback(() => {
+    if (!isEditingSelectedArgument) return;
+    if (isSavingEdit) return;
+    if (isEditDirtyRef.current) {
+      const ok = confirmDiscardEdits(t("stage.confirmCancelEdit"));
+      if (!ok) return;
+    }
+
+    isEditDirtyRef.current = false;
+    setIsEditDirty(false);
+    shouldFocusEditRef.current = false;
+    setEditError("");
+    setIsSavingEdit(false);
+    setIsEditingSelectedArgument(false);
+  }, [confirmDiscardEdits, isEditingSelectedArgument, isSavingEdit]);
+
   const hasRestoredReplySelectionRef = useRef(false);
   const hasAutoOpenedManageRef = useRef(false);
 
@@ -1012,7 +1077,7 @@ export function TopicStage({ topicId }: Props) {
     try {
       const lastParentId = draftStore.getReplyMeta(topicId)?.lastParentId ?? null;
       if (lastParentId && argumentById.has(lastParentId)) {
-        setSelectedArgumentId(lastParentId);
+        requestSelectArgumentId(lastParentId);
       }
     } catch {
       // ignore
@@ -1020,7 +1085,7 @@ export function TopicStage({ topicId }: Props) {
 
     setIsReplyDraftHydrated(true);
     hasRestoredReplySelectionRef.current = true;
-  }, [argumentById, draftStore, topicId, tree.status]);
+  }, [argumentById, draftStore, requestSelectArgumentId, topicId, tree.status]);
 
   const isOwner =
     hasIdentity === true &&
@@ -1053,15 +1118,146 @@ export function TopicStage({ topicId }: Props) {
     return buildSunburstTreeFromFlatNodes(nodes, tree.topic.rootArgumentId);
   }, [tree]);
 
+  const showHoverCard = useCallback(
+    (input: { id: string; x: number; y: number }) => {
+      const arg = argumentById.get(input.id);
+      if (!arg) {
+        setHoverCard(null);
+        return;
+      }
+
+      if (hoverCardHideTimerRef.current !== null) {
+        window.clearTimeout(hoverCardHideTimerRef.current);
+        hoverCardHideTimerRef.current = null;
+      }
+
+      setHoverCard({ argument: arg, x: input.x, y: input.y, phase: "compact" });
+
+      if (hoverCardExpandTimerRef.current !== null) {
+        window.clearTimeout(hoverCardExpandTimerRef.current);
+        hoverCardExpandTimerRef.current = null;
+      }
+
+      const expandAfterMs = 650;
+      hoverCardExpandTimerRef.current = window.setTimeout(() => {
+        hoverCardExpandTimerRef.current = null;
+        if (hoverCardHoverIdRef.current !== input.id) return;
+        setHoverCard((prev) => {
+          if (!prev || prev.argument.id !== input.id) return prev;
+          if (prev.phase === "expanded") return prev;
+          return { ...prev, phase: "expanded" };
+        });
+      }, expandAfterMs);
+    },
+    [argumentById],
+  );
+
+  const hideHoverCard = useCallback(
+    (options?: { immediate?: boolean }) => {
+      const immediate = options?.immediate ?? false;
+
+      if (hoverCardShowTimerRef.current !== null) {
+        window.clearTimeout(hoverCardShowTimerRef.current);
+        hoverCardShowTimerRef.current = null;
+      }
+      if (hoverCardExpandTimerRef.current !== null) {
+        window.clearTimeout(hoverCardExpandTimerRef.current);
+        hoverCardExpandTimerRef.current = null;
+      }
+
+      hoverCardPendingRef.current = null;
+      hoverCardHoverIdRef.current = null;
+
+      if (immediate) {
+        if (hoverCardHideTimerRef.current !== null) {
+          window.clearTimeout(hoverCardHideTimerRef.current);
+          hoverCardHideTimerRef.current = null;
+        }
+        setHoverCard(null);
+        return;
+      }
+
+      if (hoverCardHideTimerRef.current !== null) {
+        window.clearTimeout(hoverCardHideTimerRef.current);
+        hoverCardHideTimerRef.current = null;
+      }
+
+      const hideAfterMs = 110;
+      hoverCardHideTimerRef.current = window.setTimeout(() => {
+        hoverCardHideTimerRef.current = null;
+        setHoverCard(null);
+      }, hideAfterMs);
+    },
+    [],
+  );
+
+  const handleSunburstHoverChange = useCallback(
+    (value: { id: string; pointer: { x: number; y: number } } | null) => {
+      if (selectedArgumentIdRef.current) {
+        hideHoverCard({ immediate: true });
+        return;
+      }
+
+      if (!value) {
+        hideHoverCard();
+        return;
+      }
+
+      if (hoverCardHideTimerRef.current !== null) {
+        window.clearTimeout(hoverCardHideTimerRef.current);
+        hoverCardHideTimerRef.current = null;
+      }
+
+      hoverCardHoverIdRef.current = value.id;
+
+      const current = hoverCardRef.current;
+      if (current && current.argument.id === value.id) {
+        return;
+      }
+
+      if (current) {
+        if (hoverCardShowTimerRef.current !== null) {
+          window.clearTimeout(hoverCardShowTimerRef.current);
+          hoverCardShowTimerRef.current = null;
+        }
+        hoverCardPendingRef.current = null;
+        showHoverCard({ id: value.id, x: value.pointer.x, y: value.pointer.y });
+        return;
+      }
+
+      const pending = hoverCardPendingRef.current;
+      if (pending && pending.id === value.id && hoverCardShowTimerRef.current !== null) {
+        hoverCardPendingRef.current = { id: value.id, x: value.pointer.x, y: value.pointer.y };
+        return;
+      }
+
+      hoverCardPendingRef.current = { id: value.id, x: value.pointer.x, y: value.pointer.y };
+
+      if (hoverCardShowTimerRef.current !== null) {
+        window.clearTimeout(hoverCardShowTimerRef.current);
+      }
+
+      const showAfterMs = 150;
+      hoverCardShowTimerRef.current = window.setTimeout(() => {
+        hoverCardShowTimerRef.current = null;
+        const pending = hoverCardPendingRef.current;
+        if (!pending) return;
+        if (hoverCardHoverIdRef.current !== pending.id) return;
+        showHoverCard(pending);
+      }, showAfterMs);
+    },
+    [hideHoverCard, showHoverCard],
+  );
+
   // Hide hover card when entering read mode
   useEffect(() => {
     lastPointerSideRef.current = null;
     setQuoteHint(null);
     if (selectedArgumentId) {
-      setHoverCard(null);
+      hideHoverCard({ immediate: true });
       setActiveSide(null);
     }
-  }, [selectedArgumentId]);
+  }, [hideHoverCard, selectedArgumentId]);
 
   const handlePointerMove = (event: React.PointerEvent<HTMLElement>) => {
     if (selectedArgumentId) return;
@@ -1084,6 +1280,10 @@ export function TopicStage({ topicId }: Props) {
 
   useEffect(() => {
     if (!selectedArgumentId) return;
+    if (isEditingSelectedArgument) {
+      setQuoteHint(null);
+      return;
+    }
 
     const clear = () => setQuoteHint(null);
 
@@ -1143,13 +1343,13 @@ export function TopicStage({ topicId }: Props) {
       document.removeEventListener("scroll", clear, true);
       window.removeEventListener("resize", clear);
     };
-  }, [selectedArgumentId]);
+  }, [isEditingSelectedArgument, selectedArgumentId]);
 
   const sunburstSize = selectedArgumentId ? 240 : 360;
 
-  const cardPosition = (x: number, y: number) => {
+  const cardPosition = (x: number, y: number, phase: HoverCardState["phase"]) => {
     const cardWidth = 280;
-    const cardHeight = 180;
+    const cardHeight = phase === "expanded" ? 260 : 180;
     const padding = 16;
 
     let left = x + padding;
@@ -1225,10 +1425,10 @@ export function TopicStage({ topicId }: Props) {
       }
     } catch {
       if (!options?.silent) {
-        setReplyAutosave({ kind: "error", message: "本地缓存不可用" });
+        setReplyAutosave({ kind: "error", message: t("errors.localStorageUnavailable") });
       }
     }
-  }, [draftStore, topicId]);
+  }, [draftStore, t, topicId]);
 
   const enqueueReplyDraftSave = useCallback(
     (input: { title: string; body: string; bodyRich: TiptapDoc | null }) => {
@@ -1262,7 +1462,7 @@ export function TopicStage({ topicId }: Props) {
     extensions: [
       StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
       Placeholder.configure({
-        placeholder: "分享你的观点…",
+        placeholder: t("stage.replyPlaceholder"),
       }),
       Typography,
       Underline,
@@ -1271,7 +1471,7 @@ export function TopicStage({ topicId }: Props) {
     content: "",
     editorProps: {
       attributes: {
-        "aria-label": "Reply",
+        "aria-label": t("dialogue.replyLabel"),
         class: [
           "w-full min-h-[140px] p-4 text-foreground outline-none",
           "prose prose-base max-w-none",
@@ -1376,7 +1576,7 @@ export function TopicStage({ topicId }: Props) {
     extensions: [
       StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
       Placeholder.configure({
-        placeholder: "修改你的观点…",
+        placeholder: t("stage.editPlaceholder"),
       }),
       Typography,
       Underline,
@@ -1385,7 +1585,7 @@ export function TopicStage({ topicId }: Props) {
     content: "",
     editorProps: {
       attributes: {
-        "aria-label": "Edit argument",
+        "aria-label": t("stage.editArgumentAria"),
         class: [
           "w-full min-h-[220px] p-4 text-foreground outline-none",
           "prose prose-base max-w-none",
@@ -1403,26 +1603,66 @@ export function TopicStage({ topicId }: Props) {
       },
     },
     onUpdate: ({ editor }) => {
+      if (!isSeedingEditRef.current) {
+        isEditDirtyRef.current = true;
+        setIsEditDirty(true);
+      }
       setEditError("");
       setEditText(editor.getText());
     },
   });
 
   useEffect(() => {
-    editEditor?.setEditable(canEditSelectedArgument);
-  }, [editEditor, canEditSelectedArgument]);
+    editEditor?.setEditable(canEditSelectedArgument && isEditingSelectedArgument);
+  }, [editEditor, canEditSelectedArgument, isEditingSelectedArgument]);
 
   useEffect(() => {
-    if (!isEditOpen) return;
+    if (!isEditingSelectedArgument) return;
     if (!editEditor) return;
     if (!readArgument) return;
 
     const doc = readArgument.bodyRich ?? plainTextToTiptapDoc(readArgument.body);
-    editEditor.commands.setContent(doc as any, true);
+    isSeedingEditRef.current = true;
+    editEditor.commands.setContent(doc as any, false);
     setEditText(editEditor.getText());
     setEditTitle(readArgument.title ?? "");
     setEditError("");
-  }, [editEditor, isEditOpen, readArgument?.id]);
+    isSeedingEditRef.current = false;
+
+    if (shouldFocusEditRef.current) {
+      shouldFocusEditRef.current = false;
+      const timer = window.setTimeout(() => {
+        editEditor.chain().focus("end").run();
+      }, 0);
+      return () => window.clearTimeout(timer);
+    }
+  }, [editEditor, isEditingSelectedArgument, readArgument?.id]);
+
+  useEffect(() => {
+    if (!isEditingSelectedArgument) return;
+    if (!editEditor) return;
+    if (!selectedArgumentDetail) return;
+    if (!readArgumentId) return;
+    if (selectedArgumentDetail.id !== readArgumentId) return;
+    if (isLoadingSelectedArgumentDetail) return;
+    if (selectedArgumentDetailError) return;
+    if (isEditDirtyRef.current) return;
+
+    const doc = selectedArgumentDetail.bodyRich ?? plainTextToTiptapDoc(selectedArgumentDetail.body);
+    isSeedingEditRef.current = true;
+    editEditor.commands.setContent(doc as any, false);
+    setEditText(editEditor.getText());
+    setEditTitle(selectedArgumentDetail.title ?? "");
+    setEditError("");
+    isSeedingEditRef.current = false;
+  }, [
+    editEditor,
+    isEditingSelectedArgument,
+    selectedArgumentDetail,
+    selectedArgumentDetailError,
+    readArgumentId,
+    isLoadingSelectedArgumentDetail,
+  ]);
 
   async function submitReply() {
     if (!replyEditor) return;
@@ -1434,7 +1674,7 @@ export function TopicStage({ topicId }: Props) {
 
     const body = replyText.trim();
     if (!body) {
-      setReplyError("请输入观点内容");
+      setReplyError(t("createTopic.bodyRequired"));
       return;
     }
 
@@ -1455,7 +1695,7 @@ export function TopicStage({ topicId }: Props) {
     setIsSubmittingReply(false);
 
     if (!result.ok) {
-      setReplyError(toFriendlyMessage(result.error));
+      setReplyError(toFriendlyMessage(t, result.error));
       return;
     }
 
@@ -1475,17 +1715,19 @@ export function TopicStage({ topicId }: Props) {
       skipReplyAutosaveRef.current = false;
     }, 0);
     setReplyText("");
-    toast({ variant: "success", title: "post", message: "观点提交成功" });
+    toast({ variant: "success", title: t("stage.submit"), message: t("stage.postSuccess") });
   }
 
   async function submitEdit() {
     if (!editEditor) return;
-    if (!canOpenEdit) return;
+    if (!isEditingSelectedArgument) return;
+    if (!canEditSelectedArgument) return;
     if (!readArgument) return;
+    if (isSavingEdit) return;
 
     const body = editEditor.getText().trim();
     if (!body) {
-      setEditError("请输入观点内容");
+      setEditError(t("createTopic.bodyRequired"));
       return;
     }
 
@@ -1495,7 +1737,9 @@ export function TopicStage({ topicId }: Props) {
     const bodyRichResult = zTiptapDoc.safeParse(editEditor.getJSON());
     const bodyRich = bodyRichResult.success ? bodyRichResult.data : null;
 
-    const result = await apiClient.editArgument(topicId, readArgument.id, {
+    const argumentId = readArgument.id;
+
+    const result = await apiClient.editArgument(topicId, argumentId, {
       title: editTitle.trim() ? editTitle.trim() : null,
       body,
       bodyRich,
@@ -1504,26 +1748,53 @@ export function TopicStage({ topicId }: Props) {
     setIsSavingEdit(false);
 
     if (!result.ok) {
-      setEditError(toFriendlyMessage(result.error));
+      setEditError(toFriendlyMessage(t, result.error));
       return;
     }
 
     setSelectedArgumentDetail(result.data.argument);
     invalidate();
-    setIsEditOpen(false);
-    toast({ variant: "success", title: "edit", message: "已更新" });
+    isEditDirtyRef.current = false;
+    setIsEditDirty(false);
+    shouldFocusEditRef.current = false;
+    setIsEditingSelectedArgument(false);
+    toast({ variant: "success", title: t("stage.edit"), message: t("stage.updated") });
   }
+
+  submitEditRef.current = () => {
+    void submitEdit();
+  };
+
+  useEffect(() => {
+    if (!isEditingSelectedArgument) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        cancelEditingSelectedArgument();
+        return;
+      }
+
+      if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        submitEditRef.current?.();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [cancelEditingSelectedArgument, isEditingSelectedArgument]);
 
   const insertQuote = useCallback(
     (text: string) => {
       const trimmed = text.trim();
       if (!trimmed) return;
 
-      const targetEditor = isEditOpen ? editEditor : replyEditor;
+      const targetEditor = isEditingSelectedArgument ? editEditor : replyEditor;
       if (!targetEditor) return;
 
       if (!targetEditor.isEditable) {
-        toast({ variant: "warn", title: "quote", message: "当前不可编辑" });
+        toast({ variant: "warn", title: t("editor.quote"), message: t("stage.notEditable") });
         return;
       }
 
@@ -1542,7 +1813,7 @@ export function TopicStage({ topicId }: Props) {
         )
         .run();
     },
-    [editEditor, isEditOpen, replyEditor, toast],
+    [editEditor, isEditingSelectedArgument, replyEditor, toast],
   );
 
   const handleInsertQuote = useCallback(() => {
@@ -1559,7 +1830,7 @@ export function TopicStage({ topicId }: Props) {
   if (tree.status === "loading") {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center">
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
       </div>
     );
   }
@@ -1567,16 +1838,17 @@ export function TopicStage({ topicId }: Props) {
   if (tree.status === "error") {
     return (
       <div className="mx-auto w-full max-w-3xl px-4 py-10">
-        <P5Alert role="alert" variant="error" title="error">
+        <Alert role="alert" variant="error" title={t("common.error")}>
           {tree.errorMessage}
-        </P5Alert>
+        </Alert>
       </div>
     );
   }
 
   const topic = tree.topic;
+  const topicTitle = topic.title.trim() ? topic.title : t("topics.untitled");
   const argumentCount = Math.max(0, tree.arguments.length - 1);
-  const currentVotes = selectedArgumentId ? stakesByArgumentId[selectedArgumentId] ?? 0 : 0;
+  const currentVotes = readArgument ? stakesByArgumentId[readArgument.id] ?? 0 : 0;
 
   const claimInfo =
     hasIdentity === true && topic.ownerPubkey === null
@@ -1605,7 +1877,7 @@ export function TopicStage({ topicId }: Props) {
 
     if (!result.ok) {
       setClaimError(result.error.message);
-      toast({ variant: "error", title: "claim", message: result.error.message });
+      toast({ variant: "error", title: t("topic.claimHost"), message: result.error.message });
       if (
         result.error.kind === "http" &&
         (result.error.code === "CLAIM_TOKEN_EXPIRED" || result.error.code === "CLAIM_TOKEN_INVALID")
@@ -1624,23 +1896,24 @@ export function TopicStage({ topicId }: Props) {
     } catch {
       // ignore
     }
-    toast({ variant: "success", title: "host", message: "Host claimed for this topic." });
+    toast({ variant: "success", title: t("topics.host"), message: t("topic.hostClaimedForTopic") });
     invalidate();
   }
 
   return (
     <>
-      {quoteHint ? (
-        <P5Button
-          size="sm"
-          variant="ghost"
-          className="fixed z-50 h-8 px-3 border border-border bg-background shadow-lg"
-          style={{ left: quoteHint.x, top: quoteHint.y, transform: "translate(-100%, -120%)" }}
-          onPointerDown={(event) => event.preventDefault()}
-          onClick={handleInsertQuote}
-        >
-          引用
-        </P5Button>
+	      {quoteHint ? (
+	        <Button
+	          size="sm"
+	          variant="ghost"
+	          className="fixed z-50 h-8 px-3 border border-border bg-background shadow-lg"
+	          data-testid="selection-quote-button"
+	          style={{ left: quoteHint.x, top: quoteHint.y, transform: "translate(-100%, -120%)" }}
+	          onPointerDown={(event) => event.preventDefault()}
+	          onClick={handleInsertQuote}
+	        >
+          {t("editor.quote")}
+        </Button>
       ) : null}
       <div
         className="flex min-h-0 flex-1 flex-col gap-4 p-4 md:p-6"
@@ -1653,14 +1926,14 @@ export function TopicStage({ topicId }: Props) {
         }}
       >
         {reloadRequired ? (
-          <P5Alert title="reload_required" variant="warn" role="alert">
+          <Alert title={t("topic.reloadRequiredTitle")} variant="warn" role="alert">
             <div className="flex items-center justify-between gap-3">
-              <span>数据已更新，请刷新</span>
-              <P5Button onClick={() => window.location.reload()} size="sm">
-                刷新
-              </P5Button>
+              <span>{t("topic.reloadRequiredMessage")}</span>
+              <Button onClick={() => window.location.reload()} size="sm">
+                {t("common.refresh")}
+              </Button>
             </div>
-          </P5Alert>
+          </Alert>
         ) : null}
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-background shadow-sm md:flex-row">
@@ -1680,18 +1953,18 @@ export function TopicStage({ topicId }: Props) {
           >
             <div className="flex items-start justify-between gap-3 border-b border-border/60 px-5 py-4">
               <div className="min-w-0">
-                <h2 className="truncate font-serif text-xl text-foreground" title={topic.title}>
-                  {topic.title}
+                <h2 className="truncate font-serif text-xl text-foreground" title={topicTitle}>
+                  {topicTitle}
                 </h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {argumentCount} nodes
+                  {t("stage.nodesCount", { count: argumentCount })}
                 </p>
               </div>
-              <P5Badge
+              <Badge
                 variant={topic.status === "active" ? "electric" : topic.status === "frozen" ? "acid" : "ink"}
               >
-                {topic.status}
-              </P5Badge>
+                {t(`status.${topic.status}`)}
+              </Badge>
             </div>
 
             <div
@@ -1708,33 +1981,22 @@ export function TopicStage({ topicId }: Props) {
                     showTooltip={false}
                     selectedId={selectedArgumentId}
                     onSelectedIdChange={(id) => {
-                      setHoverCard(null);
-                      setSelectedArgumentId(id);
+                      hideHoverCard({ immediate: true });
+                      requestSelectArgumentId(id);
                     }}
-                    onHoverChange={(value) => {
-                      if (!value || selectedArgumentId) {
-                        setHoverCard(null);
-                        return;
-                      }
-                      const arg = argumentById.get(value.id);
-                      if (!arg) {
-                        setHoverCard(null);
-                        return;
-                      }
-                      setHoverCard({ argument: arg, x: value.pointer.x, y: value.pointer.y });
-                    }}
+                    onHoverChange={handleSunburstHoverChange}
                   />
 
                   <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                     <span className="max-w-[160px] text-center font-serif text-xs font-semibold text-foreground/90">
-                      {topic.title.length > 12 ? `${topic.title.slice(0, 10)}…` : topic.title}
+                      {topicTitle.length > 12 ? `${topicTitle.slice(0, 10)}…` : topicTitle}
                     </span>
                   </div>
 
                   {hoverCard && !selectedArgumentId ? (
                     <div
                       className="pointer-events-none absolute z-10"
-                      style={{ ...cardPosition(hoverCard.x, hoverCard.y), width: 280 }}
+                      style={{ ...cardPosition(hoverCard.x, hoverCard.y, hoverCard.phase), width: 280 }}
                     >
                       <div className="rounded-lg border border-border/60 bg-background p-4 shadow-lg">
                         <div className="mb-2">
@@ -1743,86 +2005,88 @@ export function TopicStage({ topicId }: Props) {
                           </h3>
                         </div>
 
-                        <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
+                        <p
+                          className={[
+                            "text-xs text-muted-foreground leading-relaxed",
+                            hoverCard.phase === "expanded" ? "line-clamp-8" : "line-clamp-3",
+                          ].join(" ")}
+                        >
                           {toExcerpt(hoverCard.argument.body)}
                         </p>
 
                         <div className="mt-3 flex items-center justify-between border-t border-border/60 pt-2 text-[10px] text-muted-foreground">
-                          <span title={hoverCard.argument.authorId}>
-                            {authorLabel(hoverCard.argument.authorId, hoverCard.argument.authorDisplayName)}
-                          </span>
-                          <span>{hoverCard.argument.totalVotes} votes</span>
+                          <span>{authorLabel(hoverCard.argument.authorId, hoverCard.argument.authorDisplayName)}</span>
+                          <span>{t("stage.votesCount", { count: hoverCard.argument.totalVotes })}</span>
                         </div>
                       </div>
                     </div>
                   ) : null}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">Sunburst unavailable.</p>
+                <p className="text-sm text-muted-foreground">{t("sunburstView.unavailable")}</p>
               )}
             </div>
 
             <div className="border-t border-border/60 px-4 py-4">
-              <P5Button
+              <Button
                 variant="ghost"
                 size="sm"
                 className="w-full justify-center border border-border bg-background"
                 onClick={() => setIsReportOpen(true)}
               >
-                查看 AI 分析报告
-              </P5Button>
+                {t("stage.openReport")}
+              </Button>
 
               {claimError ? (
                 <div className="mt-3">
-                  <P5Alert role="alert" variant="error" title="claim">
+                  <Alert role="alert" variant="error" title={t("topic.claimHost")}>
                     {claimError}
-                  </P5Alert>
+                  </Alert>
                 </div>
               ) : null}
 
               {claimInfo ? (
                 <div className="mt-3">
-                  <P5Button
+                  <Button
                     variant="primary"
                     size="sm"
                     className="w-full justify-center border border-border"
                     onClick={claimOwner}
                     disabled={isClaiming}
                   >
-                    {isClaiming ? "Claiming…" : "Claim Host"}
-                  </P5Button>
+                    {isClaiming ? t("topic.claiming") : t("topic.claimHost")}
+                  </Button>
                 </div>
               ) : null}
 
               {isOwner ? (
                 <div className="mt-3">
-                  <P5Button
+                  <Button
                     variant="ghost"
                     size="sm"
                     className="w-full justify-center border border-border bg-background"
                     onClick={() => setIsManageOpen(true)}
                   >
-                    Host 管理
-                  </P5Button>
+                    {t("topic.manage")}
+                  </Button>
                 </div>
               ) : null}
 
               <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
                 <Link href="/" className="hover:text-foreground">
-                  Hosted by Epiphany
+                  {t("brand.hostedBy")}
                 </Link>
                 {identityFingerprint ? (
                   <Link
                     href="/my"
                     className="flex items-center gap-2 hover:text-foreground"
-                    title={`我的身份 ${identityFingerprint}`}
+                    title={t("identity.myIdentity")}
                   >
                     {myAuthorId ? (
                       <span className="font-medium text-foreground/90">{authorLabel(myAuthorId)}</span>
-                    ) : null}
-                    <span className="font-mono text-[10px] text-muted-foreground/80">
-                      {identityFingerprint}
-                    </span>
+                    ) : (
+                      <span className="font-medium text-foreground/90">{t("my.identityReady")}</span>
+                    )}
                   </Link>
                 ) : null}
               </div>
@@ -1834,14 +2098,28 @@ export function TopicStage({ topicId }: Props) {
             {readArgument ? (
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <div className="border-b border-border/60 px-6 py-6">
-                  <h1 className="font-serif text-2xl leading-tight text-foreground">
-                    {toTitle(readArgument)}
-                  </h1>
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                      <span title={readArgument.authorId}>
-                        {authorLabel(readArgument.authorId, readArgument.authorDisplayName)}
-                      </span>
+                  {isEditingSelectedArgument ? (
+                    <Input
+                      aria-label={t("stage.editTitleAria")}
+                      value={editTitle}
+                      onChange={(e) => {
+                        isEditDirtyRef.current = true;
+                        setIsEditDirty(true);
+                        setEditTitle(e.target.value);
+                      }}
+                      placeholder={t("stage.titleOptionalPlaceholder")}
+                      className="border-0 rounded-none bg-transparent px-0 py-0 font-serif text-2xl leading-tight shadow-none"
+                      maxLength={160}
+                      disabled={isSavingEdit}
+                    />
+                  ) : (
+                    <h1 className="font-serif text-2xl leading-tight text-foreground">
+                      {toTitle(readArgument)}
+                    </h1>
+                  )}
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                      <span>{authorLabel(readArgument.authorId, readArgument.authorDisplayName)}</span>
                       <span aria-hidden className="text-border">
                         ·
                       </span>
@@ -1849,62 +2127,120 @@ export function TopicStage({ topicId }: Props) {
                       <span aria-hidden className="text-border">
                         ·
                       </span>
-                      <span>{readArgument.totalVotes} votes</span>
+                      <span>{t("stage.votesCount", { count: readArgument.totalVotes })}</span>
                     </div>
 
-                    {canEditSelectedArgument ? (
-                      <P5Button
+                    {isEditingSelectedArgument ? (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-3 border border-border bg-background"
+                          onClick={cancelEditingSelectedArgument}
+                          disabled={isSavingEdit}
+                        >
+                          {t("common.cancel")}
+                        </Button>
+                        <Button
+                          variant="ink"
+                          size="sm"
+                          onClick={submitEdit}
+                          disabled={!canEditSelectedArgument || isSavingEdit || !editText.trim()}
+                        >
+                          {isSavingEdit ? t("common.saving") : t("stage.saveChanges")}
+                        </Button>
+                      </div>
+                    ) : canEditSelectedArgument ? (
+                      <Button
                         size="sm"
                         variant="ghost"
                         className="h-8 px-3 border border-border bg-background"
-                        onClick={() => {
-                          if (!canOpenEdit) return;
-                          setIsEditOpen(true);
-                        }}
-                        disabled={!canOpenEdit}
+                        onClick={startEditingSelectedArgument}
                         title={
                           selectedArgumentDetailError
-                            ? "加载失败"
+                            ? t("common.loadFailed")
                             : isLoadingSelectedArgumentDetail
-                              ? "加载中…"
-                              : "编辑"
+                              ? t("common.loading")
+                              : t("stage.edit")
                         }
                       >
-                        {isLoadingSelectedArgumentDetail ? "加载中…" : "编辑"}
-                      </P5Button>
+                        {t("stage.edit")}
+                      </Button>
                     ) : null}
                   </div>
+                  {isEditingSelectedArgument ? (
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+                      <span>{t("stage.editAiHint")}</span>
+                      <span className="font-mono">{t("stage.editHotkeysHint")}</span>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-y-auto px-6 py-8">
 	                  <div className="mx-auto w-full max-w-[760px]">
-	                    <div
-	                      ref={readerContentRef}
-	                      className={[
-	                        "prose prose-lg max-w-none",
-	                        "prose-headings:font-serif prose-headings:tracking-tight",
-	                        "prose-a:text-accent prose-a:underline prose-a:decoration-border/70 hover:prose-a:text-foreground",
-                        "prose-blockquote:border-l-border prose-blockquote:text-muted-foreground",
-                        "prose-code:before:content-none prose-code:after:content-none",
-                        "prose-pre:rounded-md prose-pre:border prose-pre:border-border/60 prose-pre:bg-[color:var(--muted)]",
-                      ].join(" ")}
-                    >
-                      {readArgument.bodyRich ? (
-                        <TiptapRenderer
-                          doc={readArgument.bodyRich}
-                          fallback={readArgument.body}
-                        />
+                      {isEditingSelectedArgument ? (
+                        <div>
+                          <div
+                            aria-label={t("stage.inlineEditorAria")}
+                            className="overflow-hidden rounded-lg border border-border/60 bg-background"
+                          >
+                            {isEditEditorMode ? (
+                              <div className="sticky top-0 z-10">
+                                <RichTextToolbar
+                                  editor={editEditor}
+                                  onRequestHideToolbar={() => setIsEditEditorMode(false)}
+                                />
+                              </div>
+                            ) : (
+                              <div className="sticky top-0 z-10 border-b border-border/60 bg-[color:var(--muted)] px-3 py-2">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 px-3 border border-border bg-background"
+                                  onClick={() => setIsEditEditorMode(true)}
+                                >
+                                  {t("stage.showToolbar")}
+                                </Button>
+                              </div>
+                            )}
+                            <EditorContent editor={editEditor} />
+                          </div>
+
+                          {editError ? (
+                            <p role="alert" className="mt-2 text-xs text-destructive">
+                              {editError}
+                            </p>
+                          ) : null}
+                        </div>
                       ) : (
-                        <p className="whitespace-pre-wrap">{readArgument.body}</p>
+                        <div
+                          ref={readerContentRef}
+                          className={[
+                            "prose prose-lg max-w-none",
+                            "prose-headings:font-serif prose-headings:tracking-tight",
+                            "prose-a:text-accent prose-a:underline prose-a:decoration-border/70 hover:prose-a:text-foreground",
+                            "prose-blockquote:border-l-border prose-blockquote:text-muted-foreground",
+                            "prose-code:before:content-none prose-code:after:content-none",
+                            "prose-pre:rounded-md prose-pre:border prose-pre:border-border/60 prose-pre:bg-[color:var(--muted)]",
+                          ].join(" ")}
+                        >
+                          {readArgument.bodyRich ? (
+                            <TiptapRenderer
+                              doc={readArgument.bodyRich}
+                              fallback={readArgument.body}
+                            />
+                          ) : (
+                            <p className="whitespace-pre-wrap">{readArgument.body}</p>
+                          )}
+                        </div>
                       )}
-                    </div>
                   </div>
 
                   {ledgerError ? (
                     <div className="mt-6">
-                      <P5Alert role="alert" variant="error" title="ledger">
+                      <Alert role="alert" variant="error" title={t("topic.ledger")}>
                         {ledgerError}
-                      </P5Alert>
+                      </Alert>
                     </div>
                   ) : null}
                 </div>
@@ -1928,14 +2264,14 @@ export function TopicStage({ topicId }: Props) {
 	                  <div className="mx-auto w-full max-w-[760px]">
 	                    <div className="overflow-hidden rounded-lg border border-border/60 bg-background">
 	                      <div className="border-b border-border/60 bg-background">
-	                        <P5Input
-	                          value={replyTitle}
-	                          onChange={handleReplyTitleChange}
-	                          placeholder="标题（可选）"
-	                          className="h-11 border-0 rounded-none shadow-none font-serif text-base"
-	                          maxLength={160}
-	                          disabled={!canCreateArgument || isSubmittingReply}
-	                        />
+		                        <Input
+		                          value={replyTitle}
+		                          onChange={handleReplyTitleChange}
+		                          placeholder={t("stage.titleOptionalPlaceholder")}
+		                          className="h-11 border-0 rounded-none shadow-none font-serif text-base"
+		                          maxLength={160}
+		                          disabled={!canCreateArgument || isSubmittingReply}
+		                        />
 	                      </div>
 	                      {isReplyEditorMode ? (
 	                        <RichTextToolbar
@@ -1944,16 +2280,16 @@ export function TopicStage({ topicId }: Props) {
 	                        />
 	                      ) : (
 	                        <div className="border-b border-border/60 bg-[color:var(--muted)] px-3 py-2">
-	                          <P5Button
-	                            size="sm"
-	                            variant="ghost"
-	                            className="h-8 px-3 border border-border bg-background"
-	                            onClick={() => setIsReplyEditorMode(true)}
-	                          >
-	                            显示工具栏
-	                          </P5Button>
-	                        </div>
-	                      )}
+		                          <Button
+		                            size="sm"
+		                            variant="ghost"
+		                            className="h-8 px-3 border border-border bg-background"
+		                            onClick={() => setIsReplyEditorMode(true)}
+		                          >
+		                            {t("stage.showToolbar")}
+		                          </Button>
+		                        </div>
+		                      )}
 
 	                      <EditorContent editor={replyEditor} />
 	                    </div>
@@ -1973,9 +2309,11 @@ export function TopicStage({ topicId }: Props) {
                           ].join(" ")}
                         >
                           {replyAutosave.kind === "saving"
-                            ? "自动保存中…"
+                            ? t("dialogue.autosaveSaving")
                             : replyAutosave.kind === "saved"
-                              ? `已自动保存 ${formatSavedTime(replyAutosave.savedAt) ?? ""}`.trim()
+                              ? t("dialogue.autosaveSavedAt", {
+                                  time: formatSavedTime(replyAutosave.savedAt) ?? "",
+                                }).trim()
                               : replyAutosave.message}
                         </span>
                       ) : (
@@ -1984,23 +2322,25 @@ export function TopicStage({ topicId }: Props) {
 
 	                      <div className="flex flex-col items-end gap-1">
 	                        <div className="flex items-center gap-2">
-                            <P5Input
-                              value={topicDisplayName}
-                              onChange={handleTopicDisplayNameChange}
-                              placeholder="你在此议题的名字"
-                              className="h-8 w-[180px] py-0 text-xs"
-                              maxLength={40}
-                              disabled={!hasIdentity}
-                            />
-                            <P5Button
-                              variant="ink"
-                              size="sm"
-                              onClick={submitReply}
-                              disabled={!canCreateArgument || isSubmittingReply || !replyText.trim()}
-                            >
-                              {isSubmittingReply ? "提交中…" : "提交"}
-                            </P5Button>
-                          </div>
+		                            <Input
+		                              value={topicDisplayName}
+		                              onChange={handleTopicDisplayNameChange}
+		                              placeholder={t("stage.topicNamePlaceholder")}
+		                              aria-label={t("stage.topicNamePlaceholder")}
+		                              data-testid="topic-display-name-input"
+		                              className="h-8 w-[180px] py-0 text-xs"
+		                              maxLength={40}
+		                              disabled={!hasIdentity}
+		                            />
+	                            <Button
+	                              variant="ink"
+	                              size="sm"
+	                              onClick={submitReply}
+	                              disabled={!canCreateArgument || isSubmittingReply || !replyText.trim()}
+	                            >
+	                              {isSubmittingReply ? t("stage.submitting") : t("stage.submit")}
+	                            </Button>
+	                          </div>
                           {topicDisplayNameSave.kind !== "idle" ? (
                             <span
                               className={[
@@ -2009,9 +2349,9 @@ export function TopicStage({ topicId }: Props) {
                               ].join(" ")}
                             >
                               {topicDisplayNameSave.kind === "saving"
-                                ? "名字保存中…"
+                                ? t("stage.nameSaving")
                                 : topicDisplayNameSave.kind === "saved"
-                                  ? "名字已保存"
+                                  ? t("stage.nameSaved")
                                   : topicDisplayNameSave.message}
                             </span>
                           ) : null}
@@ -2022,22 +2362,22 @@ export function TopicStage({ topicId }: Props) {
               </div>
             ) : (
               <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-8 py-10 text-center">
-                <h2 className="font-serif text-2xl text-foreground">选择一个观点来探索</h2>
+                <h2 className="font-serif text-2xl text-foreground">{t("stage.emptyTitle")}</h2>
                 <p className="mt-4 max-w-md text-sm leading-relaxed text-muted-foreground">
-                  点击旭日图中的任意区块来查看详情并参与讨论。你也可以直接在下方提出一个新观点（默认发布在 root 下）。
+                  {t("stage.emptyBody")}
                 </p>
 
 	                <div className="mt-8 w-full max-w-[760px]">
 	                  <div className="overflow-hidden rounded-lg border border-border/60 bg-background">
 	                    <div className="border-b border-border/60 bg-background">
-	                      <P5Input
-	                        value={replyTitle}
-	                        onChange={handleReplyTitleChange}
-	                        placeholder="标题（可选）"
-	                        className="h-11 border-0 rounded-none shadow-none font-serif text-base"
-	                        maxLength={160}
-	                        disabled={!canCreateArgument || isSubmittingReply}
-	                      />
+		                      <Input
+		                        value={replyTitle}
+		                        onChange={handleReplyTitleChange}
+		                        placeholder={t("stage.titleOptionalPlaceholder")}
+		                        className="h-11 border-0 rounded-none shadow-none font-serif text-base"
+		                        maxLength={160}
+		                        disabled={!canCreateArgument || isSubmittingReply}
+		                      />
 	                    </div>
 	                    {isReplyEditorMode ? (
 	                      <RichTextToolbar
@@ -2046,16 +2386,16 @@ export function TopicStage({ topicId }: Props) {
 	                      />
 	                    ) : (
 	                      <div className="border-b border-border/60 bg-[color:var(--muted)] px-3 py-2">
-	                        <P5Button
-	                          size="sm"
-	                          variant="ghost"
-	                          className="h-8 px-3 border border-border bg-background"
-	                          onClick={() => setIsReplyEditorMode(true)}
-	                        >
-	                          显示工具栏
-	                        </P5Button>
-	                      </div>
-	                    )}
+		                          <Button
+		                            size="sm"
+		                            variant="ghost"
+		                            className="h-8 px-3 border border-border bg-background"
+		                            onClick={() => setIsReplyEditorMode(true)}
+		                          >
+		                            {t("stage.showToolbar")}
+		                          </Button>
+		                      </div>
+		                    )}
 
 	                    <EditorContent editor={replyEditor} />
 	                  </div>
@@ -2075,9 +2415,11 @@ export function TopicStage({ topicId }: Props) {
                         ].join(" ")}
                       >
                         {replyAutosave.kind === "saving"
-                          ? "自动保存中…"
+                          ? t("dialogue.autosaveSaving")
                           : replyAutosave.kind === "saved"
-                            ? `已自动保存 ${formatSavedTime(replyAutosave.savedAt) ?? ""}`.trim()
+                            ? t("dialogue.autosaveSavedAt", {
+                                time: formatSavedTime(replyAutosave.savedAt) ?? "",
+                              }).trim()
                             : replyAutosave.message}
                       </span>
                     ) : (
@@ -2086,28 +2428,30 @@ export function TopicStage({ topicId }: Props) {
 
                     <div className="flex flex-col items-end gap-1">
                       <div className="flex items-center gap-2">
-                        <P5Input
-                          value={topicDisplayName}
-                          onChange={handleTopicDisplayNameChange}
-                          placeholder="你在此议题的名字"
-                          className="h-8 w-[180px] py-0 text-xs"
-                          maxLength={40}
-                          disabled={!hasIdentity}
-                        />
-                        <P5Button
-                          variant="ink"
-                          size="sm"
-                          onClick={submitReply}
-                          disabled={
-                            !canCreateArgument ||
-                            isSubmittingReply ||
-                            !replyText.trim() ||
-                            !rootArgumentId
-                          }
-                        >
-                          {isSubmittingReply ? "提交中…" : "提交观点"}
-                        </P5Button>
-                      </div>
+		                        <Input
+		                          value={topicDisplayName}
+		                          onChange={handleTopicDisplayNameChange}
+		                          placeholder={t("stage.topicNamePlaceholder")}
+		                          aria-label={t("stage.topicNamePlaceholder")}
+		                          data-testid="topic-display-name-input"
+		                          className="h-8 w-[180px] py-0 text-xs"
+		                          maxLength={40}
+		                          disabled={!hasIdentity}
+		                        />
+	                        <Button
+	                          variant="ink"
+	                          size="sm"
+	                          onClick={submitReply}
+	                          disabled={
+	                            !canCreateArgument ||
+	                            isSubmittingReply ||
+	                            !replyText.trim() ||
+	                            !rootArgumentId
+	                          }
+	                        >
+	                          {isSubmittingReply ? t("stage.submitting") : t("stage.submitArgument")}
+	                        </Button>
+	                      </div>
                       {topicDisplayNameSave.kind !== "idle" ? (
                         <span
                           className={[
@@ -2116,9 +2460,9 @@ export function TopicStage({ topicId }: Props) {
                           ].join(" ")}
                         >
                           {topicDisplayNameSave.kind === "saving"
-                            ? "名字保存中…"
+                            ? t("stage.nameSaving")
                             : topicDisplayNameSave.kind === "saved"
-                              ? "名字已保存"
+                              ? t("stage.nameSaved")
                               : topicDisplayNameSave.message}
                         </span>
                       ) : null}
@@ -2127,7 +2471,9 @@ export function TopicStage({ topicId }: Props) {
 
                   {topic.status !== "active" ? (
                     <p className="mt-3 text-xs text-muted-foreground">
-                      该议题为只读（{topic.status}），无法新增观点；仍可撤回投票。
+                      {t("stage.topicReadonlyCannotPost", {
+                        status: t(`status.${topic.status}`),
+                      })}
                     </p>
                   ) : null}
                 </div>
@@ -2136,72 +2482,6 @@ export function TopicStage({ topicId }: Props) {
           </div>
         </div>
       </div>
-
-      <P5Modal
-        open={isEditOpen}
-        onClose={() => setIsEditOpen(false)}
-        title="修改评论"
-        maxWidth="760px"
-        footer={
-          <>
-            <P5Button
-              variant="ghost"
-              size="sm"
-              className="h-8 px-3 border border-border bg-background"
-              onClick={() => setIsEditOpen(false)}
-              disabled={isSavingEdit}
-            >
-              取消
-            </P5Button>
-            <P5Button
-              variant="ink"
-              size="sm"
-              onClick={submitEdit}
-              disabled={!canOpenEdit || isSavingEdit || !editText.trim()}
-            >
-              {isSavingEdit ? "保存中…" : "保存修改"}
-            </P5Button>
-          </>
-        }
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="text-xs text-muted-foreground">修改后会重新触发 AI 分析</span>
-        </div>
-
-        <div className="mt-3 overflow-hidden rounded-lg border border-border/60 bg-background">
-          <div className="border-b border-border/60 bg-background">
-            <P5Input
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              placeholder="标题（可选）"
-              className="h-11 border-0 rounded-none shadow-none font-serif text-base"
-              maxLength={160}
-              disabled={isSavingEdit}
-            />
-          </div>
-          {isEditEditorMode ? (
-            <RichTextToolbar editor={editEditor} onRequestHideToolbar={() => setIsEditEditorMode(false)} />
-          ) : (
-            <div className="border-b border-border/60 bg-[color:var(--muted)] px-3 py-2">
-              <P5Button
-                size="sm"
-                variant="ghost"
-                className="h-8 px-3 border border-border bg-background"
-                onClick={() => setIsEditEditorMode(true)}
-              >
-                显示工具栏
-              </P5Button>
-            </div>
-          )}
-          <EditorContent editor={editEditor} />
-        </div>
-
-        {editError ? (
-          <p role="alert" className="mt-2 text-xs text-destructive">
-            {editError}
-          </p>
-        ) : null}
-      </P5Modal>
 
       {isOwner && isManageOpen ? (
         <TopicManagePanel

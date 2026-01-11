@@ -8,6 +8,7 @@ import {
   ArgumentsHost,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { Response } from 'express';
 import type { ErrorCode } from '@epiphany/shared-contracts';
@@ -51,6 +52,8 @@ function isHealthResult(obj: unknown): obj is HealthResult {
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(HttpExceptionFilter.name);
+
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
@@ -93,6 +96,25 @@ export class HttpExceptionFilter implements ExceptionFilter {
           error: {
             code: 'BAD_REQUEST',
             message: exceptionResponse,
+          },
+        };
+      }
+
+      if (status >= 500) {
+        const stack = exception instanceof Error ? exception.stack : String(exception);
+        this.logger.error(stack);
+      }
+    } else {
+      const stack = exception instanceof Error ? exception.stack : String(exception);
+      this.logger.error(stack);
+
+      // Add debug details in non-production to aid troubleshooting.
+      if (process.env.NODE_ENV !== 'production' && exception instanceof Error) {
+        errorBody = {
+          error: {
+            code: 'BAD_REQUEST',
+            message: 'Internal server error',
+            details: { debug: exception.message },
           },
         };
       }

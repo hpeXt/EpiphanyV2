@@ -3,12 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { P5Button } from "@/components/ui/P5Button";
 import { P5Alert } from "@/components/ui/P5Alert";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 type Props = {
   mnemonic: string;
 };
 
 export function MnemonicDisplay({ mnemonic }: Props) {
+  const { t } = useI18n();
   const [isRevealed, setIsRevealed] = useState(false);
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied">("idle");
   const words = mnemonic.split(" ");
@@ -52,14 +54,14 @@ export function MnemonicDisplay({ mnemonic }: Props) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="font-serif text-base font-semibold text-foreground">助记词备份</h3>
+        <h3 className="font-serif text-base font-semibold text-foreground">{t("mnemonic.title")}</h3>
         <div className="flex gap-2">
           <P5Button
             size="sm"
             variant="ghost"
             onClick={() => setIsRevealed(!isRevealed)}
           >
-            {isRevealed ? "🙈 隐藏" : "👁 显示"}
+            {isRevealed ? `🙈 ${t("common.hide")}` : `👁 ${t("common.show")}`}
           </P5Button>
           <P5Button
             size="sm"
@@ -67,7 +69,7 @@ export function MnemonicDisplay({ mnemonic }: Props) {
             onClick={handleCopy}
             disabled={!isRevealed}
           >
-            {copyStatus === "copied" ? "✓ 已复制" : "复制"}
+            {copyStatus === "copied" ? `✓ ${t("mnemonic.copied")}` : t("mnemonic.copy")}
           </P5Button>
         </div>
       </div>
@@ -117,17 +119,17 @@ export function MnemonicDisplay({ mnemonic }: Props) {
         {/* 自动隐藏倒计时（揭示时显示） */}
         {isRevealed && (
           <div className="border-t border-border/60 px-4 py-3 text-center text-xs text-muted-foreground">
-            30 秒后自动隐藏
+            {t("mnemonic.autoHide", { seconds: 30 })}
           </div>
         )}
       </div>
 
       {/* 警告提示 */}
-      <P5Alert variant="warn" title="备份提示" role="status">
+      <P5Alert variant="warn" title={t("mnemonic.alertTitle")} role="status">
         <div className="space-y-1">
-          <p className="font-medium">助记词是恢复身份的唯一方式</p>
+          <p className="font-medium">{t("mnemonic.alertLine1")}</p>
           <p className="text-muted-foreground">
-            清除浏览器数据或更换设备后，未备份将永久丢失
+            {t("mnemonic.alertLine2")}
           </p>
         </div>
       </P5Alert>

@@ -1,6 +1,10 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
+import { createTranslator, defaultLocale } from "@/lib/i18n";
+
 const { GodView } = require("@/components/topics/GodView");
+
+const t = createTranslator(defaultLocale);
 
 type MockJsonResponse = { ok: boolean; status: number; json: unknown };
 
@@ -152,7 +156,7 @@ describe("GodView (Step 20)", () => {
 
     render(<GodView topicId="topic-1" />);
 
-    expect(await screen.findByRole("status")).toHaveTextContent(/no cluster/i);
+    expect(await screen.findByRole("status")).toHaveTextContent(t("godView.empty"));
     expect(screen.queryByTestId("godview-canvas")).not.toBeInTheDocument();
   });
 

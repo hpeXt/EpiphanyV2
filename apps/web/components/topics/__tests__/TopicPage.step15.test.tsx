@@ -184,10 +184,10 @@ describe("TopicPage (Step 15)", () => {
     render(<TopicPage topicId="topic-1" />);
 
     await clickRoot(user);
-    expect(await screen.findByText("No replies yet.")).toBeInTheDocument();
+    expect(await screen.findByText(/No replies yet\\.|暂无回复。/i)).toBeInTheDocument();
 
-    await user.type(await screen.findByLabelText("Reply"), "Hello world");
-    await user.click(screen.getByRole("button", { name: "Post" }));
+    await user.type(await screen.findByLabelText(/Reply|回复/i), "Hello world");
+    await user.click(screen.getByRole("button", { name: /Post|发布/i }));
 
     expect(await screen.findByText("Hello world")).toBeInTheDocument();
   });
@@ -214,12 +214,12 @@ describe("TopicPage (Step 15)", () => {
     render(<TopicPage topicId="topic-1" />);
 
     await clickRoot(user);
-    expect(await screen.findByText("No replies yet.")).toBeInTheDocument();
+    expect(await screen.findByText(/No replies yet\\.|暂无回复。/i)).toBeInTheDocument();
 
-    await user.type(await screen.findByLabelText("Reply"), "Hello world");
-    await user.click(screen.getByRole("button", { name: "Post" }));
+    await user.type(await screen.findByLabelText(/Reply|回复/i), "Hello world");
+    await user.click(screen.getByRole("button", { name: /Post|发布/i }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("余额不足");
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Insufficient balance|余额不足/i);
     expect(screen.queryByText("Hello world")).not.toBeInTheDocument();
   });
 
@@ -244,11 +244,11 @@ describe("TopicPage (Step 15)", () => {
     await clickRoot(user);
     await screen.findByText("Child A");
 
-    const slider = screen.getByRole("slider", { name: /votes/i });
+    const slider = screen.getByRole("slider", { name: /votes|票数/i });
     fireEvent.change(slider, { target: { value: "3" } });
 
-    expect(screen.getByText(/Cost: 9/)).toBeInTheDocument();
-    expect(screen.getByText(/ΔCost: \+9/)).toBeInTheDocument();
+    expect(screen.getByText(/Cost: 9|成本: 9/i)).toBeInTheDocument();
+    expect(screen.getByText(/ΔCost: \+9|Δ成本: \+9/i)).toBeInTheDocument();
   });
 
   it("debounces refresh after receiving SSE invalidation", async () => {
@@ -334,10 +334,10 @@ describe("TopicPage (Step 15)", () => {
     render(<TopicPage topicId="topic-1" />);
 
     await clickRoot(user);
-    await user.type(await screen.findByLabelText("Reply"), "Hello world");
-    await user.click(screen.getByRole("button", { name: "Post" }));
+    await user.type(await screen.findByLabelText(/Reply|回复/i), "Hello world");
+    await user.click(screen.getByRole("button", { name: /Post|发布/i }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("签名验证失败");
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Invalid signature|签名验证失败/i);
   });
 
   it("injects v1 signature headers with stable pubkey and unique nonce", async () => {
@@ -381,11 +381,11 @@ describe("TopicPage (Step 15)", () => {
 
     await clickRoot(user);
 
-    await user.type(await screen.findByLabelText("Reply"), "Hello 0");
-    await user.click(screen.getByRole("button", { name: "Post" }));
+    await user.type(await screen.findByLabelText(/Reply|回复/i), "Hello 0");
+    await user.click(screen.getByRole("button", { name: /Post|发布/i }));
 
-    await user.type(await screen.findByLabelText("Reply"), "Hello 1");
-    await user.click(screen.getByRole("button", { name: "Post" }));
+    await user.type(await screen.findByLabelText(/Reply|回复/i), "Hello 1");
+    await user.click(screen.getByRole("button", { name: /Post|发布/i }));
 
     await waitFor(() => {
       expect(

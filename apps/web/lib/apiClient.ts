@@ -12,6 +12,7 @@ import {
   zListTopicsResponse,
   zSetVotesResponse,
   zSetTopicProfileMeResponse,
+  zTopicArgumentsResponse,
   zTopicCommandResponse,
   zStakesMeResponse,
   zTopicTreeResponse,
@@ -248,7 +249,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
 
   return {
     listTopics() {
-      return requestJson("/v1/topics", { method: "GET" }, zListTopicsResponse);
+      return requestJson("/v1/topics", { method: "GET", cache: "no-store" }, zListTopicsResponse);
     },
     createTopic(input: CreateTopicRequest) {
       return requestJson(
@@ -279,6 +280,30 @@ export function createApiClient(deps?: { signer?: Signer }) {
       }
 
       return requestJson(path, { method: "GET", headers: accessKeyHeaders }, zTopicTreeResponse);
+    },
+    listTopicArguments(input: { topicId: string; limit?: number; beforeId?: string }) {
+      const signer = getSigner();
+      const encodedTopicId = encodeURIComponent(input.topicId);
+      const params = new URLSearchParams();
+      if (input.limit) params.set("limit", String(input.limit));
+      if (input.beforeId) params.set("beforeId", input.beforeId);
+      const query = params.toString();
+      const path = query
+        ? `/v1/topics/${encodedTopicId}/arguments?${query}`
+        : `/v1/topics/${encodedTopicId}/arguments`;
+      const accessKeyHeaders = getTopicAccessKeyHeaders(input.topicId);
+
+      if (signer) {
+        return requestJsonSigned(
+          signer,
+          input.topicId,
+          path,
+          { method: "GET", headers: accessKeyHeaders },
+          zTopicArgumentsResponse,
+        );
+      }
+
+      return requestJson(path, { method: "GET", headers: accessKeyHeaders }, zTopicArgumentsResponse);
     },
     /**
      * God View semantic map (public read)

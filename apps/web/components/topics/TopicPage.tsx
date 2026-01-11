@@ -26,12 +26,14 @@ import { P5SkeletonList } from "@/components/ui/P5Skeleton";
 import { TopicDualColumn } from "@/components/topics/TopicDualColumn";
 import { TopicTopBar } from "@/components/topics/TopicTopBar";
 import { SelectedNodeCard } from "@/components/topics/SelectedNodeCard";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 type Props = {
   topicId: string;
 };
 
 export function TopicPage({ topicId }: Props) {
+  const { t } = useI18n();
   const keyStore = useMemo(() => createLocalStorageKeyStore(), []);
   const visitedStore = useMemo(() => createLocalStorageVisitedTopicsStore(), []);
   const claimTokenStore = useMemo(() => createLocalStorageClaimTokenStore(), []);
@@ -135,7 +137,7 @@ export function TopicPage({ topicId }: Props) {
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex h-14 flex-shrink-0 items-center justify-center border-b-[4px] border-[color:var(--ink)] bg-[color:var(--ink)]">
           <span className="font-display text-lg uppercase text-[color:var(--paper)]">
-            Loading...
+            {t("common.loading")}
           </span>
         </div>
         <div className="flex-1 p-8">
@@ -150,11 +152,11 @@ export function TopicPage({ topicId }: Props) {
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex h-14 flex-shrink-0 items-center justify-center border-b-[4px] border-[color:var(--ink)] bg-[color:var(--ink)]">
           <span className="font-display text-lg uppercase text-[color:var(--paper)]">
-            Error
+            {t("common.error")}
           </span>
         </div>
         <div className="flex-1 p-8">
-          <P5Alert role="alert" variant="error" title="error">
+          <P5Alert role="alert" variant="error" title={t("common.error")}>
             {tree.errorMessage}
           </P5Alert>
         </div>
@@ -198,7 +200,7 @@ export function TopicPage({ topicId }: Props) {
       setClaimError(result.error.message);
       toast({
         variant: "error",
-        title: "claim",
+        title: t("topic.claimHost"),
         message: result.error.message,
       });
       if (
@@ -222,8 +224,8 @@ export function TopicPage({ topicId }: Props) {
     }
     toast({
       variant: "success",
-      title: "host",
-      message: "Host claimed for this topic.",
+      title: t("topics.host"),
+      message: t("topic.hostClaimedForTopic"),
     });
     invalidate();
   }
@@ -243,7 +245,7 @@ export function TopicPage({ topicId }: Props) {
             size="sm"
             variant="ghost"
           >
-            Report
+            {t("topic.report")}
           </P5Button>
         }
         claimButton={
@@ -254,7 +256,7 @@ export function TopicPage({ topicId }: Props) {
               variant="primary"
               disabled={isClaiming}
             >
-              {isClaiming ? "Claiming…" : "Claim Host"}
+              {isClaiming ? t("topic.claiming") : t("topic.claimHost")}
             </P5Button>
           ) : null
         }
@@ -265,7 +267,7 @@ export function TopicPage({ topicId }: Props) {
               size="sm"
               variant="ghost"
             >
-              Manage
+              {t("topic.manage")}
             </P5Button>
           ) : null
         }
@@ -285,11 +287,11 @@ export function TopicPage({ topicId }: Props) {
             {/* Reload Banner */}
             {reloadRequired && (
               <div className="mb-4">
-                <P5Alert title="reload_required" variant="warn" role="alert">
+                <P5Alert title={t("topic.reloadRequiredTitle")} variant="warn" role="alert">
                   <div className="flex items-center justify-between">
-                    <span>数据已更新，请刷新</span>
+                    <span>{t("topic.reloadRequiredMessage")}</span>
                     <P5Button onClick={() => window.location.reload()} size="sm">
-                      刷新
+                      {t("common.refresh")}
                     </P5Button>
                   </div>
                 </P5Alert>
@@ -299,7 +301,7 @@ export function TopicPage({ topicId }: Props) {
             {/* Claim Error */}
             {claimError && (
               <div className="mb-4">
-                <P5Alert role="alert" variant="error" title="claim">
+                <P5Alert role="alert" variant="error" title={t("topic.claimHost")}>
                   {claimError}
                 </P5Alert>
               </div>
@@ -308,7 +310,7 @@ export function TopicPage({ topicId }: Props) {
             {/* Ledger Error */}
             {ledgerError && (
               <div className="mb-4">
-                <P5Alert role="alert" variant="error" title="ledger">
+                <P5Alert role="alert" variant="error" title={t("topic.ledger")}>
                   {ledgerError}
                 </P5Alert>
               </div>
@@ -317,13 +319,13 @@ export function TopicPage({ topicId }: Props) {
             {/* ViewMode Tabs */}
             <div className="mb-4 flex items-center justify-between">
               <P5Tabs
-                ariaLabel="视图模式"
+                ariaLabel={t("topic.viewMode.label")}
                 value={viewMode}
                 onValueChange={setViewMode}
                 tabs={[
-                  { value: "focus", label: "Focus" },
-                  { value: "sunburst", label: "Overview" },
-                  { value: "god", label: "God View" },
+                  { value: "focus", label: t("topic.viewMode.focus") },
+                  { value: "sunburst", label: t("topic.viewMode.overview") },
+                  { value: "god", label: t("topic.viewMode.god") },
                 ]}
               />
             </div>

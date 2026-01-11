@@ -1,5 +1,9 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+
+import { createTranslator, defaultLocale } from "@/lib/i18n";
+
+const t = createTranslator(defaultLocale);
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
@@ -197,6 +201,31 @@ describe("TopicStage interactions", () => {
         });
       }
 
+      if (url.pathname === "/v1/arguments/arg-root") {
+        return jsonResponse({
+          ok: true,
+          status: 200,
+          json: {
+            argument: {
+              id: "arg-root",
+              topicId: TOPIC_ID,
+              parentId: null,
+              title: "Root",
+              body: "Root body",
+              bodyRich: null,
+              authorId: "66687aadf862bd77",
+              analysisStatus: "ready",
+              stanceScore: null,
+              totalVotes: 0,
+              totalCost: 0,
+              prunedAt: null,
+              createdAt: "2025-12-19T12:34:56.789Z",
+              updatedAt: "2025-12-19T12:34:56.789Z",
+            },
+          },
+        });
+      }
+
       throw new Error(`Unhandled request: ${url.toString()}`);
     }) as unknown as typeof fetch;
 
@@ -212,7 +241,230 @@ describe("TopicStage interactions", () => {
     expect(await screen.findByRole("heading", { name: "My Argument" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Blank" }));
-    expect(await screen.findByText("选择一个观点来探索")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Root" })).toBeInTheDocument();
+  });
+
+  it("can quote selected text into the reply editor", async () => {
+    const { TopicStage } = require("@/components/topics/TopicStage");
+
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(typeof input === "string" ? input : input.toString());
+
+      if (url.pathname === `/v1/topics/${TOPIC_ID}/ledger/me`) {
+        return jsonResponse({
+          ok: true,
+          status: 200,
+          json: {
+            topicId: TOPIC_ID,
+            pubkey: MY_PUBKEY_HEX,
+            balance: 100,
+            myTotalVotes: 0,
+            myTotalCost: 0,
+            lastInteractionAt: null,
+          },
+        });
+      }
+
+      if (url.pathname === `/v1/topics/${TOPIC_ID}/stakes/me`) {
+        return jsonResponse({
+          ok: true,
+          status: 200,
+          json: {
+            topicId: TOPIC_ID,
+            pubkey: MY_PUBKEY_HEX,
+            items: [],
+          },
+        });
+      }
+
+      if (url.pathname === "/v1/arguments/arg-1") {
+        return jsonResponse({
+          ok: true,
+          status: 200,
+          json: {
+            argument: {
+              id: "arg-1",
+              topicId: TOPIC_ID,
+              parentId: "arg-root",
+              title: "My Argument",
+              body: "My body",
+              bodyRich: null,
+              authorId: MY_AUTHOR_ID,
+              analysisStatus: "ready",
+              stanceScore: null,
+              totalVotes: 3,
+              totalCost: 9,
+              prunedAt: null,
+              createdAt: "2025-12-19T13:00:00.000Z",
+              updatedAt: "2025-12-19T13:00:00.000Z",
+            },
+          },
+        });
+      }
+
+      if (url.pathname === "/v1/arguments/arg-root") {
+        return jsonResponse({
+          ok: true,
+          status: 200,
+          json: {
+            argument: {
+              id: "arg-root",
+              topicId: TOPIC_ID,
+              parentId: null,
+              title: "Root",
+              body: "Root body",
+              bodyRich: null,
+              authorId: "66687aadf862bd77",
+              analysisStatus: "ready",
+              stanceScore: null,
+              totalVotes: 0,
+              totalCost: 0,
+              prunedAt: null,
+              createdAt: "2025-12-19T12:34:56.789Z",
+              updatedAt: "2025-12-19T12:34:56.789Z",
+            },
+          },
+        });
+      }
+
+      throw new Error(`Unhandled request: ${url.toString()}`);
+    }) as unknown as typeof fetch;
+
+    const user = userEvent.setup();
+    render(<TopicStage topicId={TOPIC_ID} />);
+
+    await screen.findByRole("heading", { name: "Topic 1" });
+    await user.click(screen.getByRole("button", { name: "Select arg-1" }));
+    await screen.findByRole("heading", { name: "My Argument" });
+
+    const readerParagraph = await screen.findByText("My body");
+
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(readerParagraph);
+    (range as any).getBoundingClientRect = () => ({
+      width: 12,
+      height: 12,
+      top: 100,
+      left: 100,
+      right: 112,
+      bottom: 112,
+      x: 100,
+      y: 100,
+      toJSON: () => ({}),
+    });
+
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    fireEvent(document, new Event("selectionchange"));
+
+    const quoteButton = await screen.findByTestId("selection-quote-button");
+    await user.click(quoteButton);
+
+    const reply = screen.getByLabelText(t("dialogue.replyLabel"));
+    expect(reply).toHaveTextContent("My body");
+  });
+
+  it("auto-expands the layout when crossing the divider", async () => {
+    const { TopicStage } = require("@/components/topics/TopicStage");
+
+    // JSDOM doesn't implement PointerEvent; React only wires `onPointerMove*` when it's available.
+    if (!(window as any).PointerEvent) {
+      (window as any).PointerEvent = MouseEvent as any;
+    }
+
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(typeof input === "string" ? input : input.toString());
+
+      if (url.pathname === `/v1/topics/${TOPIC_ID}/ledger/me`) {
+        return jsonResponse({
+          ok: true,
+          status: 200,
+          json: {
+            topicId: TOPIC_ID,
+            pubkey: MY_PUBKEY_HEX,
+            balance: 100,
+            myTotalVotes: 0,
+            myTotalCost: 0,
+            lastInteractionAt: null,
+          },
+        });
+      }
+
+      if (url.pathname === `/v1/topics/${TOPIC_ID}/stakes/me`) {
+        return jsonResponse({
+          ok: true,
+          status: 200,
+          json: {
+            topicId: TOPIC_ID,
+            pubkey: MY_PUBKEY_HEX,
+            items: [],
+          },
+        });
+      }
+
+      if (url.pathname === "/v1/arguments/arg-root") {
+        return jsonResponse({
+          ok: true,
+          status: 200,
+          json: {
+            argument: {
+              id: "arg-root",
+              topicId: TOPIC_ID,
+              parentId: null,
+              title: "Root",
+              body: "Root body",
+              bodyRich: null,
+              authorId: "66687aadf862bd77",
+              analysisStatus: "ready",
+              stanceScore: null,
+              totalVotes: 0,
+              totalCost: 0,
+              prunedAt: null,
+              createdAt: "2025-12-19T12:34:56.789Z",
+              updatedAt: "2025-12-19T12:34:56.789Z",
+            },
+          },
+        });
+      }
+
+      throw new Error(`Unhandled request: ${url.toString()}`);
+    }) as unknown as typeof fetch;
+
+    render(<TopicStage topicId={TOPIC_ID} />);
+
+    const topicHeading = await screen.findByRole("heading", { name: "Topic 1" });
+
+    const findAncestor = (node: HTMLElement, includes: string) => {
+      let current: HTMLElement | null = node;
+      while (current) {
+        if (typeof current.className === "string" && current.className.includes(includes)) return current;
+        current = current.parentElement;
+      }
+      return null;
+    };
+
+    const leftColumn = findAncestor(topicHeading, "md:border-r");
+    if (!leftColumn) {
+      throw new Error("Failed to locate left column container.");
+    }
+
+    // Simulate the divider at clientX=200.
+    (leftColumn as any).getBoundingClientRect = () => ({ right: 200 });
+
+    expect(leftColumn.className).toContain("md:w-[420px]");
+
+    // First move just records the side; no expansion yet.
+    fireEvent.pointerMove(leftColumn, { clientX: 100 });
+    expect(leftColumn.className).toContain("md:w-[420px]");
+
+    // Crossing to the right triggers expansion to the right layout.
+    fireEvent.pointerMove(leftColumn, { clientX: 300 });
+    expect(leftColumn.className).toContain("md:w-[300px]");
+
+    // Crossing back triggers left expansion.
+    fireEvent.pointerMove(leftColumn, { clientX: 100 });
+    expect(leftColumn.className).toContain("md:w-[55%]");
   });
 
   it("can create argument, vote, open report, and edit own comment", async () => {
@@ -272,6 +524,31 @@ describe("TopicStage interactions", () => {
               prunedAt: null,
               createdAt: "2025-12-19T13:00:00.000Z",
               updatedAt: "2025-12-19T13:00:00.000Z",
+            },
+          },
+        });
+      }
+
+      if (url.pathname === "/v1/arguments/arg-root") {
+        return jsonResponse({
+          ok: true,
+          status: 200,
+          json: {
+            argument: {
+              id: "arg-root",
+              topicId: TOPIC_ID,
+              parentId: null,
+              title: "Root",
+              body: "Root body",
+              bodyRich: null,
+              authorId: "66687aadf862bd77",
+              analysisStatus: "ready",
+              stanceScore: null,
+              totalVotes: 0,
+              totalCost: 0,
+              prunedAt: null,
+              createdAt: "2025-12-19T12:34:56.789Z",
+              updatedAt: "2025-12-19T12:34:56.789Z",
             },
           },
         });
@@ -369,11 +646,11 @@ describe("TopicStage interactions", () => {
     render(<TopicStage topicId={TOPIC_ID} />);
 
     await screen.findByRole("heading", { name: "Topic 1" });
-    await screen.findByLabelText("Reply");
+    await screen.findByLabelText(t("dialogue.replyLabel"));
 
-    const replyTitle = screen.getByPlaceholderText("标题（可选）");
-    const reply = screen.getByLabelText("Reply");
-    const submitNew = screen.getByRole("button", { name: "提交观点" });
+    const replyTitle = screen.getByPlaceholderText(t("stage.titleOptionalPlaceholder"));
+    const reply = screen.getByLabelText(t("dialogue.replyLabel"));
+    const submitNew = screen.getByRole("button", { name: t("stage.submit") });
 
     await waitFor(() => {
       expect(replyTitle).toBeEnabled();
@@ -401,27 +678,28 @@ describe("TopicStage interactions", () => {
     await user.click(screen.getByRole("button", { name: "Select arg-1" }));
     await screen.findByRole("heading", { name: "My Argument" });
 
-    await user.click(screen.getByLabelText("Increase votes"));
-    await user.click(screen.getByRole("button", { name: "确认投票" }));
+    await user.click(screen.getByLabelText(t("stage.increaseVotes")));
+    await user.click(screen.getByRole("button", { name: t("stage.confirmVotes") }));
     await waitFor(() => {
       expect(lastSetVotesBody).toEqual({ targetVotes: 1 });
     });
 
-    await user.click(screen.getByRole("button", { name: "查看 AI 分析报告" }));
+    await user.click(screen.getByRole("button", { name: t("stage.openReport") }));
     expect(await screen.findByRole("dialog", { name: "Consensus report" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Close report" }));
     expect(screen.queryByRole("dialog", { name: "Consensus report" })).not.toBeInTheDocument();
 
-    const editButton = await screen.findByRole("button", { name: "编辑" });
+    const editButton = await screen.findByRole("button", { name: t("stage.edit") });
     await waitFor(() => expect(editButton).toBeEnabled());
     await user.click(editButton);
 
-    const dialog = await screen.findByRole("dialog");
-    const titleInput = within(dialog).getByPlaceholderText("标题（可选）");
+    const titleInput = await screen.findByLabelText(t("stage.editTitleAria"));
     fireEvent.change(titleInput, { target: { value: "Updated title" } });
 
-    await user.click(within(dialog).getByRole("button", { name: "保存修改" }));
+    const saveButton = screen.getByRole("button", { name: t("stage.saveChanges") });
+    await waitFor(() => expect(saveButton).toBeEnabled());
+    await user.click(saveButton);
     await waitFor(() => {
       expect(lastEditArgumentBody).toEqual({
         title: "Updated title",
@@ -485,7 +763,7 @@ describe("TopicStage interactions", () => {
 
     render(<TopicStage topicId={TOPIC_ID} />);
 
-    const input = screen.getByPlaceholderText("你在此议题的名字");
+    const input = screen.getByTestId("topic-display-name-input");
     await waitFor(() => expect(input).toHaveValue("Matrix"));
 
     fireEvent.change(input, { target: { value: "Alice" } });

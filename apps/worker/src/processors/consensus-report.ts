@@ -19,8 +19,11 @@ import type { Redis } from 'ioredis';
 import { createHash } from 'node:crypto';
 
 const TOPIC_EVENTS_MAXLEN = 1000;
-const DEFAULT_MAX_ARGUMENTS = 30;
-const DEFAULT_PROMPT_VERSION = 'consensus-report/v2';
+const DEFAULT_MAX_ARGUMENTS = parsePositiveInt(process.env.REPORT_MAX_ARGUMENTS, 120);
+const DEFAULT_MAX_CHARS_PER_SOURCE = parsePositiveInt(process.env.REPORT_MAX_CHARS_PER_SOURCE, 1200);
+const DEFAULT_PROMPT_VERSION = process.env.REPORT_PROMPT_VERSION ?? 'consensus-report/v3-stage03';
+const REPORT_META_START = '<!-- REPORT_META_START -->';
+const REPORT_META_END = '<!-- REPORT_META_END -->';
 
 export type ConsensusReportTrigger = 'auto' | 'host';
 
@@ -36,11 +39,17 @@ export interface SelectedArgument {
 export interface ConsensusReportParamsSnapshot {
   promptVersion: string;
   trigger: ConsensusReportTrigger;
-  maxArguments: number;
-  ordering: 'totalVotes_desc_createdAt_asc_id_asc';
-  filters: {
-    pruned: false;
+  selection: {
+    strategy: 'root+topVotes+stratified';
+    maxSources: number;
+    maxCharsPerSource: number;
+    topVotesK: number;
+    minPerBucket: number;
+    stanceThresholds: { supportGte: number; opposeLte: number };
+    depthBins: Array<'1' | '2-3' | '4+'>;
   };
+  ordering: 'totalVotes_desc_createdAt_asc_id_asc';
+  filters: { pruned: false };
   selectedArgumentIds: string[];
 }
 
@@ -126,13 +135,22 @@ export async function processConsensusReport(
   let paramsSnapshot: ConsensusReportParamsSnapshot | null = null;
 
   try {
-    const { topicTitle, arguments: selectedArgs, selectedArgumentIds } =
-      await selectConsensusReportArguments(prisma, topicId, maxArguments);
+    const selectionDefaults = {
+      maxSources: maxArguments,
+      maxCharsPerSource: DEFAULT_MAX_CHARS_PER_SOURCE,
+      topVotesK: 40,
+      minPerBucket: 6,
+      stanceThresholds: { supportGte: 0.3, opposeLte: -0.3 },
+      depthBins: ['1', '2-3', '4+'] as const,
+    };
+
+    const { topicTitle, arguments: selectedArgs, selectedArgumentIds, selectionSummary, coverage } =
+      await selectConsensusReportArguments(prisma, topicId, selectionDefaults);
 
     paramsSnapshot = {
       promptVersion,
       trigger,
-      maxArguments,
+      selection: selectionSummary,
       ordering: 'totalVotes_desc_createdAt_asc_id_asc',
       filters: { pruned: false },
       selectedArgumentIds,
@@ -140,18 +158,43 @@ export async function processConsensusReport(
 
     const paramsJson = paramsSnapshot as unknown as Prisma.InputJsonValue;
 
-    const sources: ConsensusReportSourceForModel[] = selectedArgs.map((arg, index) => ({
-      label: `S${index + 1}`,
-      title: arg.title,
-      body: arg.body,
-      totalVotes: arg.totalVotes,
-    }));
+    const sources: ConsensusReportSourceForModel[] = selectedArgs.map((arg, index) => {
+      const trimmedBody = trimForModel(arg.body, selectionDefaults.maxCharsPerSource);
+      return {
+        label: `S${index + 1}`,
+        title: arg.title,
+        body: trimmedBody,
+        totalVotes: arg.totalVotes,
+      };
+    });
 
-    const sourceMap: Record<string, { argumentId: string; authorId: string }> = Object.fromEntries(
-      selectedArgs.map((arg, index) => [
-        `S${index + 1}`,
-        { argumentId: arg.id, authorId: deriveAuthorId(arg.authorPubkey) },
-      ]),
+    const sourceMap: Record<
+      string,
+      {
+        argumentId: string;
+        authorId: string;
+        title: string | null;
+        totalVotes: number;
+        excerpt: string;
+        depth: number | null;
+        stance: -1 | 0 | 1;
+      }
+    > = Object.fromEntries(
+      selectedArgs.map((arg, index) => {
+        const label = `S${index + 1}`;
+        return [
+          label,
+          {
+            argumentId: arg.id,
+            authorId: deriveAuthorId(arg.authorPubkey),
+            title: arg.title,
+            totalVotes: arg.totalVotes,
+            excerpt: toExcerpt(arg.body, 240),
+            depth: arg.depth,
+            stance: arg.stance,
+          },
+        ];
+      }),
     );
 
     const { contentMd, model } = await provider.generate({
@@ -164,15 +207,23 @@ export async function processConsensusReport(
       throw new Error('Provider returned empty contentMd');
     }
 
+    const extractedMeta = extractReportMetaBlock(contentMd);
+    const reportMd = extractedMeta.contentMd;
+    const providerMeta = extractedMeta.meta;
+
     await prisma.consensusReport.update({
       where: { id: reportId },
       data: {
         status: 'ready',
-        contentMd,
+        contentMd: reportMd,
         model,
         promptVersion,
         params: paramsJson,
-        metadata: { sources: sourceMap },
+        metadata: {
+          ...(providerMeta ?? {}),
+          coverage,
+          sources: sourceMap,
+        },
         computedAt: startedAt,
       },
     });
@@ -229,14 +280,87 @@ function deriveAuthorId(pubkey: Uint8Array): string {
   return createHash('sha256').update(pubkey).digest('hex').slice(0, 16);
 }
 
+function parsePositiveInt(value: string | undefined, fallback: number): number {
+  if (!value) return fallback;
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return parsed;
+}
+
+function trimForModel(text: string, maxChars: number): string {
+  const normalized = text.trim();
+  if (normalized.length <= maxChars) return normalized;
+  return `${normalized.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
+}
+
+function toExcerpt(text: string, maxChars: number): string {
+  const normalized = text.trim().replaceAll('\n', ' ');
+  if (normalized.length <= maxChars) return normalized;
+  return `${normalized.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
+}
+
+function extractReportMetaBlock(contentMd: string): { contentMd: string; meta: Record<string, unknown> | null } {
+  const startIndex = contentMd.indexOf(REPORT_META_START);
+  if (startIndex < 0) return { contentMd, meta: null };
+  const endIndex = contentMd.indexOf(REPORT_META_END, startIndex + REPORT_META_START.length);
+  if (endIndex < 0) return { contentMd, meta: null };
+
+  const before = contentMd.slice(0, startIndex).trimEnd();
+  const after = contentMd.slice(endIndex + REPORT_META_END.length).trimStart();
+  const between = contentMd.slice(startIndex + REPORT_META_START.length, endIndex);
+
+  const jsonMatch = between.match(/```json\s*([\s\S]*?)\s*```/i);
+  if (!jsonMatch) {
+    const joined = [before, after].filter(Boolean).join('\n\n');
+    return { contentMd: joined, meta: null };
+  }
+
+  try {
+    const parsed = JSON.parse(jsonMatch[1]) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      const joined = [before, after].filter(Boolean).join('\n\n');
+      return { contentMd: joined, meta: null };
+    }
+    const joined = [before, after].filter(Boolean).join('\n\n');
+    return { contentMd: joined, meta: parsed as Record<string, unknown> };
+  } catch {
+    const joined = [before, after].filter(Boolean).join('\n\n');
+    return { contentMd: joined, meta: null };
+  }
+}
+
+function stanceBucket(args: { analysisStatus: string; stanceScore: number | null }, thresholds: {
+  supportGte: number;
+  opposeLte: number;
+}): -1 | 0 | 1 {
+  if (args.analysisStatus !== 'ready' || args.stanceScore === null) return 0;
+  if (args.stanceScore <= thresholds.opposeLte) return -1;
+  if (args.stanceScore >= thresholds.supportGte) return 1;
+  return 0;
+}
+
 async function selectConsensusReportArguments(
   prisma: PrismaClient,
   topicId: string,
-  maxArguments: number,
+  selection: {
+    maxSources: number;
+    maxCharsPerSource: number;
+    topVotesK: number;
+    minPerBucket: number;
+    stanceThresholds: { supportGte: number; opposeLte: number };
+    depthBins: Array<'1' | '2-3' | '4+'>;
+  },
 ): Promise<{
   topicTitle: string;
-  arguments: SelectedArgument[];
+  arguments: Array<SelectedArgument & { depth: number | null; stance: -1 | 0 | 1 }>;
   selectedArgumentIds: string[];
+  selectionSummary: ConsensusReportParamsSnapshot['selection'];
+  coverage: {
+    argumentsTotal: number;
+    argumentsIncluded: number;
+    votesTotal: number;
+    votesIncluded: number;
+  };
 }> {
   const topic = await prisma.topic.findUnique({
     where: { id: topicId },
@@ -246,9 +370,54 @@ async function selectConsensusReportArguments(
     },
   });
 
-    if (!topic || !topic.rootArgumentId) {
-      throw new Error('Topic not found');
+  if (!topic || !topic.rootArgumentId) {
+    throw new Error('Topic not found');
+  }
+
+  const [agg, candidates] = await Promise.all([
+    prisma.argument.aggregate({
+      where: { topicId, prunedAt: null },
+      _count: { _all: true },
+      _sum: { totalVotes: true },
+    }),
+    prisma.argument.findMany({
+      where: { topicId, prunedAt: null },
+      select: {
+        id: true,
+        parentId: true,
+        totalVotes: true,
+        createdAt: true,
+        analysisStatus: true,
+        stanceScore: true,
+      },
+    }),
+  ]);
+
+  const argumentsTotal = agg._count?._all ?? 0;
+  const votesTotal = agg._sum?.totalVotes ?? 0;
+
+  const byParent = new Map<string, string[]>();
+  for (const arg of candidates) {
+    if (!arg.parentId) continue;
+    const list = byParent.get(arg.parentId) ?? [];
+    list.push(arg.id);
+    byParent.set(arg.parentId, list);
+  }
+
+  const depthById = new Map<string, number>();
+  depthById.set(topic.rootArgumentId, 0);
+  const queue: string[] = [topic.rootArgumentId];
+  while (queue.length) {
+    const current = queue.shift()!;
+    const currentDepth = depthById.get(current);
+    if (currentDepth === undefined) continue;
+    const children = byParent.get(current) ?? [];
+    for (const childId of children) {
+      if (depthById.has(childId)) continue;
+      depthById.set(childId, currentDepth + 1);
+      queue.push(childId);
     }
+  }
 
   const root = await prisma.argument.findUnique({
     where: { topicId_id: { topicId, id: topic.rootArgumentId } },
@@ -259,6 +428,8 @@ async function selectConsensusReportArguments(
       totalVotes: true,
       createdAt: true,
       authorPubkey: true,
+      analysisStatus: true,
+      stanceScore: true,
     },
   });
 
@@ -266,43 +437,131 @@ async function selectConsensusReportArguments(
     throw new Error('Root argument not found');
   }
 
-  const remaining = Math.max(0, maxArguments - 1);
+  const maxSources = Math.max(1, selection.maxSources);
+  const topVotesK = Math.max(0, selection.topVotesK);
+  const minPerBucket = Math.max(0, selection.minPerBucket);
 
-  const others = remaining
-    ? await prisma.argument.findMany({
-        where: {
-          topicId,
-          prunedAt: null,
-          NOT: { id: root.id },
-        },
-        orderBy: [{ totalVotes: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
-        take: remaining,
-        select: {
-          id: true,
-          title: true,
-          body: true,
-          totalVotes: true,
-          createdAt: true,
-          authorPubkey: true,
-        },
-      })
-    : [];
+  const sortedCandidates = candidates
+    .filter((c) => c.id !== root.id)
+    .slice()
+    .sort((a, b) => {
+      if (b.totalVotes !== a.totalVotes) return b.totalVotes - a.totalVotes;
+      const timeDiff = a.createdAt.getTime() - b.createdAt.getTime();
+      if (timeDiff !== 0) return timeDiff;
+      return a.id.localeCompare(b.id);
+    });
 
-  const selected = [root, ...others].map((arg) => ({
-    id: arg.id,
-    title: arg.title,
-    body: arg.body,
-    totalVotes: arg.totalVotes,
-    createdAt: arg.createdAt,
-    authorPubkey: arg.authorPubkey,
-  }));
+  const selectedIds = new Set<string>();
+  selectedIds.add(root.id);
+
+  for (const c of sortedCandidates.slice(0, topVotesK)) {
+    if (selectedIds.size >= maxSources) break;
+    selectedIds.add(c.id);
+  }
+
+  type DepthBin = '1' | '2-3' | '4+';
+  function toDepthBin(depth: number | null): DepthBin {
+    if (depth === 1) return '1';
+    if (depth === 2 || depth === 3) return '2-3';
+    return '4+';
+  }
+
+  const buckets = new Map<string, typeof sortedCandidates>();
+  for (const c of sortedCandidates) {
+    if (selectedIds.has(c.id)) continue;
+    if (selectedIds.size >= maxSources) break;
+    const depth = depthById.get(c.id) ?? null;
+    const bin = toDepthBin(depth);
+    if (!selection.depthBins.includes(bin)) continue;
+    const stance = stanceBucket({ analysisStatus: c.analysisStatus, stanceScore: c.stanceScore }, selection.stanceThresholds);
+    const key = `${stance}:${bin}`;
+    const list = buckets.get(key) ?? [];
+    list.push(c);
+    buckets.set(key, list);
+  }
+
+  const stanceOrder: Array<-1 | 0 | 1> = [-1, 0, 1];
+  for (const stance of stanceOrder) {
+    for (const bin of selection.depthBins) {
+      if (selectedIds.size >= maxSources) break;
+      const key = `${stance}:${bin}`;
+      const list = buckets.get(key);
+      if (!list || list.length < minPerBucket) continue;
+      for (const c of list.slice(0, minPerBucket)) {
+        if (selectedIds.size >= maxSources) break;
+        selectedIds.add(c.id);
+      }
+    }
+  }
+
+  for (const c of sortedCandidates) {
+    if (selectedIds.size >= maxSources) break;
+    if (selectedIds.has(c.id)) continue;
+    selectedIds.add(c.id);
+  }
+
+  const orderedSelectedIds: string[] = [root.id, ...Array.from(selectedIds).filter((id) => id !== root.id)];
+  const selectedDetail = await prisma.argument.findMany({
+    where: { topicId, prunedAt: null, id: { in: orderedSelectedIds } },
+    select: {
+      id: true,
+      title: true,
+      body: true,
+      totalVotes: true,
+      createdAt: true,
+      authorPubkey: true,
+      analysisStatus: true,
+      stanceScore: true,
+    },
+  });
+
+  const detailById = new Map(selectedDetail.map((d) => [d.id, d] as const));
+
+  const selected = orderedSelectedIds
+    .map((id) => detailById.get(id))
+    .filter((d): d is NonNullable<typeof d> => Boolean(d))
+    .map((arg) => {
+      const depth = depthById.get(arg.id) ?? null;
+      const stance = stanceBucket(
+        { analysisStatus: arg.analysisStatus, stanceScore: arg.stanceScore ?? null },
+        selection.stanceThresholds,
+      );
+      return {
+        id: arg.id,
+        title: arg.title,
+        body: arg.body,
+        totalVotes: arg.totalVotes,
+        createdAt: arg.createdAt,
+        authorPubkey: arg.authorPubkey,
+        depth,
+        stance,
+      };
+    });
 
   const selectedArgumentIds = selected.map((arg) => arg.id);
+  const votesIncluded = selected.reduce((sum, arg) => sum + arg.totalVotes, 0);
+
+  const selectionSummary: ConsensusReportParamsSnapshot['selection'] = {
+    strategy: 'root+topVotes+stratified',
+    maxSources,
+    maxCharsPerSource: selection.maxCharsPerSource,
+    topVotesK: Math.min(topVotesK, Math.max(0, maxSources - 1)),
+    minPerBucket,
+    stanceThresholds: selection.stanceThresholds,
+    depthBins: [...selection.depthBins],
+  };
 
   return {
     topicTitle: topic.title,
     arguments: selected,
     selectedArgumentIds,
+    selectionSummary,
+    coverage: {
+      argumentsTotal,
+      argumentsIncluded: selected.length,
+      votesTotal,
+      votesIncluded,
+    },
   };
 }
 

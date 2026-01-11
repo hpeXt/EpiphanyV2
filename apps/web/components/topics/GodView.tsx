@@ -9,6 +9,7 @@ import { useClusterMap } from "@/components/topics/hooks/useClusterMap";
 import { apiClient } from "@/lib/apiClient";
 import { P5Alert } from "@/components/ui/P5Alert";
 import { P5Panel } from "@/components/ui/P5Panel";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 type Props = {
   topicId: string;
@@ -45,15 +46,16 @@ const COLORS = {
 } as const;
 
 export function GodView({ topicId, refreshToken = 0 }: Props) {
+  const { t } = useI18n();
   const clusterMap = useClusterMap(topicId, refreshToken);
 
   if (clusterMap.status === "loading") {
-    return <p className="text-sm text-[color:var(--ink)]/80">Loading semantic map…</p>;
+    return <p className="text-sm text-[color:var(--ink)]/80">{t("godView.loading")}</p>;
   }
 
   if (clusterMap.status === "error") {
     return (
-      <P5Alert role="alert" variant="error" title="error">
+      <P5Alert role="alert" variant="error" title={t("common.error")}>
         {clusterMap.errorMessage}
       </P5Alert>
     );
@@ -61,8 +63,8 @@ export function GodView({ topicId, refreshToken = 0 }: Props) {
 
   if (clusterMap.data.points.length === 0) {
     return (
-      <P5Alert role="status" variant="info" title="god view">
-        No cluster map available yet.
+      <P5Alert role="status" variant="info" title={t("topic.viewMode.god")}>
+        {t("godView.empty")}
       </P5Alert>
     );
   }
@@ -71,6 +73,7 @@ export function GodView({ topicId, refreshToken = 0 }: Props) {
 }
 
 function ClusterMapCanvas({ map }: { map: ClusterMap }) {
+  const { t } = useI18n();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [viewport, setViewport] = useState<Viewport>({ zoom: 1, offsetX: 0, offsetY: 0 });
   const [dragState, setDragState] = useState<DragState | null>(null);
@@ -341,12 +344,10 @@ function ClusterMapCanvas({ map }: { map: ClusterMap }) {
       header={
         <div className="flex flex-wrap items-center justify-between gap-3 bg-[color:var(--ink)] px-4 py-3 text-[color:var(--paper)]">
           <h2 className="font-mono text-sm font-semibold uppercase tracking-wide">
-            God View
+            {t("topic.viewMode.god")}
           </h2>
           <div className="text-xs text-white/80">
-            <span className="font-mono">Wheel</span> to zoom ·{" "}
-            <span className="font-mono">Drag</span> to pan ·{" "}
-            <span className="font-mono">Hover</span> for details
+            {t("godView.instructions")}
           </div>
         </div>
       }
@@ -388,8 +389,10 @@ function GodViewCallingCard(props: {
   x: number;
   y: number;
 }) {
+  const { t } = useI18n();
   const votes = weightToVotes(props.point.weight);
-  const stanceLabel = stanceLabelFromBucket(props.point.stance);
+  const stance = stanceKeyFromBucket(props.point.stance);
+  const stanceLabel = t(`node.stance.${stance}`);
 
   const baseX = Number.isFinite(props.x) ? props.x : 0;
   const baseY = Number.isFinite(props.y) ? props.y : 0;
@@ -418,7 +421,7 @@ function GodViewCallingCard(props: {
           data-testid="godview-calling-card-title"
           className="font-mono text-xs uppercase tracking-wide"
         >
-          {props.point.argumentId}
+          {t("godView.nodeId", { id: shortId(props.point.argumentId) })}
         </div>
       </div>
 
@@ -434,22 +437,22 @@ function GodViewCallingCard(props: {
           ) : props.argument ? (
             <p className="whitespace-pre-wrap text-zinc-800">{props.argument.body}</p>
           ) : (
-            <p className="text-zinc-500">Loading…</p>
+            <p className="text-zinc-500">{t("common.loading")}</p>
           )}
         </div>
 
         <dl className="grid grid-cols-[90px_1fr] gap-x-2 gap-y-1 font-mono">
-          <dt className="text-zinc-500">votes</dt>
+          <dt className="text-zinc-500">{t("godView.clusterIdLabel")}</dt>
+          <dd data-testid="godview-calling-card-meta-cluster" className="text-zinc-900">
+            {props.point.clusterId}
+          </dd>
+          <dt className="text-zinc-500">{t("dialogue.votes")}</dt>
           <dd data-testid="godview-calling-card-meta-votes" className="text-zinc-900">
             {votes}
           </dd>
-          <dt className="text-zinc-500">stance</dt>
+          <dt className="text-zinc-500">{t("godView.stanceLabel")}</dt>
           <dd data-testid="godview-calling-card-meta-stance" className="text-zinc-900">
             {stanceLabel}
-          </dd>
-          <dt className="text-zinc-500">cluster</dt>
-          <dd data-testid="godview-calling-card-meta-cluster" className="text-zinc-900">
-            {props.point.clusterId}
           </dd>
         </dl>
       </div>
@@ -593,10 +596,14 @@ function stanceStroke(stance: -1 | 0 | 1): string {
   return COLORS.neutral;
 }
 
-function stanceLabelFromBucket(stance: -1 | 0 | 1): string {
-  if (stance === 1) return "PRO";
-  if (stance === -1) return "CON";
-  return "NEUTRAL";
+function stanceKeyFromBucket(stance: -1 | 0 | 1): "pro" | "con" | "neutral" {
+  if (stance === 1) return "pro";
+  if (stance === -1) return "con";
+  return "neutral";
+}
+
+function shortId(id: string): string {
+  return id.length > 12 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id;
 }
 
 function clusterFill(index: number): string {

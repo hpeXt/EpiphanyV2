@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { useI18n } from "@/components/i18n/I18nProvider";
+
 function cls(active: boolean) {
   return [
     "inline-flex items-center justify-center",
@@ -21,6 +23,7 @@ function isTopicsPath(pathname: string): boolean {
 
 export function P5TopNav() {
   const pathname = usePathname() ?? "";
+  const { locale, setLocale, t } = useI18n();
 
   const topicsActive = isTopicsPath(pathname);
   const myActive = pathname === "/my" || pathname.startsWith("/my/");
@@ -32,15 +35,41 @@ export function P5TopNav() {
         aria-current={topicsActive ? "page" : undefined}
         className={cls(topicsActive)}
       >
-        Topics
+        {t("nav.topics")}
       </Link>
       <Link
         href="/my"
         aria-current={myActive ? "page" : undefined}
         className={cls(myActive)}
       >
-        My
+        {t("nav.my")}
       </Link>
+
+      <div
+        className="ml-1 flex items-center gap-1 rounded-md border border-border/60 bg-background p-1"
+        aria-label={t("nav.language")}
+      >
+        <button
+          type="button"
+          className={cls(locale === "zh")}
+          aria-pressed={locale === "zh"}
+          onClick={() => {
+            if (locale !== "zh") setLocale("zh");
+          }}
+        >
+          {t("nav.zh")}
+        </button>
+        <button
+          type="button"
+          className={cls(locale === "en")}
+          aria-pressed={locale === "en"}
+          onClick={() => {
+            if (locale !== "en") setLocale("en");
+          }}
+        >
+          {t("nav.en")}
+        </button>
+      </div>
     </nav>
   );
 }

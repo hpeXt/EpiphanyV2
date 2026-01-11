@@ -9,6 +9,7 @@ import { deriveTopicKeypairFromMasterSeedHex } from "@/lib/identity";
 import { createLocalStorageKeyStore } from "@/lib/signing";
 import { P5Button, P5LinkButton } from "@/components/ui/P5Button";
 import { useP5Toast } from "@/components/ui/P5ToastProvider";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 type Props = {
   topicId: string;
@@ -18,6 +19,7 @@ type Props = {
 
 export function TopicHostControls({ topicId, ownerPubkey, size = "sm" }: Props) {
   const router = useRouter();
+  const { t } = useI18n();
   const { toast } = useP5Toast();
 
   const keyStore = useMemo(() => createLocalStorageKeyStore(), []);
@@ -83,7 +85,7 @@ export function TopicHostControls({ topicId, ownerPubkey, size = "sm" }: Props) 
     setIsClaiming(false);
 
     if (!result.ok) {
-      toast({ variant: "error", title: "claim", message: result.error.message });
+      toast({ variant: "error", title: t("topic.claimHost"), message: result.error.message });
       if (
         result.error.kind === "http" &&
         (result.error.code === "CLAIM_TOKEN_EXPIRED" || result.error.code === "CLAIM_TOKEN_INVALID")
@@ -106,7 +108,7 @@ export function TopicHostControls({ topicId, ownerPubkey, size = "sm" }: Props) 
 
     setClaimInfo(null);
     setEffectiveOwnerPubkey(myPubkeyHex);
-    toast({ variant: "success", title: "host", message: "Host claimed." });
+    toast({ variant: "success", title: t("topics.host"), message: t("topic.hostClaimed") });
     router.refresh?.();
   }
 
@@ -116,7 +118,7 @@ export function TopicHostControls({ topicId, ownerPubkey, size = "sm" }: Props) 
     <div className="flex flex-wrap items-center justify-end gap-2">
       {isOwner ? (
         <P5LinkButton href={`/topics/${topicId}?manage=1`} variant="ghost" size={size}>
-          Manage
+          {t("topic.manage")}
         </P5LinkButton>
       ) : null}
       {canClaim ? (
@@ -127,10 +129,9 @@ export function TopicHostControls({ topicId, ownerPubkey, size = "sm" }: Props) 
           variant="primary"
           size={size}
         >
-          {isClaiming ? "Claiming…" : "Claim Host"}
+          {isClaiming ? t("topic.claiming") : t("topic.claimHost")}
         </P5Button>
       ) : null}
     </div>
   );
 }
-

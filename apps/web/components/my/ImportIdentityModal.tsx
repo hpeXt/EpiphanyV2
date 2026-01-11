@@ -4,10 +4,9 @@ import { useCallback, useState } from "react";
 import { P5Modal } from "@/components/ui/P5Modal";
 import { P5Button } from "@/components/ui/P5Button";
 import { P5Textarea } from "@/components/ui/P5Textarea";
+import { useI18n } from "@/components/i18n/I18nProvider";
 import {
   validateMnemonic,
-  mnemonicToMasterSeedHex,
-  deriveTopicKeypairFromMasterSeedHex,
 } from "@/lib/identity";
 
 type Props = {
@@ -17,6 +16,7 @@ type Props = {
 };
 
 export function ImportIdentityModal({ open, onClose, onImport }: Props) {
+  const { t } = useI18n();
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
 
@@ -24,25 +24,9 @@ export function ImportIdentityModal({ open, onClose, onImport }: Props) {
   const isValidFormat = words.length === 12;
   const isValidMnemonic = isValidFormat && validateMnemonic(input.trim());
 
-  // 预览地址
-  const previewAddress = isValidMnemonic
-    ? (() => {
-        try {
-          const seedHex = mnemonicToMasterSeedHex(input.trim());
-          const { pubkeyHex } = deriveTopicKeypairFromMasterSeedHex(
-            seedHex,
-            "preview"
-          );
-          return `${pubkeyHex.slice(0, 8)}...${pubkeyHex.slice(-8)}`;
-        } catch {
-          return null;
-        }
-      })()
-    : null;
-
   const handleImport = useCallback(() => {
     if (!isValidMnemonic) {
-      setError("无效的助记词");
+      setError(t("identity.invalidMnemonic"));
       return;
     }
 
@@ -50,24 +34,24 @@ export function ImportIdentityModal({ open, onClose, onImport }: Props) {
     setInput("");
     setError("");
     onClose();
-  }, [input, isValidMnemonic, onImport, onClose]);
+  }, [input, isValidMnemonic, onClose, onImport, t]);
 
   return (
     <P5Modal
       open={open}
       onClose={onClose}
-      title="IMPORT IDENTITY"
+      title={t("importIdentityModal.title")}
       footer={
         <>
           <P5Button variant="ghost" onClick={onClose}>
-            取消
+            {t("common.cancel")}
           </P5Button>
           <P5Button
             variant="primary"
             onClick={handleImport}
             disabled={!isValidMnemonic}
           >
-            导入身份
+            {t("importIdentityModal.confirm")}
           </P5Button>
         </>
       }
@@ -75,7 +59,7 @@ export function ImportIdentityModal({ open, onClose, onImport }: Props) {
       <div className="space-y-4">
         <div>
           <label className="mb-2 block font-display text-sm uppercase tracking-wide">
-            输入 12 个助记词（用空格分隔）
+            {t("importIdentityModal.label")}
           </label>
           <P5Textarea
             value={input}
@@ -83,7 +67,7 @@ export function ImportIdentityModal({ open, onClose, onImport }: Props) {
               setInput(e.target.value);
               setError("");
             }}
-            placeholder="apple banana cherry ..."
+            placeholder={t("importIdentityModal.placeholder")}
             rows={4}
           />
         </div>
@@ -99,7 +83,9 @@ export function ImportIdentityModal({ open, onClose, onImport }: Props) {
                     isValidFormat ? "" : "text-[color:var(--rebel-red)]"
                   }
                 >
-                  格式{isValidFormat ? "正确" : "错误"} ({words.length}/12 个词)
+                  {isValidFormat
+                    ? t("importIdentityModal.formatOk", { count: words.length })
+                    : t("importIdentityModal.formatBad", { count: words.length })}
                 </span>
               </div>
               {isValidFormat && (
@@ -110,14 +96,10 @@ export function ImportIdentityModal({ open, onClose, onImport }: Props) {
                       isValidMnemonic ? "" : "text-[color:var(--rebel-red)]"
                     }
                   >
-                    校验和{isValidMnemonic ? "有效" : "无效"}
+                    {isValidMnemonic
+                      ? t("importIdentityModal.checksumOk")
+                      : t("importIdentityModal.checksumBad")}
                   </span>
-                </div>
-              )}
-              {previewAddress && (
-                <div className="flex items-center gap-2 font-mono text-xs">
-                  <span>派生地址:</span>
-                  <span>{previewAddress}</span>
                 </div>
               )}
             </div>
@@ -134,10 +116,10 @@ export function ImportIdentityModal({ open, onClose, onImport }: Props) {
             <span className="text-lg">⚠</span>
             <div>
               <p className="font-medium text-[color:var(--ink)]">
-                导入将覆盖当前设备上的身份
+                {t("importIdentityModal.warningTitle")}
               </p>
               <p className="mt-1 text-[color:var(--ink)]/70">
-                当前身份的投票记录将无法访问（除非再次导入）
+                {t("importIdentityModal.warningBody")}
               </p>
             </div>
           </div>

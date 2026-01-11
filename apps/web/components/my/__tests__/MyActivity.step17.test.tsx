@@ -48,7 +48,7 @@ describe("MyActivity Component (Step 17)", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText(/no topics visited yet|暂无参与记录/i),
+          screen.getByText(/no activity yet|no topics visited yet|暂无参与记录/i),
         ).toBeInTheDocument();
       });
     });
@@ -627,7 +627,7 @@ describe("MyActivity Component (Step 17)", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText(/set up.*identity|身份尚未初始化/i),
+          screen.getByText(/identity is not initialized|set up.*identity|身份尚未初始化/i),
         ).toBeInTheDocument();
       });
     });

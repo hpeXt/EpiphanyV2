@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 import type { ConsensusReport } from "@epiphany/shared-contracts";
@@ -8,6 +8,7 @@ import type { ConsensusReport } from "@epiphany/shared-contracts";
 import { apiClient } from "@/lib/apiClient";
 import { P5Alert } from "@/components/ui/P5Alert";
 import { P5Button } from "@/components/ui/P5Button";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 type Props = {
   topicId: string;
@@ -29,6 +30,7 @@ export function ConsensusReportModal({
   onInvalidate,
   onClose,
 }: Props) {
+  const { t } = useI18n();
   const [state, setState] = useState<LoadState>({
     status: "loading",
     errorMessage: "",
@@ -60,11 +62,12 @@ export function ConsensusReportModal({
   const report = state.status === "success" ? state.report : null;
 
   const title = useMemo(() => {
-    if (!report) return "Consensus report";
-    if (report.status === "ready") return "Consensus report";
-    if (report.status === "generating") return "Consensus report (generating)";
-    return "Consensus report (failed)";
-  }, [report]);
+    const base = t("report.consensusReport");
+    if (!report) return base;
+    if (report.status === "ready") return base;
+    if (report.status === "generating") return `${base} (${t("report.generating")})`;
+    return `${base} (${t("report.failed")})`;
+  }, [report, t]);
 
   async function triggerGeneration() {
     if (!isOwner) return;
@@ -88,7 +91,7 @@ export function ConsensusReportModal({
   return (
     <div
       role="dialog"
-      aria-label="Consensus report"
+      aria-label={t("report.consensusReport")}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
     >
       <div
@@ -106,17 +109,17 @@ export function ConsensusReportModal({
             size="sm"
             className="border-[color:var(--paper)] text-[color:var(--paper)] shadow-none hover:bg-white/10"
           >
-            Close
+            {t("common.close")}
           </P5Button>
         </div>
 
         <div className="max-h-[80vh] overflow-y-auto px-5 py-4">
           {state.status === "loading" ? (
-            <p className="text-sm text-[color:var(--ink)]/80">Loading report…</p>
+            <p className="text-sm text-[color:var(--ink)]/80">{t("report.loadingReport")}</p>
           ) : null}
 
           {state.status === "error" ? (
-            <P5Alert role="alert" variant="error" title="error">
+            <P5Alert role="alert" variant="error" title={t("common.error")}>
               {state.errorMessage}
             </P5Alert>
           ) : null}
@@ -124,16 +127,16 @@ export function ConsensusReportModal({
           {state.status === "success" ? (
             <div className="space-y-4">
               {!report ? (
-                <p className="text-sm text-[color:var(--ink)]/90">No report yet.</p>
+                <p className="text-sm text-[color:var(--ink)]/90">{t("report.noReportYet")}</p>
               ) : report.status === "generating" ? (
-                <p className="text-sm text-[color:var(--ink)]/90">Generating report…</p>
+                <p className="text-sm text-[color:var(--ink)]/90">{t("report.generatingReport")}</p>
               ) : report.status === "failed" ? (
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-[color:var(--rebel-red)]">
-                    Report failed
+                    {t("report.reportFailedTitle")}
                   </p>
                   <p className="text-sm text-[color:var(--rebel-red)]">
-                    {(report.metadata as any)?.error?.message ?? "Unknown error"}
+                    {(report.metadata as any)?.error?.message ?? t("report.unknownError")}
                   </p>
                 </div>
               ) : (
@@ -146,7 +149,7 @@ export function ConsensusReportModal({
               )}
 
               {triggerError ? (
-                <P5Alert role="alert" variant="error" title="error">
+                <P5Alert role="alert" variant="error" title={t("common.error")}>
                   {triggerError}
                 </P5Alert>
               ) : null}
@@ -159,7 +162,7 @@ export function ConsensusReportModal({
                     disabled={isTriggering || report?.status === "generating"}
                     variant="primary"
                   >
-                    {isTriggering ? "Generating…" : "Generate report"}
+                    {isTriggering ? t("report.generatingAction") : t("report.generateReport")}
                   </P5Button>
                 </div>
               ) : null}
@@ -214,6 +217,7 @@ function Markdown(props: {
   sourceMap: ReportSourceMap | null;
   onRequestClose: () => void;
 }) {
+  const { t } = useI18n();
   const router = useRouter();
 
   const blocks = useMemo(() => parseMarkdown(props.content), [props.content]);
@@ -226,7 +230,7 @@ function Markdown(props: {
   }, [citationLabels]);
 
   const renderInline = useCallback((text: string) => {
-    const parts: Array<string | JSX.Element> = [];
+    const parts: ReactNode[] = [];
     const regex = /\[(S\d+)\]/g;
 
     let lastIndex = 0;
@@ -239,19 +243,19 @@ function Markdown(props: {
       }
 
       const label = match[1];
-      const index = labelToIndex.get(label);
-      if (!index) {
-        parts.push(match[0]);
-      } else {
-        parts.push(
-          <sup key={`${label}-${start}`} className="ml-0.5 align-super text-[0.75em]">
-            <a
-              href={`#footnote-${label}`}
-              aria-label={`Footnote ${index}`}
-              className="font-mono text-[color:var(--ink)] underline decoration-dotted underline-offset-2"
-            >
-              {index}
-            </a>
+              const index = labelToIndex.get(label);
+              if (!index) {
+                parts.push(match[0]);
+              } else {
+                parts.push(
+                  <sup key={`${label}-${start}`} className="ml-0.5 align-super text-[0.75em]">
+                    <a
+                      href={`#footnote-${label}`}
+                      aria-label={t("report.footnoteAria", { index })}
+                      className="font-mono text-[color:var(--ink)] underline decoration-dotted underline-offset-2"
+                    >
+                      {index}
+                    </a>
           </sup>,
         );
       }
@@ -264,7 +268,7 @@ function Markdown(props: {
     }
 
     return parts;
-  }, [labelToIndex]);
+  }, [labelToIndex, t]);
 
   return (
     <article className="prose prose-zinc max-w-none">
@@ -303,7 +307,7 @@ function Markdown(props: {
       {citationLabels.length ? (
         <section className="mt-8">
           <hr className="my-6 border-zinc-200" />
-          <h3 className="text-zinc-900">Footnotes</h3>
+          <h3 className="text-zinc-900">{t("report.footnotes")}</h3>
           <ol className="space-y-2 pl-5">
             {citationLabels.map((label) => {
               const index = labelToIndex.get(label);
@@ -315,6 +319,7 @@ function Markdown(props: {
               return (
                 <li key={label} id={`footnote-${label}`} className="break-all">
                   <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-xs text-zinc-600">{label}</span>
                     {href ? (
                       <button
                         type="button"
@@ -324,20 +329,10 @@ function Markdown(props: {
                           router.push(href);
                         }}
                       >
-                        Open
+                        {t("common.open")}
                       </button>
                     ) : (
-                      <span className="font-mono text-xs text-zinc-600">{label}</span>
-                    )}
-
-                    {source ? (
-                      <span className="font-mono text-xs text-zinc-700">
-                        topic:{props.topicId} · author:{source.authorId} · argument:{source.argumentId}
-                      </span>
-                    ) : (
-                      <span className="font-mono text-xs text-zinc-600">
-                        (source mapping missing for {label})
-                      </span>
+                      <span className="text-xs text-zinc-600">{t("report.sourceMissing")}</span>
                     )}
                   </div>
                 </li>

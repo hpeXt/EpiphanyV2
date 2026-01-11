@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import type { FocusTreeNode } from "@/components/topics/hooks/useTopicTree";
 import { P5Alert } from "@/components/ui/P5Alert";
 import { P5Panel } from "@/components/ui/P5Panel";
+import { useI18n } from "@/components/i18n/I18nProvider";
 
 type Props = {
   rootId: string;
@@ -14,6 +15,7 @@ type Props = {
 };
 
 export function FocusView({ rootId, nodes, selectedId, onSelect }: Props) {
+  const { t } = useI18n();
   const { root, childrenByParentId } = useMemo(() => {
     const byId = new Map(nodes.map((node) => [node.id, node]));
     const rootNode = byId.get(rootId) ?? null;
@@ -31,8 +33,8 @@ export function FocusView({ rootId, nodes, selectedId, onSelect }: Props) {
 
   if (!root) {
     return (
-      <P5Alert role="status" variant="warn" title="focus">
-        Focus tree is unavailable.
+      <P5Alert role="status" variant="warn" title={t("topic.viewMode.focus")}>
+        {t("focusView.unavailable")}
       </P5Alert>
     );
   }
@@ -80,10 +82,10 @@ export function FocusView({ rootId, nodes, selectedId, onSelect }: Props) {
       header={
         <div className="flex flex-wrap items-center justify-between gap-3 bg-[color:var(--ink)] px-4 py-3 text-[color:var(--paper)]">
           <h2 className="font-mono text-sm font-semibold uppercase tracking-wide">
-            Focus
+            {t("topic.viewMode.focus")}
           </h2>
           <div className="text-xs text-white/80">
-            <span className="font-mono">Click</span> to select
+            {t("focusView.instructions")}
           </div>
         </div>
       }
