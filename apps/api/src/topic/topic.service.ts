@@ -19,6 +19,7 @@ import { TopicEventsPublisher } from '../sse/topic-events.publisher.js';
 import type {
   ClusterMap,
   ConsensusReport,
+  ConsensusReportByIdResponse,
   ConsensusReportLatestResponse,
   CreateTopicRequest,
   LedgerMe,
@@ -183,6 +184,43 @@ export class TopicService {
     return { report: this.toConsensusReportDto(latest) };
   }
 
+  async getConsensusReportById(topicId: string, reportId: string): Promise<ConsensusReportByIdResponse> {
+    const topic = await this.prisma.topic.findUnique({
+      where: { id: topicId },
+      select: { id: true },
+    });
+
+    if (!topic) {
+      throw new NotFoundException({
+        error: { code: 'TOPIC_NOT_FOUND', message: 'Topic not found' },
+      });
+    }
+
+    const report = await this.prisma.consensusReport.findUnique({
+      where: { id: reportId },
+      select: {
+        id: true,
+        topicId: true,
+        status: true,
+        contentMd: true,
+        model: true,
+        promptVersion: true,
+        params: true,
+        metadata: true,
+        computedAt: true,
+        createdAt: true,
+      },
+    });
+
+    if (!report || report.topicId !== topicId) {
+      throw new NotFoundException({
+        error: { code: 'REPORT_NOT_FOUND', message: 'Report not found' },
+      });
+    }
+
+    return { report: this.toConsensusReportDto(report) };
+  }
+
   private toConsensusReportDto(report: {
     id: string;
     topicId: string;
@@ -258,6 +296,22 @@ export class TopicService {
       currentStatus: topic.status,
       command: { type: 'GENERATE_CONSENSUS_REPORT', payload: {} },
     });
+
+    const existingGenerating = await this.prisma.consensusReport.findFirst({
+      where: { topicId, status: 'generating' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: { id: true },
+    });
+
+    if (existingGenerating) {
+      const updatedTopic = await this.getTopicById(topicId);
+      if (!updatedTopic) {
+        throw new NotFoundException({
+          error: { code: 'TOPIC_NOT_FOUND', message: 'Topic not found' },
+        });
+      }
+      return updatedTopic;
+    }
 
     const reportId = uuidv7();
 

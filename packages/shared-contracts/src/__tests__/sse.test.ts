@@ -241,6 +241,10 @@ describe('SseEnvelope', () => {
         { event: 'argument_updated', data: { argumentId: 'uuid', reason: 'new_vote' } },
         { event: 'topic_updated', data: { topicId: 'uuid', reason: 'status_changed' } },
         { event: 'cluster_updated', data: { topicId: 'uuid' } },
+        {
+          event: 'report_updated',
+          data: { topicId: 'uuid', reportId: 'uuid' },
+        },
         { event: 'reload_required', data: { reason: 'trimmed' } },
       ];
 

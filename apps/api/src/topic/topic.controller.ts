@@ -91,6 +91,19 @@ export class TopicController {
   }
 
   /**
+   * GET /v1/topics/:topicId/consensus-report/:reportId - Consensus report by id (public read)
+   * Supports share permalinks (stable report version).
+   */
+  @Get(':topicId/consensus-report/:reportId')
+  @UseGuards(TopicPrivacyGuard)
+  async getConsensusReportById(
+    @Param('topicId') topicId: string,
+    @Param('reportId') reportId: string,
+  ) {
+    return this.topicService.getConsensusReportById(topicId, reportId);
+  }
+
+  /**
    * POST /v1/topics/:topicId/commands - Execute topic command
    */
   @Post(':topicId/commands')

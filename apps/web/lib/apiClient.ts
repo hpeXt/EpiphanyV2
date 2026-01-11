@@ -5,6 +5,7 @@ import {
   zEditArgumentResponse,
   zBatchBalanceResponse,
   zCreateArgumentResponse,
+  zConsensusReportByIdResponse,
   zConsensusReportLatestResponse,
   zErrorResponse,
   zClusterMap,
@@ -424,6 +425,25 @@ export function createApiClient(deps?: { signer?: Signer }) {
       }
 
       return requestJson(path, { method: "GET", headers: accessKeyHeaders }, zConsensusReportLatestResponse);
+    },
+    getConsensusReportById(topicId: string, reportId: string) {
+      const signer = getSigner();
+      const encodedTopicId = encodeURIComponent(topicId);
+      const encodedReportId = encodeURIComponent(reportId);
+      const path = `/v1/topics/${encodedTopicId}/consensus-report/${encodedReportId}`;
+      const accessKeyHeaders = getTopicAccessKeyHeaders(topicId);
+
+      if (signer) {
+        return requestJsonSigned(
+          signer,
+          topicId,
+          path,
+          { method: "GET", headers: accessKeyHeaders },
+          zConsensusReportByIdResponse,
+        );
+      }
+
+      return requestJson(path, { method: "GET", headers: accessKeyHeaders }, zConsensusReportByIdResponse);
     },
     getLedgerMe(topicId: string): Promise<ApiResult<z.infer<typeof zLedgerMe>>> {
       const signer = getSigner();

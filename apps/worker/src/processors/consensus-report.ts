@@ -19,9 +19,6 @@ import type { Redis } from 'ioredis';
 import { createHash } from 'node:crypto';
 
 const TOPIC_EVENTS_MAXLEN = 1000;
-const DEFAULT_MAX_ARGUMENTS = parsePositiveInt(process.env.REPORT_MAX_ARGUMENTS, 120);
-const DEFAULT_MAX_CHARS_PER_SOURCE = parsePositiveInt(process.env.REPORT_MAX_CHARS_PER_SOURCE, 1200);
-const DEFAULT_PROMPT_VERSION = process.env.REPORT_PROMPT_VERSION ?? 'consensus-report/v3-stage03';
 const REPORT_META_START = '<!-- REPORT_META_START -->';
 const REPORT_META_END = '<!-- REPORT_META_END -->';
 
@@ -92,16 +89,10 @@ export interface ProcessConsensusReportResult {
 export async function processConsensusReport(
   params: ProcessConsensusReportParams,
 ): Promise<ProcessConsensusReportResult> {
-  const {
-    topicId,
-    reportId,
-    trigger,
-    prisma,
-    redis,
-    provider,
-    promptVersion = DEFAULT_PROMPT_VERSION,
-    maxArguments = DEFAULT_MAX_ARGUMENTS,
-  } = params;
+  const { topicId, reportId, trigger, prisma, redis, provider } = params;
+  const defaults = getConsensusReportDefaults();
+  const promptVersion = params.promptVersion ?? defaults.promptVersion;
+  const maxArguments = params.maxArguments ?? defaults.maxArguments;
 
   const report = await prisma.consensusReport.findUnique({
     where: { id: reportId },
@@ -135,13 +126,21 @@ export async function processConsensusReport(
   let paramsSnapshot: ConsensusReportParamsSnapshot | null = null;
 
   try {
-    const selectionDefaults = {
+    const maxCharsPerSource = defaults.maxCharsPerSource;
+    const selectionDefaults: {
+      maxSources: number;
+      maxCharsPerSource: number;
+      topVotesK: number;
+      minPerBucket: number;
+      stanceThresholds: { supportGte: number; opposeLte: number };
+      depthBins: Array<'1' | '2-3' | '4+'>;
+    } = {
       maxSources: maxArguments,
-      maxCharsPerSource: DEFAULT_MAX_CHARS_PER_SOURCE,
+      maxCharsPerSource: maxCharsPerSource,
       topVotesK: 40,
       minPerBucket: 6,
       stanceThresholds: { supportGte: 0.3, opposeLte: -0.3 },
-      depthBins: ['1', '2-3', '4+'] as const,
+      depthBins: ['1', '2-3', '4+'],
     };
 
     const { topicTitle, arguments: selectedArgs, selectedArgumentIds, selectionSummary, coverage } =
@@ -246,7 +245,15 @@ export async function processConsensusReport(
       const fallbackParams: ConsensusReportParamsSnapshot = {
         promptVersion,
         trigger,
-        maxArguments,
+        selection: {
+          strategy: 'root+topVotes+stratified',
+          maxSources: maxArguments,
+          maxCharsPerSource: defaults.maxCharsPerSource,
+          topVotesK: 40,
+          minPerBucket: 6,
+          stanceThresholds: { supportGte: 0.3, opposeLte: -0.3 },
+          depthBins: ['1', '2-3', '4+'],
+        },
         ordering: 'totalVotes_desc_createdAt_asc_id_asc',
         filters: { pruned: false },
         selectedArgumentIds: [],
@@ -273,6 +280,18 @@ export async function processConsensusReport(
 
     return { success: false, error: errorMessage, topicId, reportId };
   }
+}
+
+function getConsensusReportDefaults(): {
+  maxArguments: number;
+  maxCharsPerSource: number;
+  promptVersion: string;
+} {
+  return {
+    maxArguments: parsePositiveInt(process.env.REPORT_MAX_ARGUMENTS, 120),
+    maxCharsPerSource: parsePositiveInt(process.env.REPORT_MAX_CHARS_PER_SOURCE, 1200),
+    promptVersion: process.env.REPORT_PROMPT_VERSION ?? 'consensus-report/v3-stage03',
+  };
 }
 
 function deriveAuthorId(pubkey: Uint8Array): string {
@@ -538,8 +557,21 @@ async function selectConsensusReportArguments(
       };
     });
 
-  const selectedArgumentIds = selected.map((arg) => arg.id);
-  const votesIncluded = selected.reduce((sum, arg) => sum + arg.totalVotes, 0);
+  const rootSelected = selected.find((arg) => arg.id === root.id) ?? null;
+  const otherSelected = selected
+    .filter((arg) => arg.id !== root.id)
+    .slice()
+    .sort((a, b) => {
+      if (b.totalVotes !== a.totalVotes) return b.totalVotes - a.totalVotes;
+      const timeDiff = a.createdAt.getTime() - b.createdAt.getTime();
+      if (timeDiff !== 0) return timeDiff;
+      return a.id.localeCompare(b.id);
+    });
+
+  const orderedSelected = rootSelected ? [rootSelected, ...otherSelected] : otherSelected;
+
+  const selectedArgumentIds = orderedSelected.map((arg) => arg.id);
+  const votesIncluded = orderedSelected.reduce((sum, arg) => sum + arg.totalVotes, 0);
 
   const selectionSummary: ConsensusReportParamsSnapshot['selection'] = {
     strategy: 'root+topVotes+stratified',
@@ -553,12 +585,12 @@ async function selectConsensusReportArguments(
 
   return {
     topicTitle: topic.title,
-    arguments: selected,
+    arguments: orderedSelected,
     selectedArgumentIds,
     selectionSummary,
     coverage: {
       argumentsTotal,
-      argumentsIncluded: selected.length,
+      argumentsIncluded: orderedSelected.length,
       votesTotal,
       votesIncluded,
     },

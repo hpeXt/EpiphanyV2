@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { createTranslator, defaultLocale } from "@/lib/i18n";
@@ -234,11 +234,17 @@ describe("TopicStage interactions", () => {
 
     await screen.findByRole("heading", { name: "Topic 1" });
 
-    await user.hover(screen.getByRole("button", { name: "Hover arg-1" }));
-    expect(await screen.findByText("My Argument")).toBeInTheDocument();
+    const hoverButton = screen.getByRole("button", { name: "Hover arg-1" });
+    await user.hover(hoverButton);
+    expect(await screen.findByTestId("sunburst-hover-card")).toBeInTheDocument();
+    await user.unhover(hoverButton);
 
     await user.click(screen.getByRole("button", { name: "Select arg-1" }));
     expect(await screen.findByRole("heading", { name: "My Argument" })).toBeInTheDocument();
+
+    await user.hover(hoverButton);
+    expect(await screen.findByTestId("sunburst-hover-card")).toBeInTheDocument();
+    await user.unhover(hoverButton);
 
     await user.click(screen.getByRole("button", { name: "Blank" }));
     expect(await screen.findByRole("heading", { name: "Root" })).toBeInTheDocument();
@@ -373,6 +379,8 @@ describe("TopicStage interactions", () => {
       (window as any).PointerEvent = MouseEvent as any;
     }
 
+    jest.useFakeTimers();
+
     global.fetch = jest.fn(async (input: RequestInfo | URL) => {
       const url = new URL(typeof input === "string" ? input : input.toString());
 
@@ -433,7 +441,7 @@ describe("TopicStage interactions", () => {
 
     render(<TopicStage topicId={TOPIC_ID} />);
 
-    const topicHeading = await screen.findByRole("heading", { name: "Topic 1" });
+    const topicHeading = screen.getByRole("heading", { name: "Topic 1" });
 
     const findAncestor = (node: HTMLElement, includes: string) => {
       let current: HTMLElement | null = node;
@@ -454,17 +462,170 @@ describe("TopicStage interactions", () => {
 
     expect(leftColumn.className).toContain("md:w-[420px]");
 
-    // First move just records the side; no expansion yet.
     fireEvent.pointerMove(leftColumn, { clientX: 100 });
     expect(leftColumn.className).toContain("md:w-[420px]");
 
-    // Crossing to the right triggers expansion to the right layout.
+    await act(async () => {
+      jest.advanceTimersByTime(260);
+    });
+    expect(leftColumn.className).toContain("md:w-[55%]");
+
     fireEvent.pointerMove(leftColumn, { clientX: 300 });
+    expect(leftColumn.className).toContain("md:w-[55%]");
+
+    await act(async () => {
+      jest.advanceTimersByTime(359);
+    });
+    expect(leftColumn.className).toContain("md:w-[55%]");
+
+    await act(async () => {
+      jest.advanceTimersByTime(1);
+    });
     expect(leftColumn.className).toContain("md:w-[300px]");
 
-    // Crossing back triggers left expansion.
     fireEvent.pointerMove(leftColumn, { clientX: 100 });
+
+    await act(async () => {
+      jest.advanceTimersByTime(260);
+    });
     expect(leftColumn.className).toContain("md:w-[55%]");
+  });
+
+  it("auto-expands the layout in read mode when moving to the left", async () => {
+    const { TopicStage } = require("@/components/topics/TopicStage");
+
+    // JSDOM doesn't implement PointerEvent; React only wires `onPointerMove*` when it's available.
+    if (!(window as any).PointerEvent) {
+      (window as any).PointerEvent = MouseEvent as any;
+    }
+
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(typeof input === "string" ? input : input.toString());
+
+      if (url.pathname === `/v1/topics/${TOPIC_ID}/ledger/me`) {
+        return jsonResponse({
+          ok: true,
+          status: 200,
+          json: {
+            topicId: TOPIC_ID,
+            pubkey: MY_PUBKEY_HEX,
+            balance: 100,
+            myTotalVotes: 0,
+            myTotalCost: 0,
+            lastInteractionAt: null,
+          },
+        });
+      }
+
+      if (url.pathname === `/v1/topics/${TOPIC_ID}/stakes/me`) {
+        return jsonResponse({
+          ok: true,
+          status: 200,
+          json: {
+            topicId: TOPIC_ID,
+            pubkey: MY_PUBKEY_HEX,
+            items: [],
+          },
+        });
+      }
+
+      if (url.pathname === "/v1/arguments/arg-root") {
+        return jsonResponse({
+          ok: true,
+          status: 200,
+          json: {
+            argument: {
+              id: "arg-root",
+              topicId: TOPIC_ID,
+              parentId: null,
+              title: "Root",
+              body: "Root body",
+              bodyRich: null,
+              authorId: "66687aadf862bd77",
+              analysisStatus: "ready",
+              stanceScore: null,
+              totalVotes: 0,
+              totalCost: 0,
+              prunedAt: null,
+              createdAt: "2025-12-19T12:34:56.789Z",
+              updatedAt: "2025-12-19T12:34:56.789Z",
+            },
+          },
+        });
+      }
+
+      if (url.pathname === "/v1/arguments/arg-1") {
+        return jsonResponse({
+          ok: true,
+          status: 200,
+          json: {
+            argument: {
+              id: "arg-1",
+              topicId: TOPIC_ID,
+              parentId: "arg-root",
+              title: "My Argument",
+              body: "My body",
+              bodyRich: null,
+              authorId: MY_AUTHOR_ID,
+              analysisStatus: "ready",
+              stanceScore: null,
+              totalVotes: 3,
+              totalCost: 9,
+              prunedAt: null,
+              createdAt: "2025-12-19T13:00:00.000Z",
+              updatedAt: "2025-12-19T13:00:00.000Z",
+            },
+          },
+        });
+      }
+
+      throw new Error(`Unhandled request: ${url.toString()}`);
+    }) as unknown as typeof fetch;
+
+    render(<TopicStage topicId={TOPIC_ID} />);
+
+    const topicHeading = await screen.findByRole("heading", { name: "Topic 1" });
+
+    const findAncestor = (node: HTMLElement, includes: string) => {
+      let current: HTMLElement | null = node;
+      while (current) {
+        if (typeof current.className === "string" && current.className.includes(includes)) return current;
+        current = current.parentElement;
+      }
+      return null;
+    };
+
+    const leftColumn = findAncestor(topicHeading, "md:border-r");
+    if (!leftColumn) {
+      throw new Error("Failed to locate left column container.");
+    }
+
+    // Simulate the divider at clientX=200.
+    (leftColumn as any).getBoundingClientRect = () => ({ right: 200 });
+
+    fireEvent.click(screen.getByRole("button", { name: "Select arg-1" }));
+    await screen.findByRole("heading", { name: "My Argument" });
+
+    expect(leftColumn.className).toContain("md:w-[280px]");
+
+    // In read mode, moving to the left should expand immediately.
+    jest.useFakeTimers();
+    fireEvent.pointerMove(leftColumn, { clientX: 100 });
+    expect(leftColumn.className).toContain("md:w-[280px]");
+
+    await act(async () => {
+      jest.advanceTimersByTime(260);
+    });
+    expect(leftColumn.className).toContain("md:w-[45%]");
+
+    // And moving back to the right collapses again.
+    fireEvent.pointerMove(leftColumn, { clientX: 300 });
+    expect(leftColumn.className).toContain("md:w-[45%]");
+
+    await act(async () => {
+      jest.advanceTimersByTime(360);
+    });
+    expect(leftColumn.className).toContain("md:w-[280px]");
   });
 
   it("can create argument, vote, open report, and edit own comment", async () => {
@@ -685,10 +846,7 @@ describe("TopicStage interactions", () => {
     });
 
     await user.click(screen.getByRole("button", { name: t("stage.openReport") }));
-    expect(await screen.findByRole("dialog", { name: "Consensus report" })).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Close report" }));
-    expect(screen.queryByRole("dialog", { name: "Consensus report" })).not.toBeInTheDocument();
+    expect(mockPush).toHaveBeenCalledWith(`/topics/${TOPIC_ID}/report`);
 
     const editButton = await screen.findByRole("button", { name: t("stage.edit") });
     await waitFor(() => expect(editButton).toBeEnabled());

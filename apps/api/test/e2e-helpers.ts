@@ -8,6 +8,7 @@ import {
   sign as cryptoSign,
   type KeyObject,
 } from 'node:crypto';
+import { AppModule } from '../src/app.module';
 
 export function ensureTestEnv(): void {
   process.env.DATABASE_URL =
@@ -53,8 +54,6 @@ export function ensureTestEnv(): void {
 
 export async function createE2eApp(): Promise<INestApplication> {
   ensureTestEnv();
-
-  const { AppModule } = await import('../src/app.module');
 
   const moduleFixture: TestingModule = await Test.createTestingModule({
     imports: [AppModule],

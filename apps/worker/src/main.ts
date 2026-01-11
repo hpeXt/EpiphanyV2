@@ -15,6 +15,7 @@ import { Worker, Queue, type Job } from 'bullmq';
 import { Redis } from 'ioredis';
 import { getPrisma } from '@epiphany/database';
 
+import { loadEnv } from './env.js';
 import { getRedisConnection } from './lib/redis-connection.js';
 import { createAIProvider } from './providers/provider-factory.js';
 import { processArgumentAnalysis } from './processors/argument-analysis.js';
@@ -32,6 +33,7 @@ const QUEUE_TOPIC_CLUSTER = 'ai_topic-cluster';
 const QUEUE_CONSENSUS_REPORT = 'ai_consensus-report';
 
 // Configuration
+loadEnv();
 const port = Number(process.env.PORT ?? process.env.WORKER_PORT ?? 3002);
 const connection = getRedisConnection();
 

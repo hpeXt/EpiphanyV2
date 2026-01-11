@@ -6,6 +6,7 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import {
+  zConsensusReportByIdResponse,
   zConsensusReportLatestResponse,
   zCreateTopicResponse,
   zErrorResponse,
@@ -118,6 +119,17 @@ describe('Consensus Report API (e2e)', () => {
     expect(latestParsed.data.report.status).toBe('generating');
     expect(latestParsed.data.report.contentMd).toBeNull();
     expect(latestParsed.data.report.computedAt).toBeNull();
+
+    const reportId = latestParsed.data.report.id;
+    const byIdRes = await request(app.getHttpServer())
+      .get(`/v1/topics/${topicId}/consensus-report/${reportId}`)
+      .expect(200);
+
+    const byIdParsed = zConsensusReportByIdResponse.safeParse(byIdRes.body);
+    expect(byIdParsed.success).toBe(true);
+    if (!byIdParsed.success) return;
+    expect(byIdParsed.data.report.id).toBe(reportId);
+    expect(byIdParsed.data.report.topicId).toBe(topicId);
   });
 
   it('GET /v1/topics/:topicId/consensus-report/latest should return 404 TOPIC_NOT_FOUND for unknown topic', async () => {
@@ -132,5 +144,28 @@ describe('Consensus Report API (e2e)', () => {
       expect(parsed.data.error.code).toBe('TOPIC_NOT_FOUND');
     }
   });
-});
 
+  it('GET /v1/topics/:topicId/consensus-report/:reportId should return 404 REPORT_NOT_FOUND when report is missing', async () => {
+    const createRes = await request(app.getHttpServer())
+      .post('/v1/topics')
+      .send({ title: 'Topic for report missing test', body: 'Root body' })
+      .expect(201);
+
+    const createParsed = zCreateTopicResponse.safeParse(createRes.body);
+    expect(createParsed.success).toBe(true);
+    if (!createParsed.success) return;
+
+    const topicId = createParsed.data.topicId;
+    const missingReportId = uuidv7();
+
+    const res = await request(app.getHttpServer())
+      .get(`/v1/topics/${topicId}/consensus-report/${missingReportId}`)
+      .expect(404);
+
+    const parsed = zErrorResponse.safeParse(res.body);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.error.code).toBe('REPORT_NOT_FOUND');
+    }
+  });
+});

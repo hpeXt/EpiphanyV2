@@ -339,5 +339,15 @@ export const zConsensusReportLatestResponse = z.object({
 
 export type ConsensusReportLatestResponse = z.infer<typeof zConsensusReportLatestResponse>;
 
+// ============================================================================
+// GET /v1/topics/:topicId/consensus-report/:reportId - Consensus Report (by id)
+// ============================================================================
+
+export const zConsensusReportByIdResponse = z.object({
+  report: zConsensusReport,
+});
+
+export type ConsensusReportByIdResponse = z.infer<typeof zConsensusReportByIdResponse>;
+
 // Re-export ClusterMap for endpoint use
 export { zClusterMap };

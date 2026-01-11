@@ -56,7 +56,6 @@ export function loadEnv(): void {
   const contents = fs.readFileSync(envPath, 'utf8');
   const parsed = parseEnvFile(contents);
   for (const [key, value] of Object.entries(parsed)) {
-    if (process.env[key] === undefined) process.env[key] = value;
+    if (process.env[key] === undefined || process.env[key] === '') process.env[key] = value;
   }
 }
-

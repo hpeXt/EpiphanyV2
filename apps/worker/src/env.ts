@@ -1,9 +1,22 @@
-import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-function parseEnvFile(contents) {
-  const result = {};
+function findUp(filename: string, startDir: string): string | null {
+  let current = startDir;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const candidate = path.join(current, filename);
+    if (fs.existsSync(candidate)) return candidate;
+
+    const parent = path.dirname(current);
+    if (parent === current) return null;
+    current = parent;
+  }
+}
+
+function parseEnvFile(contents: string): Record<string, string> {
+  const result: Record<string, string> = {};
 
   for (const rawLine of contents.split('\n')) {
     const line = rawLine.trim();
@@ -30,9 +43,16 @@ function parseEnvFile(contents) {
   return result;
 }
 
-function loadRootEnv() {
-  const envPath = path.join(process.cwd(), '.env');
-  if (!fs.existsSync(envPath)) return;
+export function loadEnv(): void {
+  const globalAny = globalThis as typeof globalThis & {
+    __EPIPHANY_WORKER_ENV_LOADED__?: boolean;
+  };
+  if (globalAny.__EPIPHANY_WORKER_ENV_LOADED__) return;
+  globalAny.__EPIPHANY_WORKER_ENV_LOADED__ = true;
+
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  const envPath = findUp('.env', process.cwd()) ?? findUp('.env', moduleDir) ?? null;
+  if (!envPath) return;
 
   const contents = fs.readFileSync(envPath, 'utf8');
   const parsed = parseEnvFile(contents);
@@ -40,17 +60,3 @@ function loadRootEnv() {
     if (process.env[key] === undefined || process.env[key] === '') process.env[key] = value;
   }
 }
-
-loadRootEnv();
-
-const extraArgs = process.argv.slice(2);
-const child = spawn('turbo', ['dev', ...extraArgs], {
-  stdio: 'inherit',
-  env: process.env,
-  shell: process.platform === 'win32',
-});
-
-child.on('exit', (code, signal) => {
-  if (signal) process.kill(process.pid, signal);
-  process.exit(code ?? 1);
-});

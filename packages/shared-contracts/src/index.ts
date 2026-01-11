@@ -132,7 +132,9 @@ export {
   zTopicCommandGenerateConsensusReport,
   zTopicCommandResponse,
   zConsensusReportLatestResponse,
+  zConsensusReportByIdResponse,
   type TopicCommand,
   type TopicCommandResponse,
   type ConsensusReportLatestResponse,
+  type ConsensusReportByIdResponse,
 } from './endpoints.js';

@@ -32,6 +32,8 @@ import {
   zClusterMap,
   // GET /v1/topics/:topicId/consensus-report/latest
   zConsensusReportLatestResponse,
+  // GET /v1/topics/:topicId/consensus-report/:reportId
+  zConsensusReportByIdResponse,
   // POST /v1/topics/:topicId/commands
   zTopicCommand,
   type CreateTopicResponse,
@@ -44,6 +46,7 @@ import {
   type StakesMeResponse,
   type BatchBalanceResponse,
   type ConsensusReportLatestResponse,
+  type ConsensusReportByIdResponse,
 } from '../index.js';
 
 describe('POST /v1/arguments/:argumentId/edit request', () => {
@@ -710,6 +713,28 @@ describe('GET /v1/topics/:topicId/consensus-report/latest response', () => {
     };
 
     const result = zConsensusReportLatestResponse.safeParse(fixture);
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('GET /v1/topics/:topicId/consensus-report/:reportId response', () => {
+  it('should parse generating report', () => {
+    const fixture: ConsensusReportByIdResponse = {
+      report: {
+        id: '0193e3a6-0b7d-7a8d-9f2c-abcdef123456',
+        topicId: '0193e3a6-0b7d-7a8d-9f2c-topic0123456',
+        status: 'generating',
+        contentMd: null,
+        model: null,
+        promptVersion: null,
+        params: null,
+        metadata: null,
+        computedAt: null,
+        createdAt: '2025-12-19T12:34:56.789Z',
+      },
+    };
+
+    const result = zConsensusReportByIdResponse.safeParse(fixture);
     expect(result.success).toBe(true);
   });
 });

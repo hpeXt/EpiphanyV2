@@ -167,11 +167,16 @@ function createOpenRouterConsensusReportProvider(): ConsensusReportProvider {
         '    "galleryIds": ["B1","B2","B3"],',
         '    "statements": [',
         '      { "id": "B1", "text": "一句可签字的共识桥梁句…", "conditions": ["条件1","条件2"], "sourceLabels": ["S2","S4","S9"] }',
-        '      // 至少 7 条，最多 12 条；id 必须是 B1..B12；sourceLabels 至少 3 个',
         '    ]',
         '  },',
         '  "share": { "featuredBridgeIds": ["B1","B2","B3"], "ogTitle": "...", "ogDescription": "...", "shareText": "..." }',
         '}',
+        '',
+        '额外硬性约束（请严格遵守）：',
+        '- bridges.statements 至少 7 条，最多 12 条',
+        '- id 必须按 B1..B12 的格式（只允许 B + 数字）',
+        '- 每条 sourceLabels 至少 3 个，且必须来自给定的 [S#] labels',
+        '- JSON 里不要包含任何多余字段（尤其不要出现 source 原文内容）',
         '',
         'Bridge Statements 质量要求：',
         '- 优先输出“可签字句子”（避免空泛套话）；若是条件共识，conditions 必须写清楚且可操作',
@@ -203,7 +208,7 @@ function createOpenRouterConsensusReportProvider(): ConsensusReportProvider {
         'Sources:',
         sourcesBlock || '(no sources)',
         '',
-        '请输出共识报告（Markdown）。再次强调：每一个观点都要紧跟 [S#] 引用。',
+        '请按 system prompt 的格式输出：先 REPORT_META 的 JSON 元数据块，再输出 Markdown 报告正文。再次强调：每一个观点都要紧跟 [S#] 引用。',
       ].join('\n');
 
       const controller = new AbortController();

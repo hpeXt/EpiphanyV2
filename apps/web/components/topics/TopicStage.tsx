@@ -12,7 +12,6 @@ import Underline from "@tiptap/extension-underline";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 
-import { ConsensusReportModal } from "@/components/topics/ConsensusReportModal";
 import { TopicManagePanel } from "@/components/topics/TopicManagePanel";
 import { useTopicSse } from "@/components/topics/hooks/useTopicSse";
 import { useTopicTree } from "@/components/topics/hooks/useTopicTree";
@@ -533,7 +532,7 @@ export function TopicStage({ topicId }: Props) {
   const claimTokenStore = useMemo(() => createLocalStorageClaimTokenStore(), []);
   const draftStore = useMemo(() => createLocalStorageDraftStore(), []);
   const leftColumnRef = useRef<HTMLDivElement | null>(null);
-  const lastPointerSideRef = useRef<"left" | "right" | null>(null);
+  const rightColumnRef = useRef<HTMLDivElement | null>(null);
   const readerContentRef = useRef<HTMLDivElement | null>(null);
 
   const [hasIdentity, setHasIdentity] = useState<boolean | null>(null);
@@ -602,6 +601,11 @@ export function TopicStage({ topicId }: Props) {
   const [selectedArgumentDetailError, setSelectedArgumentDetailError] = useState("");
   const [isLoadingSelectedArgumentDetail, setIsLoadingSelectedArgumentDetail] = useState(false);
   const [activeSide, setActiveSide] = useState<"left" | "right" | null>(null);
+  const activeSideRef = useRef<"left" | "right" | null>(null);
+  activeSideRef.current = activeSide;
+  const layoutPendingSideRef = useRef<"left" | "right" | null>(null);
+  const layoutSwitchTimerRef = useRef<number | null>(null);
+  const lastRightTypingAtRef = useRef<number>(Number.NEGATIVE_INFINITY);
   const [hoverCard, setHoverCard] = useState<HoverCardState | null>(null);
   const hoverCardRef = useRef<HoverCardState | null>(null);
   hoverCardRef.current = hoverCard;
@@ -634,6 +638,75 @@ export function TopicStage({ topicId }: Props) {
       clearHoverCardTimers();
     };
   }, [clearHoverCardTimers]);
+
+  const clearLayoutSwitchTimer = useCallback(() => {
+    if (layoutSwitchTimerRef.current !== null) {
+      window.clearTimeout(layoutSwitchTimerRef.current);
+      layoutSwitchTimerRef.current = null;
+    }
+    layoutPendingSideRef.current = null;
+  }, []);
+
+  const commitActiveSide = useCallback((next: "left" | "right" | null) => {
+    activeSideRef.current = next;
+    setActiveSide(next);
+  }, []);
+
+  const scheduleActiveSide = useCallback(
+    (next: "left" | "right" | null, delayMs: number) => {
+      if (layoutSwitchTimerRef.current !== null && layoutPendingSideRef.current === next) return;
+
+      clearLayoutSwitchTimer();
+      layoutPendingSideRef.current = next;
+      layoutSwitchTimerRef.current = window.setTimeout(() => {
+        layoutSwitchTimerRef.current = null;
+        if (layoutPendingSideRef.current !== next) return;
+        layoutPendingSideRef.current = null;
+        commitActiveSide(next);
+      }, delayMs);
+    },
+    [clearLayoutSwitchTimer, commitActiveSide],
+  );
+
+  useEffect(() => {
+    return () => {
+      clearLayoutSwitchTimer();
+    };
+  }, [clearLayoutSwitchTimer]);
+
+  const isRightComposerFocused = useCallback(() => {
+    if (typeof document === "undefined") return false;
+
+    const active = document.activeElement;
+    const root = rightColumnRef.current;
+    if (!active || !root) return false;
+    if (!root.contains(active)) return false;
+
+    const el = active as HTMLElement;
+    const tag = el.tagName.toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select") return true;
+    if (el.isContentEditable) return true;
+    if (el.getAttribute("role") === "textbox") return true;
+    if (el.closest("[contenteditable='true']")) return true;
+    return false;
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Shift" || event.key === "Meta" || event.key === "Control" || event.key === "Alt") return;
+      if (!isRightComposerFocused()) return;
+
+      lastRightTypingAtRef.current = Date.now();
+
+      // User is actively composing on the right; avoid pending left expansion.
+      if (layoutPendingSideRef.current === "left") {
+        clearLayoutSwitchTimer();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [clearLayoutSwitchTimer, isRightComposerFocused]);
 
   const [isEditingSelectedArgument, setIsEditingSelectedArgument] = useState(false);
   const [isEditEditorMode, setIsEditEditorMode] = useState(true);
@@ -729,7 +802,6 @@ export function TopicStage({ topicId }: Props) {
 
   const [stakesByArgumentId, setStakesByArgumentId] = useState<Record<string, number>>({});
   const [isManageOpen, setIsManageOpen] = useState(false);
-  const [isReportOpen, setIsReportOpen] = useState(false);
   const [claimError, setClaimError] = useState("");
   const [isClaiming, setIsClaiming] = useState(false);
 
@@ -1193,11 +1265,6 @@ export function TopicStage({ topicId }: Props) {
 
   const handleSunburstHoverChange = useCallback(
     (value: { id: string; pointer: { x: number; y: number } } | null) => {
-      if (selectedArgumentIdRef.current) {
-        hideHoverCard({ immediate: true });
-        return;
-      }
-
       if (!value) {
         hideHoverCard();
         return;
@@ -1249,33 +1316,47 @@ export function TopicStage({ topicId }: Props) {
     [hideHoverCard, showHoverCard],
   );
 
-  // Hide hover card when entering read mode
+  // Hide hover card + reset layout intent when entering/leaving read mode
   useEffect(() => {
-    lastPointerSideRef.current = null;
     setQuoteHint(null);
-    if (selectedArgumentId) {
-      hideHoverCard({ immediate: true });
-      setActiveSide(null);
-    }
-  }, [hideHoverCard, selectedArgumentId]);
+    clearLayoutSwitchTimer();
+
+    if (selectedArgumentId) hideHoverCard({ immediate: true });
+    commitActiveSide(null);
+  }, [clearLayoutSwitchTimer, commitActiveSide, hideHoverCard, selectedArgumentId]);
 
   const handlePointerMove = (event: React.PointerEvent<HTMLElement>) => {
-    if (selectedArgumentId) return;
+    if (event.buttons) return;
+    if (event.pointerType && event.pointerType !== "mouse") return;
 
     const rect = leftColumnRef.current?.getBoundingClientRect();
     if (!rect) return;
 
-    const side: "left" | "right" = event.clientX < rect.right ? "left" : "right";
+    const writingRecently = Date.now() - lastRightTypingAtRef.current < 800;
+    const writingFocused = isRightComposerFocused();
+    const isWriteProtected = writingFocused || writingRecently;
 
-    if (lastPointerSideRef.current === null) {
-      // Start in the neutral layout; only switch after crossing the divider once.
-      lastPointerSideRef.current = side;
+    const enterDelayMs = isWriteProtected ? 350 : 260;
+    const leaveDelayMs = isWriteProtected ? 450 : 360;
+    const deadzonePx = isWriteProtected ? 64 : 40;
+
+    const dividerX = rect.right;
+    const x = event.clientX;
+    const intentSide = x <= dividerX - deadzonePx ? "left" : x >= dividerX + deadzonePx ? "right" : null;
+
+    if (!intentSide) {
+      clearLayoutSwitchTimer();
       return;
     }
 
-    if (side === lastPointerSideRef.current) return;
-    lastPointerSideRef.current = side;
-    setActiveSide(side);
+    const currentSide = activeSideRef.current;
+    if (currentSide === intentSide) {
+      clearLayoutSwitchTimer();
+      return;
+    }
+
+    const delayMs = currentSide === "left" && intentSide === "right" ? leaveDelayMs : enterDelayMs;
+    scheduleActiveSide(intentSide, delayMs);
   };
 
   useEffect(() => {
@@ -1345,12 +1426,16 @@ export function TopicStage({ topicId }: Props) {
     };
   }, [isEditingSelectedArgument, selectedArgumentId]);
 
-  const sunburstSize = selectedArgumentId ? 240 : 360;
+  const sunburstSize = selectedArgumentId ? (activeSide === "left" ? 320 : 240) : 360;
 
   const cardPosition = (x: number, y: number, phase: HoverCardState["phase"]) => {
-    const cardWidth = 280;
-    const cardHeight = phase === "expanded" ? 260 : 180;
     const padding = 16;
+    const maxCardWidth = Math.max(180, sunburstSize - padding * 2);
+    const cardWidth = Math.min(280, maxCardWidth);
+
+    const maxCardHeight = Math.max(140, sunburstSize - padding * 2);
+    const desiredHeight = phase === "expanded" ? 260 : 180;
+    const cardHeight = Math.min(desiredHeight, maxCardHeight);
 
     let left = x + padding;
     let top = y + padding;
@@ -1361,7 +1446,7 @@ export function TopicStage({ topicId }: Props) {
     left = Math.max(padding, Math.min(left, sunburstSize - cardWidth - padding));
     top = Math.max(padding, Math.min(top, sunburstSize - cardHeight - padding));
 
-    return { left, top };
+    return { left, top, width: cardWidth };
   };
 
   // Reply editor (shared for Explore + Read)
@@ -1919,10 +2004,8 @@ export function TopicStage({ topicId }: Props) {
         className="flex min-h-0 flex-1 flex-col gap-4 p-4 md:p-6"
         onPointerMoveCapture={handlePointerMove}
         onPointerLeave={() => {
-          if (!selectedArgumentId) {
-            lastPointerSideRef.current = null;
-            setActiveSide(null);
-          }
+          clearLayoutSwitchTimer();
+          commitActiveSide(null);
         }}
       >
         {reloadRequired ? (
@@ -1943,7 +2026,9 @@ export function TopicStage({ topicId }: Props) {
             className={[
               "relative flex w-full flex-col overflow-hidden border-b border-border/60 bg-background transition-all duration-300 ease-out md:border-b-0 md:border-r",
               selectedArgumentId
-                ? "md:w-[280px] md:min-w-[280px]"
+                ? activeSide === "left"
+                  ? "md:w-[45%] md:min-w-[360px]"
+                  : "md:w-[280px] md:min-w-[280px]"
                 : activeSide === "left"
                   ? "md:w-[55%] md:min-w-[450px]"
                   : activeSide === "right"
@@ -1993,10 +2078,11 @@ export function TopicStage({ topicId }: Props) {
                     </span>
                   </div>
 
-                  {hoverCard && !selectedArgumentId ? (
+                  {hoverCard ? (
                     <div
                       className="pointer-events-none absolute z-10"
-                      style={{ ...cardPosition(hoverCard.x, hoverCard.y, hoverCard.phase), width: 280 }}
+                      style={cardPosition(hoverCard.x, hoverCard.y, hoverCard.phase)}
+                      data-testid="sunburst-hover-card"
                     >
                       <div className="rounded-lg border border-border/60 bg-background p-4 shadow-lg">
                         <div className="mb-2">
@@ -2008,7 +2094,11 @@ export function TopicStage({ topicId }: Props) {
                         <p
                           className={[
                             "text-xs text-muted-foreground leading-relaxed",
-                            hoverCard.phase === "expanded" ? "line-clamp-8" : "line-clamp-3",
+                            hoverCard.phase === "expanded"
+                              ? sunburstSize <= 260
+                                ? "line-clamp-6"
+                                : "line-clamp-8"
+                              : "line-clamp-3",
                           ].join(" ")}
                         >
                           {toExcerpt(hoverCard.argument.body)}
@@ -2032,7 +2122,7 @@ export function TopicStage({ topicId }: Props) {
                 variant="ghost"
                 size="sm"
                 className="w-full justify-center border border-border bg-background"
-                onClick={() => setIsReportOpen(true)}
+                onClick={() => router.push(`/topics/${topicId}/report`)}
               >
                 {t("stage.openReport")}
               </Button>
@@ -2094,7 +2184,7 @@ export function TopicStage({ topicId }: Props) {
           </div>
 
           {/* Right: Reader */}
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+          <div ref={rightColumnRef} className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
             {readArgument ? (
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <div className="border-b border-border/60 px-6 py-6">
@@ -2496,15 +2586,6 @@ export function TopicStage({ topicId }: Props) {
         />
       ) : null}
 
-      {isReportOpen ? (
-        <ConsensusReportModal
-          topicId={topicId}
-          isOwner={isOwner}
-          refreshToken={refreshToken}
-          onInvalidate={invalidate}
-          onClose={() => setIsReportOpen(false)}
-        />
-      ) : null}
     </>
   );
 }
