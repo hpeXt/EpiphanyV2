@@ -1507,7 +1507,7 @@ function fallbackTopicTitleFromBody(body: string): string {
   const maxChars = 60;
   if (candidate.length > maxChars) candidate = candidate.slice(0, maxChars).trimEnd();
 
-  return candidate || (hasCjk(body) ? '未命名议题' : 'Untitled topic');
+  return candidate || (hasCjk(body) ? '未命名议题' : 'Untitled');
 }
 
 function parseJsonFromModel(content: string): unknown {
@@ -1530,12 +1530,49 @@ function parseJsonFromModel(content: string): unknown {
 }
 
 function sanitizeTopicTitle(value: string): string {
-  const singleLine = value.replace(/\s+/g, ' ').trim();
-  return singleLine.replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim();
+  let out = value.replace(/\s+/g, ' ').trim();
+  out = out.replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim();
+  out = out.replace(/^[.?!。！？；;:：、，,]+/g, '').trim();
+  out = out.replace(/[.?!。！？；;:：、，,]+$/g, '').trim();
+  return out;
+}
+
+function countCodePoints(text: string): number {
+  return Array.from(text).length;
+}
+
+function truncateCodePoints(text: string, maxChars: number): string {
+  return Array.from(text).slice(0, maxChars).join('');
+}
+
+function constrainTopicTitle(title: string, limits: { minChars: number; maxChars: number }): string | null {
+  let out = sanitizeTopicTitle(title);
+  if (!out) return null;
+
+  if (countCodePoints(out) > limits.maxChars) {
+    out = truncateCodePoints(out, limits.maxChars);
+    out = sanitizeTopicTitle(out);
+  }
+
+  if (!out) return null;
+  if (countCodePoints(out) < limits.minChars) return null;
+
+  return out;
 }
 
 async function generateTopicTitleFromBody(body: string): Promise<string> {
-  const fallback = fallbackTopicTitleFromBody(body);
+  const outputMinEnv = Number(process.env.TOPIC_TITLE_OUTPUT_MIN_CHARS ?? '2');
+  const outputMaxEnv = Number(process.env.TOPIC_TITLE_OUTPUT_MAX_CHARS ?? '10');
+  const minChars =
+    Number.isFinite(outputMinEnv) && outputMinEnv > 0 ? Math.floor(outputMinEnv) : 2;
+  const maxChars =
+    Number.isFinite(outputMaxEnv) && outputMaxEnv >= minChars ? Math.floor(outputMaxEnv) : 10;
+  const limits = { minChars, maxChars };
+
+  const defaultTitle = hasCjk(body) ? '未命名' : 'Untitled';
+  const fallback =
+    constrainTopicTitle(fallbackTopicTitleFromBody(body), limits) ?? defaultTitle;
+
   const apiKey = process.env.OPENROUTER_API_KEY?.trim();
   if (!apiKey) return fallback;
 
@@ -1544,19 +1581,24 @@ async function generateTopicTitleFromBody(body: string): Promise<string> {
   const timeoutMs = Number(process.env.TOPIC_TITLE_TIMEOUT_MS ?? '15000');
   const temperature = Number(process.env.TOPIC_TITLE_TEMPERATURE ?? '0.2');
   const maxTokens = Number(process.env.TOPIC_TITLE_MAX_TOKENS ?? '64');
-  const maxChars = Number(process.env.TOPIC_TITLE_MAX_CHARS ?? '2000');
+  const inputMaxChars = Number(process.env.TOPIC_TITLE_INPUT_MAX_CHARS ?? process.env.TOPIC_TITLE_MAX_CHARS ?? '2000');
 
-  const snippet = body.trim().slice(0, Number.isFinite(maxChars) && maxChars > 0 ? Math.floor(maxChars) : 2000);
+  const snippet = body
+    .trim()
+    .slice(0, Number.isFinite(inputMaxChars) && inputMaxChars > 0 ? Math.floor(inputMaxChars) : 2000);
 
   const systemPrompt = [
     '你是一个严格的议题标题生成器。',
-    '根据用户提供的正文，为这个议题生成一个简短、清晰的标题。',
+    '根据用户提供的正文，为这个议题生成一个简短、准确的标题。',
     '',
     '硬性要求：',
     '1) 只输出严格 JSON（不要 Markdown，不要解释，不要多余字段）。',
     '2) 输出 JSON schema: {"title": string}',
-    '3) title 必须是单行字符串，避免空泛；尽量不要以标点结尾。',
-    '4) 使用与输入正文相同的语言（中文/英文）。',
+    '3) title 必须是单行字符串，保持理性、陈述式描述；不要文学化、不要煽情、不要比喻、不要口号。',
+    '4) 高度贴合作者的思维方式与表述：尽量沿用作者在正文中的关键术语/对象/约束/变量与问题框架；不要替作者换一个叙事角度。',
+    '5) 不要用反问/营销式标题；避免“为什么/如何/震惊/终极/最强”等；不要以问号结尾。',
+    '6) 使用与输入正文相同的语言（中文/英文）。',
+    `7) 标题长度必须为 ${minChars}-${maxChars} 个字（按字符计数）；严格遵守。`,
   ].join('\n');
 
   const userPrompt = [
@@ -1602,8 +1644,9 @@ async function generateTopicTitleFromBody(body: string): Promise<string> {
     }
 
     const parsed = parseJsonFromModel(content);
-    const title = sanitizeTopicTitle((parsed as any)?.title ?? '');
-    if (!title) throw new Error('Model output missing title');
+    const rawTitle = String((parsed as any)?.title ?? '');
+    const title = constrainTopicTitle(rawTitle, limits);
+    if (!title) throw new Error('Model output missing or invalid title');
 
     return title;
   } catch (err) {

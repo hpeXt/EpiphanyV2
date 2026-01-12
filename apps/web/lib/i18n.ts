@@ -393,8 +393,8 @@ const MESSAGES: Record<Locale, Messages> = {
     },
     createTopic: {
       titleLabel: "标题",
-      titlePlaceholder: "（可选）留空自动生成",
-      titleHelp: "留空将由 AI 自动生成标题。",
+      titlePlaceholder: "（可选）留空自动生成 2-10 字标题",
+      titleHelp: "留空将由 AI 自动生成 2-10 字标题。",
       bodyLabel: "正文",
       visibilityLabel: "可见性",
       titleRequired: "需要填写标题",
@@ -878,8 +878,8 @@ const MESSAGES: Record<Locale, Messages> = {
     },
     createTopic: {
       titleLabel: "Title",
-      titlePlaceholder: "(optional) Leave blank to auto-generate",
-      titleHelp: "Leave blank and AI will generate a title.",
+      titlePlaceholder: "(optional) Leave blank to auto-generate (2–10 chars)",
+      titleHelp: "Leave blank and AI will generate a 2–10 character title.",
       bodyLabel: "Body",
       visibilityLabel: "Visibility",
       titleRequired: "Title is required",

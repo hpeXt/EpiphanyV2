@@ -612,6 +612,8 @@ export function TopicStage({ topicId }: Props) {
   const hoverCardPendingRef = useRef<{ id: string; x: number; y: number } | null>(null);
   const hoverCardShowTimerRef = useRef<number | null>(null);
   const hoverCardHideTimerRef = useRef<number | null>(null);
+  const [relatedHoverId, setRelatedHoverId] = useState<string | null>(null);
+  const [isMobileRelatedOpen, setIsMobileRelatedOpen] = useState(false);
   const [quoteHint, setQuoteHint] = useState<{ text: string; x: number; y: number } | null>(null);
   const selectedArgumentIdRef = useRef<string | null>(null);
   selectedArgumentIdRef.current = selectedArgumentId;
@@ -1135,7 +1137,9 @@ export function TopicStage({ topicId }: Props) {
 
     const compareByVotesThenCreatedAt = (a: Argument, b: Argument) => {
       if (a.totalVotes !== b.totalVotes) return b.totalVotes - a.totalVotes;
-      return Date.parse(a.createdAt) - Date.parse(b.createdAt);
+      const timeDiff = Date.parse(b.createdAt) - Date.parse(a.createdAt);
+      if (timeDiff !== 0) return timeDiff;
+      return a.id.localeCompare(b.id);
     };
 
     const ancestors = chain.slice(0, -1).reverse();
@@ -1151,6 +1155,11 @@ export function TopicStage({ topicId }: Props) {
 
     return { ancestors, siblings, children };
   }, [argumentById, childrenByParentId, readArgument]);
+
+  const relatedHoverArgument = useMemo(() => {
+    if (!relatedHoverId) return null;
+    return argumentById.get(relatedHoverId) ?? null;
+  }, [argumentById, relatedHoverId]);
 
   const canEditSelectedArgument =
     hasIdentity === true &&
@@ -2724,7 +2733,10 @@ export function TopicStage({ topicId }: Props) {
                   ) : null}
                 </div>
 
-                <aside className="absolute right-0 top-0 bottom-0 hidden w-[320px] flex-col border-l border-border/60 bg-background md:flex">
+                <aside
+                  className="absolute right-0 top-0 bottom-0 hidden w-[320px] flex-col border-l border-border/60 bg-background md:flex"
+                  onPointerLeave={() => setRelatedHoverId(null)}
+                >
                   <div className="border-b border-border/60 px-4 py-4">
                     <h2 className="font-serif text-sm font-semibold text-foreground">{t("stage.relatedTitle")}</h2>
                     <p className="mt-1 text-xs text-muted-foreground">{t("stage.relatedHint")}</p>
@@ -2733,6 +2745,32 @@ export function TopicStage({ topicId }: Props) {
                   <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
                     {related ? (
                       <div className="space-y-6">
+                        {relatedHoverArgument ? (
+                          <div className="rounded-lg border border-border/60 bg-background p-3 shadow-sm">
+                            <div className="flex items-start justify-between gap-2">
+                              <h3 className="font-serif text-sm font-semibold text-foreground leading-snug line-clamp-2">
+                                {toTitle(relatedHoverArgument)}
+                              </h3>
+                              <span className="shrink-0 text-[10px] text-muted-foreground">
+                                {t("stage.votesCount", { count: relatedHoverArgument.totalVotes })}
+                              </span>
+                            </div>
+                            {relatedHoverArgument.body ? (
+                              <p className="mt-2 line-clamp-4 text-xs text-muted-foreground leading-relaxed">
+                                {toExcerpt(relatedHoverArgument.body)}
+                              </p>
+                            ) : null}
+                            <div className="mt-3 flex items-center justify-between border-t border-border/60 pt-2 text-[10px] text-muted-foreground">
+                              <span>
+                                {authorLabel(
+                                  relatedHoverArgument.authorId,
+                                  relatedHoverArgument.authorDisplayName,
+                                )}
+                              </span>
+                              <span>{new Date(relatedHoverArgument.createdAt).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                        ) : null}
                         {related.ancestors.length > 0 ? (
                           <div>
                             <h3 className="text-xs font-medium text-muted-foreground">{t("stage.relatedPath")}</h3>
@@ -2740,7 +2778,6 @@ export function TopicStage({ topicId }: Props) {
                               {related.ancestors.map((arg) => {
                                 const isRoot = rootArgumentId !== null && arg.id === rootArgumentId;
                                 const title = isRoot ? topicTitle : toTitle(arg);
-                                const excerpt = toExcerpt(arg.body);
 
                                 return (
                                   <button
@@ -2750,6 +2787,8 @@ export function TopicStage({ topicId }: Props) {
                                       "w-full rounded-md border border-border/60 bg-background px-3 py-2 text-left",
                                       "hover:bg-[color:var(--muted)] transition-colors",
                                     ].join(" ")}
+                                    onPointerEnter={() => setRelatedHoverId(arg.id)}
+                                    onFocus={() => setRelatedHoverId(arg.id)}
                                     onClick={() => requestSelectArgumentId(isRoot ? null : arg.id)}
                                   >
                                     <div className="flex items-start justify-between gap-2">
@@ -2758,11 +2797,6 @@ export function TopicStage({ topicId }: Props) {
                                         {t("stage.votesCount", { count: arg.totalVotes })}
                                       </span>
                                     </div>
-                                    {excerpt ? (
-                                      <p className="mt-1 line-clamp-4 text-xs text-muted-foreground leading-relaxed">
-                                        {excerpt}
-                                      </p>
-                                    ) : null}
                                   </button>
                                 );
                               })}
@@ -2778,7 +2812,6 @@ export function TopicStage({ topicId }: Props) {
                             <div className="mt-2 space-y-2">
                               {related.children.map((arg) => {
                                 const title = toTitle(arg);
-                                const excerpt = toExcerpt(arg.body);
 
                                 return (
                                   <button
@@ -2788,6 +2821,8 @@ export function TopicStage({ topicId }: Props) {
                                       "w-full rounded-md border border-border/60 bg-background px-3 py-2 text-left",
                                       "hover:bg-[color:var(--muted)] transition-colors",
                                     ].join(" ")}
+                                    onPointerEnter={() => setRelatedHoverId(arg.id)}
+                                    onFocus={() => setRelatedHoverId(arg.id)}
                                     onClick={() => requestSelectArgumentId(arg.id)}
                                   >
                                     <div className="flex items-start justify-between gap-2">
@@ -2796,11 +2831,6 @@ export function TopicStage({ topicId }: Props) {
                                         {t("stage.votesCount", { count: arg.totalVotes })}
                                       </span>
                                     </div>
-                                    {excerpt ? (
-                                      <p className="mt-1 line-clamp-4 text-xs text-muted-foreground leading-relaxed">
-                                        {excerpt}
-                                      </p>
-                                    ) : null}
                                   </button>
                                 );
                               })}
@@ -2816,7 +2846,6 @@ export function TopicStage({ topicId }: Props) {
                             <div className="mt-2 space-y-2">
                               {related.siblings.map((arg) => {
                                 const title = toTitle(arg);
-                                const excerpt = toExcerpt(arg.body);
 
                                 return (
                                   <button
@@ -2826,6 +2855,8 @@ export function TopicStage({ topicId }: Props) {
                                       "w-full rounded-md border border-border/60 bg-background px-3 py-2 text-left",
                                       "hover:bg-[color:var(--muted)] transition-colors",
                                     ].join(" ")}
+                                    onPointerEnter={() => setRelatedHoverId(arg.id)}
+                                    onFocus={() => setRelatedHoverId(arg.id)}
                                     onClick={() => requestSelectArgumentId(arg.id)}
                                   >
                                     <div className="flex items-start justify-between gap-2">
@@ -2834,11 +2865,6 @@ export function TopicStage({ topicId }: Props) {
                                         {t("stage.votesCount", { count: arg.totalVotes })}
                                       </span>
                                     </div>
-                                    {excerpt ? (
-                                      <p className="mt-1 line-clamp-4 text-xs text-muted-foreground leading-relaxed">
-                                        {excerpt}
-                                      </p>
-                                    ) : null}
                                   </button>
                                 );
                               })}
