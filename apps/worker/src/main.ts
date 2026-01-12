@@ -28,6 +28,7 @@ import {
 import { createConsensusReportProvider } from './providers/consensus-report-provider.js';
 import { processTranslation } from './processors/translation.js';
 import { createTranslationProvider } from './providers/translation-provider.js';
+import { startTranslationAutomation } from './translation/translation-automation.js';
 
 // Queue names per docs/stage01/ai-worker.md (using underscore instead of colon for BullMQ compatibility)
 const QUEUE_ARGUMENT_ANALYSIS = 'ai_argument-analysis';
@@ -76,6 +77,7 @@ function getTopicClusterEngine(): TopicClusterEngine {
 const topicClusterEngine = getTopicClusterEngine();
 const consensusReportProvider = createConsensusReportProvider();
 const translationProvider = createTranslationProvider();
+startTranslationAutomation({ prisma, redis, queue: translationQueue, provider: translationProvider });
 
 /**
  * Argument Analysis Job Payload
@@ -331,6 +333,17 @@ function writeJson(res: http.ServerResponse, status: number, body: unknown): voi
   res.end(JSON.stringify(body));
 }
 
+function getTranslationBudgetTokensPerMonth(): number | null {
+  const fallback = 200_000;
+  const raw = process.env.TRANSLATION_BUDGET_TOKENS_PER_MONTH;
+  if (!raw) return fallback;
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  if (parsed < 0) return null; // unlimited
+  return parsed; // 0 disables external calls
+}
+
 /**
  * HTTP server for health checks and debugging
  */
@@ -354,6 +367,13 @@ const server = http.createServer(async (req, res) => {
         writeJson(res, 200, {
           ok: true,
           queues: [QUEUE_ARGUMENT_ANALYSIS, QUEUE_TOPIC_CLUSTER, QUEUE_CONSENSUS_REPORT, QUEUE_TRANSLATION],
+          providers: {
+            translation: translationProvider.provider,
+          },
+          translation: {
+            model: process.env.TRANSLATION_MODEL ?? 'z-ai/glm-4.7',
+            budgetTokensPerMonth: getTranslationBudgetTokensPerMonth(),
+          },
         });
         return;
       } catch (err) {

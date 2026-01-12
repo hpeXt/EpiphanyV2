@@ -242,7 +242,7 @@ export async function processConsensusReport(
 
     return { success: true, topicId, reportId };
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = formatErrorWithCause(error);
     console.error(`[consensus-report] Failed: reportId=${reportId} topicId=${topicId}`, errorMessage);
 
     try {
@@ -291,6 +291,22 @@ export async function processConsensusReport(
 
     return { success: false, error: errorMessage, topicId, reportId };
   }
+}
+
+function formatErrorWithCause(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+
+  const base = error.message || String(error);
+  const cause = (error as any).cause;
+  if (!cause) return base;
+
+  if (cause instanceof Error) {
+    const code = typeof (cause as any).code === 'string' ? String((cause as any).code) : null;
+    const msg = cause.message || String(cause);
+    return `${base} (cause: ${code ? `${code} ` : ''}${msg})`;
+  }
+
+  return `${base} (cause: ${String(cause)})`;
 }
 
 function getConsensusReportDefaults(): {

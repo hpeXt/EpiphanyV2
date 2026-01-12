@@ -12,6 +12,8 @@ type ConsensusReportProviderType = 'mock' | 'openrouter';
 
 const REPORT_META_START = '<!-- REPORT_META_START -->';
 const REPORT_META_END = '<!-- REPORT_META_END -->';
+const REPORT_META_START_RE = /<!--\s*REPORT_META_START\s*-->/i;
+const REPORT_META_END_RE = /<!--\s*REPORT_META_END\s*-->/i;
 
 function stanceLabel(stance: -1 | 0 | 1): 'oppose' | 'neutral' | 'support' {
   if (stance === -1) return 'oppose';
@@ -302,7 +304,32 @@ function createOpenRouterConsensusReportProvider(): ConsensusReportProvider {
           '你上一版输出未通过质量门槛，请完全重写并严格遵守 system prompt 的格式。失败原因：',
           ...validation.reasons.map((r) => `- ${r}`),
           '',
-          '强制要求：从 REPORT_META_START 开始输出；不要解释、不要道歉、不要输出本段反馈；补足 Themes/Claims/Quotes 与引用。',
+          '强制要求：不要解释、不要道歉、不要输出本段反馈；你的输出必须从下一行第一字符开始：',
+          REPORT_META_START,
+          '```json',
+          '{',
+          '  "bridges": {',
+          '    "gallerySize": 3,',
+          '    "galleryIds": ["B1","B2","B3"],',
+          '    "statements": [',
+          '      { "id": "B1", "text": "...", "conditions": ["..."], "sourceLabels": ["S1","S2","S3"] }',
+          '    ]',
+          '  },',
+          '  "share": { "featuredBridgeIds": ["B1","B2","B3"], "ogTitle": "...", "ogDescription": "...", "shareText": "..." }',
+          '}',
+          '```',
+          REPORT_META_END,
+          '',
+          '## 导读（How to read）',
+          '## Executive Summary',
+          '## 讨论全景（Coverage & Caveats）',
+          '## 角色图谱（Role Atlas）',
+          '## 关键张力（Key Tensions）',
+          '## 主题地图（Themes, TalkToTheCity-style）',
+          '## 未决问题与下一步议程（Agenda）',
+          '## 方法（Method, brief）',
+          '',
+          '并在每个 #### C# Claim 下至少输出 2 条以 `>` 开头的逐字 Quote（同一行末尾带 [S#]）。所有观点句末必须带 [S#] 引用。',
         ].join('\n');
       }
 
@@ -455,29 +482,80 @@ function isRetryableNetworkError(error: unknown): boolean {
   return ['ECONNRESET', 'ECONNREFUSED', 'EAI_AGAIN', 'ENOTFOUND', 'ETIMEDOUT'].includes(code);
 }
 
-function extractReportBodyOnly(contentMd: string): string {
-  const startIndex = contentMd.indexOf(REPORT_META_START);
-  if (startIndex < 0) return contentMd.trim();
-  const endIndex = contentMd.indexOf(REPORT_META_END, startIndex + REPORT_META_START.length);
-  if (endIndex < 0) return contentMd.trim();
-  return contentMd.slice(endIndex + REPORT_META_END.length).trim();
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function tryParseReportMetaJson(contentMd: string): unknown | null {
-  const startIndex = contentMd.indexOf(REPORT_META_START);
-  if (startIndex < 0) return null;
-  const endIndex = contentMd.indexOf(REPORT_META_END, startIndex + REPORT_META_START.length);
-  if (endIndex < 0) return null;
+function looksLikeReportMeta(value: unknown): value is Record<string, unknown> {
+  if (!isPlainObject(value)) return false;
+  return 'bridges' in value || 'share' in value;
+}
 
-  const between = contentMd.slice(startIndex + REPORT_META_START.length, endIndex);
-  const jsonMatch = between.match(/```json\s*([\s\S]*?)\s*```/i);
-  if (!jsonMatch) return null;
+function parseJsonObjectFromText(content: string): Record<string, unknown> | null {
+  const fenced = content.match(/```(?:json|jsonc)?\s*([\s\S]*?)\s*```/i);
+  if (fenced) {
+    try {
+      const parsed = JSON.parse(fenced[1]);
+      return isPlainObject(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
 
   try {
-    return JSON.parse(jsonMatch[1]);
+    const parsed = JSON.parse(content);
+    return isPlainObject(parsed) ? parsed : null;
   } catch {
-    return null;
+    // fallthrough
   }
+
+  const first = content.indexOf('{');
+  const last = content.lastIndexOf('}');
+  if (first >= 0 && last > first) {
+    const sliced = content.slice(first, last + 1);
+    try {
+      const parsed = JSON.parse(sliced);
+      return isPlainObject(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+function extractReportMetaAndBody(contentMd: string): { meta: Record<string, unknown> | null; body: string } {
+  const startMatch = REPORT_META_START_RE.exec(contentMd);
+  if (startMatch && typeof startMatch.index === 'number') {
+    const startIndex = startMatch.index;
+    const startEndIndex = startIndex + startMatch[0].length;
+    const endMatch = REPORT_META_END_RE.exec(contentMd.slice(startEndIndex));
+    if (endMatch && typeof endMatch.index === 'number') {
+      const endIndex = startEndIndex + endMatch.index;
+      const endEndIndex = endIndex + endMatch[0].length;
+
+      const before = contentMd.slice(0, startIndex).trimEnd();
+      const between = contentMd.slice(startEndIndex, endIndex);
+      const after = contentMd.slice(endEndIndex).trimStart();
+
+      const parsed = parseJsonObjectFromText(between);
+      const meta = parsed && looksLikeReportMeta(parsed) ? parsed : null;
+      const body = [before, after].filter(Boolean).join('\n\n').trim();
+      return { meta, body };
+    }
+  }
+
+  const leadingJsonFence = contentMd.match(/^\s*```(?:json|jsonc)?\s*([\s\S]*?)\s*```\s*/i);
+  if (leadingJsonFence) {
+    const parsed = parseJsonObjectFromText(leadingJsonFence[0]);
+    const meta = parsed && looksLikeReportMeta(parsed) ? parsed : null;
+    if (meta) {
+      const body = contentMd.slice(leadingJsonFence[0].length).trimStart();
+      return { meta, body: body.trim() };
+    }
+  }
+
+  return { meta: null, body: contentMd.trim() };
 }
 
 function validateLongformReport(params: {
@@ -487,7 +565,8 @@ function validateLongformReport(params: {
 }): { ok: true } | { ok: false; reasons: string[] } {
   const reasons: string[] = [];
 
-  const meta = tryParseReportMetaJson(params.contentMd);
+  const extracted = extractReportMetaAndBody(params.contentMd);
+  const meta = extracted.meta;
   if (!meta || typeof meta !== 'object' || Array.isArray(meta)) {
     reasons.push('缺少或无法解析 REPORT_META JSON 元数据块');
   } else {
@@ -502,7 +581,7 @@ function validateLongformReport(params: {
     }
   }
 
-  const body = extractReportBodyOnly(params.contentMd);
+  const body = extracted.body;
   if (!body) reasons.push('报告正文为空');
 
   // Basic length gate (adaptive to material volume).
@@ -526,7 +605,8 @@ function validateLongformReport(params: {
   if (claimMatches.length < minClaimsTotal) reasons.push(`Claim 数量不足（${claimMatches.length}/${minClaimsTotal}）`);
 
   const quoteLines = [...body.matchAll(/^>\s+.*$/gm)];
-  const minQuotesTotal = Math.max(0, claimMatches.length * 2);
+  const quotesPerClaim = params.sourceCount >= 12 ? 2 : 1;
+  const minQuotesTotal = Math.max(0, claimMatches.length * quotesPerClaim);
   if (quoteLines.length < minQuotesTotal) reasons.push(`Quote 数量不足（${quoteLines.length}/${minQuotesTotal}）`);
 
   const citations = [...body.matchAll(/\[(S\d+)\]/g)].map((m) => m[1] ?? null).filter((v): v is string => Boolean(v));

@@ -1444,7 +1444,7 @@ export function TopicStage({ topicId }: Props) {
     left = Math.max(padding, Math.min(left, sunburstSize - cardWidth - padding));
     top = Math.max(padding, Math.min(top, sunburstSize - cardHeight - padding));
 
-    return { left, top, width: cardWidth };
+    return { left, top, width: cardWidth, height: cardHeight };
   };
 
   // Reply editor (shared for Explore + Read)
@@ -2071,21 +2071,16 @@ export function TopicStage({ topicId }: Props) {
                       style={cardPosition(hoverCard.x, hoverCard.y)}
                       data-testid="sunburst-hover-card"
                     >
-	                      <div className="rounded-lg border border-border/60 bg-background p-4 shadow-lg">
-	                        <div className="mb-2">
-	                          <h3 className="font-serif text-base font-semibold text-foreground leading-tight line-clamp-2">
-	                            {toTitle(hoverCard.argument)}
-	                          </h3>
-	                        </div>
+                      <div className="flex h-full flex-col rounded-lg border border-border/60 bg-background p-4 shadow-lg">
+                        <div className="mb-2">
+                          <h3 className="h-[44px] font-serif text-base font-semibold text-foreground leading-tight line-clamp-2">
+                            {toTitle(hoverCard.argument)}
+                          </h3>
+                        </div>
 
-	                        <p
-	                          className={[
-	                            "text-xs text-muted-foreground leading-relaxed",
-	                            "line-clamp-4",
-	                          ].join(" ")}
-	                        >
-	                          {toExcerpt(hoverCard.argument.body)}
-	                        </p>
+                        <p className="flex-1 text-xs text-muted-foreground leading-relaxed line-clamp-4">
+                          {toExcerpt(hoverCard.argument.body)}
+                        </p>
 
                         <div className="mt-3 flex items-center justify-between border-t border-border/60 pt-2 text-[10px] text-muted-foreground">
                           <span>{authorLabel(hoverCard.argument.authorId, hoverCard.argument.authorDisplayName)}</span>
@@ -2167,10 +2162,14 @@ export function TopicStage({ topicId }: Props) {
           </div>
 
           {/* Right: Reader */}
-          <div ref={rightColumnRef} className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+          <div
+            ref={rightColumnRef}
+            className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background"
+          >
             {readArgument ? (
-              <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-                <div className="border-b border-border/60 px-6 py-6 md:pr-[340px]">
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                  <div className="border-b border-border/60 px-6 py-6">
                   {isEditingSelectedArgument ? (
                     <Input
                       aria-label={t("stage.editTitleAria")}
@@ -2249,8 +2248,8 @@ export function TopicStage({ topicId }: Props) {
                   ) : null}
                 </div>
 
-                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-8 md:pr-[340px]">
-	                  <div className="mx-auto w-full max-w-[760px]">
+                  <div className="min-h-0 flex-1 overflow-y-auto px-6 py-8">
+		                  <div className="mx-auto w-full max-w-[760px]">
                       <div className="sticky top-0 z-20 mb-6 rounded-lg border border-border/60 bg-background md:hidden">
                         <div className="border-b border-border/60 px-4 py-4">
                           <div className="flex items-start justify-between gap-3">

@@ -160,6 +160,12 @@ export async function processTranslation(params: ProcessTranslationParams): Prom
     }
 
     const translated = await provider.translate(task, targetLocale);
+    if (provider.provider === 'openrouter' && translated.usage) {
+      const { promptTokens, completionTokens, totalTokens } = translated.usage;
+      console.log(
+        `[worker] OpenRouter translation usage resourceType=${resourceType} targetLocale=${targetLocale} prompt=${promptTokens ?? '?'} completion=${completionTokens ?? '?'} total=${totalTokens ?? '?'}`,
+      );
+    }
 
     await prisma.translation.update({
       where: {
