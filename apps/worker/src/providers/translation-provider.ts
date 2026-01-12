@@ -99,7 +99,7 @@ function createMockTranslationProvider(): TranslationProvider {
 }
 
 function createOpenRouterTranslationProvider(): TranslationProvider {
-  const apiKey = process.env.OPENROUTER_API_KEY;
+  const apiKey = process.env.OPENROUTER_API_KEY?.trim();
   const baseUrl = (process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
   const model = process.env.TRANSLATION_MODEL ?? 'z-ai/glm-4.7';
   const timeoutMs = Number(process.env.TRANSLATION_TIMEOUT_MS ?? '90000');
