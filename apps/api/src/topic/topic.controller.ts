@@ -19,6 +19,7 @@ import { TopicService } from './topic.service.js';
 import { RequireSignature } from '../common/auth.guard.js';
 import { RiskControl } from '../risk-control/risk-control.decorator.js';
 import { TopicPrivacyGuard } from './topic-privacy.guard.js';
+import { resolveRequestLocale } from '../common/locale.js';
 import {
   zCreateTopicRequest,
   zSetTopicProfileMeRequest,
@@ -60,14 +61,17 @@ export class TopicController {
     @Query('limit') limitStr?: string,
     @Query('beforeId') beforeId?: string,
     @Query('orderBy') orderBy?: string,
+    @Headers('x-epiphany-locale') localeHeader?: string,
+    @Headers('accept-language') acceptLanguage?: string,
   ) {
     const limit = limitStr ? parseInt(limitStr, 10) : undefined;
+    const locale = resolveRequestLocale({ localeHeader, acceptLanguage });
 
     return this.topicService.listTopics({
       limit: isNaN(limit as number) ? undefined : limit,
       beforeId,
       orderBy: orderBy as 'createdAt_desc' | undefined,
-    });
+    }, locale);
   }
 
   /**
@@ -86,8 +90,13 @@ export class TopicController {
    */
   @Get(':topicId/consensus-report/latest')
   @UseGuards(TopicPrivacyGuard)
-  async getLatestConsensusReport(@Param('topicId') topicId: string) {
-    return this.topicService.getLatestConsensusReport(topicId);
+  async getLatestConsensusReport(
+    @Param('topicId') topicId: string,
+    @Headers('x-epiphany-locale') localeHeader?: string,
+    @Headers('accept-language') acceptLanguage?: string,
+  ) {
+    const locale = resolveRequestLocale({ localeHeader, acceptLanguage });
+    return this.topicService.getLatestConsensusReport(topicId, locale);
   }
 
   /**
@@ -99,8 +108,11 @@ export class TopicController {
   async getConsensusReportById(
     @Param('topicId') topicId: string,
     @Param('reportId') reportId: string,
+    @Headers('x-epiphany-locale') localeHeader?: string,
+    @Headers('accept-language') acceptLanguage?: string,
   ) {
-    return this.topicService.getConsensusReportById(topicId, reportId);
+    const locale = resolveRequestLocale({ localeHeader, acceptLanguage });
+    return this.topicService.getConsensusReportById(topicId, reportId, locale);
   }
 
   /**
@@ -192,8 +204,11 @@ export class TopicController {
   async getLedgerMe(
     @Param('topicId') topicId: string,
     @Headers('x-pubkey') pubkey: string,
+    @Headers('x-epiphany-locale') localeHeader?: string,
+    @Headers('accept-language') acceptLanguage?: string,
   ) {
-    return this.topicService.getLedgerMe(topicId, pubkey);
+    const locale = resolveRequestLocale({ localeHeader, acceptLanguage });
+    return this.topicService.getLedgerMe(topicId, pubkey, locale);
   }
 
   /**

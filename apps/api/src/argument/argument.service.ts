@@ -18,6 +18,8 @@ import { validateSetVotes, INITIAL_BALANCE } from '@epiphany/core-logic';
 import { PrismaService } from '../infrastructure/prisma.module.js';
 import { QueueService } from '../infrastructure/queue.module.js';
 import { TopicEventsPublisher } from '../sse/topic-events.publisher.js';
+import { TranslationService } from '../translation/translation.service.js';
+import type { Locale } from '../common/locale.js';
 
 export interface CreateArgumentParams {
   topicId: string;
@@ -38,15 +40,29 @@ export class ArgumentService {
     private readonly prisma: PrismaService,
     private readonly queueService: QueueService,
     private readonly topicEvents: TopicEventsPublisher,
+    private readonly translations: TranslationService,
   ) {}
 
-  private async getAuthorDisplayName(topicId: string, authorPubkey: Uint8Array): Promise<string | null> {
+  private async getAuthorDisplayName(
+    topicId: string,
+    authorPubkey: Uint8Array,
+    locale: Locale,
+  ): Promise<string | null> {
     const profile = await this.prisma.topicIdentityProfile.findUnique({
       where: { topicId_pubkey: { topicId, pubkey: Buffer.from(authorPubkey) } },
       select: { displayName: true },
     });
 
-    return profile?.displayName ?? null;
+    const displayName = profile?.displayName ?? null;
+    if (!displayName) return null;
+
+    const pubkeyHex = Buffer.from(authorPubkey).toString('hex');
+    const overrides = await this.translations.getDisplayNameOverrides({
+      items: [{ topicId, pubkeyHex, displayName }],
+      targetLocale: locale,
+    });
+
+    return overrides.get(`${topicId}:${pubkeyHex}`) ?? displayName;
   }
 
   private normalizeAccessKeyHex(value: string | undefined): string | null {
@@ -64,7 +80,7 @@ export class ArgumentService {
     return timingSafeEqual(expected, digest);
   }
 
-  async getArgument(argumentId: string) {
+  async getArgument(argumentId: string, locale: Locale) {
     const argument = await this.prisma.argument.findFirst({
       where: { id: argumentId, prunedAt: null },
       select: {
@@ -91,11 +107,22 @@ export class ArgumentService {
       });
     }
 
-    const authorDisplayName = await this.getAuthorDisplayName(argument.topicId, argument.authorPubkey);
-    return { argument: this.toArgumentDto(argument, authorDisplayName) };
+    const argumentOverrides = await this.translations.getArgumentOverrides({
+      items: [{ id: argument.id, title: argument.title, body: argument.body }],
+      targetLocale: locale,
+    });
+    const override = argumentOverrides.get(argument.id);
+
+    const authorDisplayName = await this.getAuthorDisplayName(argument.topicId, argument.authorPubkey, locale);
+    return {
+      argument: this.toArgumentDto(
+        { ...argument, title: override?.title ?? argument.title, body: override?.body ?? argument.body },
+        authorDisplayName,
+      ),
+    };
   }
 
-  async createArgument(params: CreateArgumentParams) {
+  async createArgument(params: CreateArgumentParams & { locale: Locale }) {
     const { topicId, dto, pubkeyHex } = params;
     const pubkeyBytes = Buffer.from(pubkeyHex, 'hex');
     const argumentId = uuidv7();
@@ -270,16 +297,27 @@ export class ArgumentService {
       console.error(`[argument] Failed to enqueue analysis for ${argumentId}:`, err);
     });
 
+    // Fire-and-forget: pre-translate argument content to the other locale.
+    this.translations
+      .requestArgumentTranslation({
+        argumentId,
+        title: result.argument.title ?? null,
+        body: result.argument.body,
+      })
+      .catch((err) => {
+        console.warn(`[argument] Failed to request translation for ${argumentId}:`, err);
+      });
+
     return {
       argument: this.toArgumentDto(
         result.argument,
-        await this.getAuthorDisplayName(result.argument.topicId, result.argument.authorPubkey),
+        await this.getAuthorDisplayName(result.argument.topicId, result.argument.authorPubkey, params.locale),
       ),
       ledger: this.toLedgerDto(result.ledger),
     };
   }
 
-  async editArgument(params: EditArgumentParams) {
+  async editArgument(params: EditArgumentParams & { locale: Locale }) {
     const { argumentId, dto, pubkeyHex } = params;
     const pubkeyBytes = Buffer.from(pubkeyHex, 'hex');
 
@@ -368,6 +406,13 @@ export class ArgumentService {
       console.error(`[argument] Failed to enqueue analysis for edit ${argumentId}:`, err);
     });
 
+    // Fire-and-forget: refresh translation for updated content.
+    this.translations
+      .requestArgumentTranslation({ argumentId, title: updated.title ?? null, body: updated.body })
+      .catch((err) => {
+        console.warn(`[argument] Failed to request translation for edit ${argumentId}:`, err);
+      });
+
     // Best-effort SSE invalidation
     this.topicEvents
       .publish(argument.topicId, {
@@ -379,7 +424,7 @@ export class ArgumentService {
     return {
       argument: this.toArgumentDto(
         updated,
-        await this.getAuthorDisplayName(updated.topicId, updated.authorPubkey),
+        await this.getAuthorDisplayName(updated.topicId, updated.authorPubkey, params.locale),
       ),
     };
   }

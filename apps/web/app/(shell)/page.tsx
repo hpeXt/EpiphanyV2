@@ -4,7 +4,7 @@ import { P5Badge } from "@/components/ui/P5Badge";
 import { P5LinkButton } from "@/components/ui/P5Button";
 import { P5Alert } from "@/components/ui/P5Alert";
 import { TopicHostControls } from "@/components/topics/TopicHostControls";
-import { apiClient } from "@/lib/apiClient";
+import { createApiClient } from "@/lib/apiClient";
 import { createTranslator, toDateLocale } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/server";
 
@@ -12,6 +12,7 @@ export default async function Home() {
   const locale = await getRequestLocale();
   const t = createTranslator(locale);
 
+  const apiClient = createApiClient({ locale });
   const result = await apiClient.listTopics();
 
   if (!result.ok) {

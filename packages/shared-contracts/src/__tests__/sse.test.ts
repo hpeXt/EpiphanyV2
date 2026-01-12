@@ -192,6 +192,38 @@ describe('SseEnvelope', () => {
     });
   });
 
+  describe('translation_updated', () => {
+    it('should parse translation_updated', () => {
+      const fixture: SseEnvelope = {
+        event: 'translation_updated',
+        data: {
+          topicId: '0193e3a6-0b7d-7a8d-9f2c-1234567890ab',
+          resourceType: 'argument',
+          resourceId: '0193e3a6-0b7d-7a8d-9f2c-abcdef123456',
+          locale: 'en',
+        },
+      };
+
+      const result = zSseEnvelope.safeParse(fixture);
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject invalid resourceType', () => {
+      const fixture = {
+        event: 'translation_updated',
+        data: {
+          topicId: '0193e3a6-0b7d-7a8d-9f2c-1234567890ab',
+          resourceType: 'unknown_type',
+          resourceId: 'id',
+          locale: 'en',
+        },
+      };
+
+      const result = zSseEnvelope.safeParse(fixture);
+      expect(result.success).toBe(false);
+    });
+  });
+
   describe('reload_required', () => {
     it('should parse reload_required with reason: trimmed', () => {
       const fixture: SseEnvelope = {
@@ -244,6 +276,10 @@ describe('SseEnvelope', () => {
         {
           event: 'report_updated',
           data: { topicId: 'uuid', reportId: 'uuid' },
+        },
+        {
+          event: 'translation_updated',
+          data: { topicId: 'uuid', resourceType: 'topic_title', resourceId: 'uuid', locale: 'zh' },
         },
         { event: 'reload_required', data: { reason: 'trimmed' } },
       ];

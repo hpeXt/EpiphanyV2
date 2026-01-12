@@ -45,6 +45,25 @@ const zSseReportUpdated = z.object({
   }),
 });
 
+const zTranslationResourceType = z.enum([
+  'topic_title',
+  'argument',
+  'consensus_report',
+  'camp',
+  'topic_profile_display_name',
+]);
+export type TranslationResourceType = z.infer<typeof zTranslationResourceType>;
+
+const zSseTranslationUpdated = z.object({
+  event: z.literal('translation_updated'),
+  data: z.object({
+    topicId: z.string(),
+    resourceType: zTranslationResourceType,
+    resourceId: z.string(),
+    locale: z.enum(['zh', 'en']),
+  }),
+});
+
 const zSseReloadRequired = z.object({
   event: z.literal('reload_required'),
   data: z.object({
@@ -60,6 +79,7 @@ export const zSseEnvelope = z.discriminatedUnion('event', [
   zSseTopicUpdated,
   zSseClusterUpdated,
   zSseReportUpdated,
+  zSseTranslationUpdated,
   zSseReloadRequired,
 ]);
 
@@ -71,5 +91,6 @@ export {
   zSseTopicUpdated,
   zSseClusterUpdated,
   zSseReportUpdated,
+  zSseTranslationUpdated,
   zSseReloadRequired,
 };

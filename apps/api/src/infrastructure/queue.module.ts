@@ -6,11 +6,13 @@
 
 import { Global, Module, OnModuleDestroy, Injectable } from '@nestjs/common';
 import { Queue } from 'bullmq';
+import { createHash } from 'node:crypto';
 
 // Queue name per docs/stage01/ai-worker.md (using underscore instead of colon for BullMQ compatibility)
 const QUEUE_ARGUMENT_ANALYSIS = 'ai_argument-analysis';
 const QUEUE_TOPIC_CLUSTER = 'ai_topic-cluster';
 const QUEUE_CONSENSUS_REPORT = 'ai_consensus-report';
+const QUEUE_TRANSLATION = 'ai_translation';
 const TOPIC_CLUSTER_DEBOUNCE_MS = 5 * 60 * 1000;
 
 /**
@@ -40,18 +42,21 @@ export class QueueService implements OnModuleDestroy {
   private readonly argumentAnalysisQueue: Queue;
   private readonly topicClusterQueue: Queue;
   private readonly consensusReportQueue: Queue;
+  private readonly translationQueue: Queue;
 
   constructor() {
     const connection = getRedisConnection();
     this.argumentAnalysisQueue = new Queue(QUEUE_ARGUMENT_ANALYSIS, { connection });
     this.topicClusterQueue = new Queue(QUEUE_TOPIC_CLUSTER, { connection });
     this.consensusReportQueue = new Queue(QUEUE_CONSENSUS_REPORT, { connection });
+    this.translationQueue = new Queue(QUEUE_TRANSLATION, { connection });
   }
 
   async onModuleDestroy() {
     await this.argumentAnalysisQueue.close();
     await this.topicClusterQueue.close();
     await this.consensusReportQueue.close();
+    await this.translationQueue.close();
   }
 
   /**
@@ -134,6 +139,48 @@ export class QueueService implements OnModuleDestroy {
       `[queue] Enqueued consensus-report job=${job.id} topicId=${params.topicId} reportId=${params.reportId}`,
     );
     return job.id ?? params.reportId;
+  }
+
+  /**
+   * Enqueue an async translation job (Topic / Argument / displayName / report).
+   *
+   * Job is idempotent via a deterministic sha256-based jobId.
+   */
+  async enqueueTranslation(params: {
+    resourceType:
+      | 'topic_title'
+      | 'argument'
+      | 'consensus_report'
+      | 'camp'
+      | 'topic_profile_display_name';
+    resourceId: string;
+    targetLocale: 'zh' | 'en';
+  }): Promise<string> {
+    const key = `${params.resourceType}|${params.resourceId}|${params.targetLocale}`;
+    const jobId = `tr_${createHash('sha256').update(key).digest('hex').slice(0, 24)}`;
+
+    try {
+      const job = await this.translationQueue.add(
+        'translate',
+        { resourceType: params.resourceType, resourceId: params.resourceId, targetLocale: params.targetLocale },
+        {
+          jobId,
+          removeOnComplete: 500,
+          removeOnFail: 500,
+        },
+      );
+
+      console.log(
+        `[queue] Enqueued translation job=${job.id} resourceType=${params.resourceType} targetLocale=${params.targetLocale}`,
+      );
+      return job.id ?? jobId;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('already exists')) {
+        return jobId;
+      }
+      throw err;
+    }
   }
 }
 

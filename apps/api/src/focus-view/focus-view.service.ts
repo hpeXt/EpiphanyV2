@@ -5,6 +5,7 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import type { ArgumentChildrenResponse, TopicArgumentsResponse, TopicTreeResponse } from '@epiphany/shared-contracts';
 import { FocusViewRepo, type ChildrenOrderBy } from './focus-view.repo.js';
+import type { Locale } from '../common/locale.js';
 
 function clampInt(value: number, min: number, max: number): number {
   if (value < min) return min;
@@ -26,7 +27,7 @@ export class FocusViewService {
 
   constructor(private readonly repo: FocusViewRepo) {}
 
-  async getTopicTree(topicId: string, depthRaw?: string): Promise<TopicTreeResponse> {
+  async getTopicTree(topicId: string, depthRaw: string | undefined, locale: Locale): Promise<TopicTreeResponse> {
     const depthParsed = depthRaw ? parseInt(depthRaw, 10) : this.DEFAULT_TREE_DEPTH;
     const depth = clampInt(
       Number.isFinite(depthParsed) ? depthParsed : this.DEFAULT_TREE_DEPTH,
@@ -34,7 +35,7 @@ export class FocusViewService {
       this.MAX_TREE_DEPTH,
     );
 
-    const result = await this.repo.getTopicTree(topicId, depth);
+    const result = await this.repo.getTopicTree(topicId, depth, locale);
     if (!result) {
       throw new NotFoundException({
         error: { code: 'TOPIC_NOT_FOUND', message: 'Topic not found' },
@@ -48,6 +49,7 @@ export class FocusViewService {
     topicId: string;
     beforeId?: string;
     limitRaw?: string;
+    locale: Locale;
   }): Promise<TopicArgumentsResponse> {
     const limitParsed = params.limitRaw ? parseInt(params.limitRaw, 10) : this.DEFAULT_TOPIC_ARGUMENTS_LIMIT;
     const limit = clampInt(
@@ -60,6 +62,7 @@ export class FocusViewService {
       topicId: params.topicId,
       beforeId: params.beforeId,
       limit,
+      locale: params.locale,
     });
 
     if (!result) {
@@ -76,6 +79,7 @@ export class FocusViewService {
     orderByRaw?: string;
     beforeId?: string;
     limitRaw?: string;
+    locale: Locale;
   }): Promise<ArgumentChildrenResponse> {
     const orderBy = this.parseChildrenOrderBy(params.orderByRaw);
 
@@ -91,6 +95,7 @@ export class FocusViewService {
       orderBy,
       beforeId: params.beforeId,
       limit,
+      locale: params.locale,
     });
 
     if (!result) {

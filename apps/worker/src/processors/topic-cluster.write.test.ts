@@ -215,4 +215,3 @@ async function setEmbedding(
     WHERE id = ${argumentId}::uuid AND topic_id = ${topicId}::uuid
   `;
 }
-

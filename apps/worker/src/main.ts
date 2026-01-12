@@ -26,11 +26,14 @@ import {
   processConsensusReport,
 } from './processors/consensus-report.js';
 import { createConsensusReportProvider } from './providers/consensus-report-provider.js';
+import { processTranslation } from './processors/translation.js';
+import { createTranslationProvider } from './providers/translation-provider.js';
 
 // Queue names per docs/stage01/ai-worker.md (using underscore instead of colon for BullMQ compatibility)
 const QUEUE_ARGUMENT_ANALYSIS = 'ai_argument-analysis';
 const QUEUE_TOPIC_CLUSTER = 'ai_topic-cluster';
 const QUEUE_CONSENSUS_REPORT = 'ai_consensus-report';
+const QUEUE_TRANSLATION = 'ai_translation';
 
 // Configuration
 loadEnv();
@@ -54,6 +57,7 @@ const aiProvider = createAIProvider();
 const argumentAnalysisQueue = new Queue(QUEUE_ARGUMENT_ANALYSIS, { connection });
 const topicClusterQueue = new Queue(QUEUE_TOPIC_CLUSTER, { connection });
 const consensusReportQueue = new Queue(QUEUE_CONSENSUS_REPORT, { connection });
+const translationQueue = new Queue(QUEUE_TRANSLATION, { connection });
 
 function getTopicClusterEngine(): TopicClusterEngine {
   const configured = (process.env.CLUSTER_ENGINE ?? 'node').toLowerCase();
@@ -71,6 +75,7 @@ function getTopicClusterEngine(): TopicClusterEngine {
 
 const topicClusterEngine = getTopicClusterEngine();
 const consensusReportProvider = createConsensusReportProvider();
+const translationProvider = createTranslationProvider();
 
 /**
  * Argument Analysis Job Payload
@@ -199,6 +204,46 @@ const consensusReportWorker = new Worker<ConsensusReportJobData>(
   },
 );
 
+/**
+ * Translation Job Payload
+ */
+interface TranslationJobData {
+  resourceType: 'topic_title' | 'argument' | 'consensus_report' | 'camp' | 'topic_profile_display_name';
+  resourceId: string;
+  targetLocale: 'zh' | 'en';
+}
+
+/**
+ * Translation Worker
+ */
+const translationWorker = new Worker<TranslationJobData>(
+  QUEUE_TRANSLATION,
+  async (job: Job<TranslationJobData>) => {
+    const { resourceType, resourceId, targetLocale } = job.data;
+
+    console.log(
+      `[worker] Processing translation job=${job.id} resourceType=${resourceType} resourceId=${resourceId} targetLocale=${targetLocale}`,
+    );
+
+    const result = await processTranslation({
+      job: { resourceType, resourceId, targetLocale },
+      prisma,
+      redis,
+      provider: translationProvider,
+    });
+
+    if (!result.success) {
+      console.warn(`[worker] translation job=${job.id} failed: ${result.error}`);
+    }
+
+    return result;
+  },
+  {
+    connection,
+    concurrency: 2,
+  },
+);
+
 topicClusterWorker.on('ready', () => {
   console.log(
     `[worker] Topic cluster worker ready queue=${QUEUE_TOPIC_CLUSTER} redis=${connection.host}:${connection.port}`
@@ -260,6 +305,26 @@ consensusReportWorker.on('error', (err) => {
   console.error(`[worker] Worker error: ${err?.message ?? err}`);
 });
 
+translationWorker.on('ready', () => {
+  console.log(
+    `[worker] Translation worker ready queue=${QUEUE_TRANSLATION} redis=${connection.host}:${connection.port}`,
+  );
+});
+
+translationWorker.on('completed', (job) => {
+  console.log(`[worker] Completed job=${job.id} name=${job.name}`);
+});
+
+translationWorker.on('failed', (job, err) => {
+  console.error(
+    `[worker] Failed job=${job?.id ?? 'unknown'} name=${job?.name ?? 'unknown'} err=${err?.message ?? err}`,
+  );
+});
+
+translationWorker.on('error', (err) => {
+  console.error(`[worker] Worker error: ${err?.message ?? err}`);
+});
+
 // HTTP response helper
 function writeJson(res: http.ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { 'content-type': 'application/json' });
@@ -283,10 +348,12 @@ const server = http.createServer(async (req, res) => {
         await client2.ping();
         const client3 = await consensusReportQueue.client;
         await client3.ping();
+        const client4 = await translationQueue.client;
+        await client4.ping();
         await prisma.$queryRaw`SELECT 1`;
         writeJson(res, 200, {
           ok: true,
-          queues: [QUEUE_ARGUMENT_ANALYSIS, QUEUE_TOPIC_CLUSTER, QUEUE_CONSENSUS_REPORT],
+          queues: [QUEUE_ARGUMENT_ANALYSIS, QUEUE_TOPIC_CLUSTER, QUEUE_CONSENSUS_REPORT, QUEUE_TRANSLATION],
         });
         return;
       } catch (err) {
@@ -361,6 +428,8 @@ async function shutdown(signal: string): Promise<void> {
   await topicClusterQueue.close();
   await consensusReportWorker.close();
   await consensusReportQueue.close();
+  await translationWorker.close();
+  await translationQueue.close();
   await redis.quit();
   await prisma.$disconnect();
   process.exit(0);

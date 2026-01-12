@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { zEditArgumentRequest } from '@epiphany/shared-contracts';
 import { RequireSignature } from '../common/auth.guard.js';
+import { resolveRequestLocale } from '../common/locale.js';
 import { RiskControl } from '../risk-control/risk-control.decorator.js';
 import { ArgumentService } from './argument.service.js';
 
@@ -32,6 +33,8 @@ export class ArgumentEditController {
     @Param('argumentId') argumentId: string,
     @Body() body: unknown,
     @Headers('x-pubkey') pubkey: string,
+    @Headers('x-epiphany-locale') localeHeader?: string,
+    @Headers('accept-language') acceptLanguage?: string,
   ) {
     const parsed = zEditArgumentRequest.safeParse(body);
     if (!parsed.success) {
@@ -43,11 +46,13 @@ export class ArgumentEditController {
       });
     }
 
+    const locale = resolveRequestLocale({ localeHeader, acceptLanguage });
+
     return this.argumentService.editArgument({
       argumentId,
       dto: parsed.data,
       pubkeyHex: pubkey,
+      locale,
     });
   }
 }
-

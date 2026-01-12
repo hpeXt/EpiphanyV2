@@ -1,12 +1,14 @@
 import { P5Alert } from "@/components/ui/P5Alert";
 import { P5Card } from "@/components/ui/P5Card";
 import { TopicsPageClient } from "@/components/topics/TopicsPageClient";
-import { apiClient } from "@/lib/apiClient";
+import { createApiClient } from "@/lib/apiClient";
 import { createTranslator } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/server";
 
 export default async function TopicsPage() {
-  const t = createTranslator(await getRequestLocale());
+  const locale = await getRequestLocale();
+  const t = createTranslator(locale);
+  const apiClient = createApiClient({ locale });
   const result = await apiClient.listTopics();
 
   if (!result.ok) {

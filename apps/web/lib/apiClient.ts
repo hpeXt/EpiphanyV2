@@ -29,6 +29,7 @@ import type { z } from "zod";
 
 import { createLocalStorageKeyStore, createV1Signer, type Signer, type SignedHeadersV1 } from "@/lib/signing";
 import { createLocalStorageTopicAccessKeyStore, type TopicAccessKeyStore } from "@/lib/topicAccessKeyStore";
+import { defaultLocale, isLocale, LOCALE_COOKIE_NAME, type Locale } from "@/lib/i18n";
 
 export type ApiError =
   | { kind: "config"; message: string }
@@ -42,6 +43,27 @@ export function getApiBaseUrl(): string | null {
   const baseUrl = process.env.NEXT_PUBLIC_API_URL;
   if (!baseUrl) return null;
   return baseUrl.replace(/\/+$/, "");
+}
+
+function readClientCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const cookies = document.cookie;
+  const parts = cookies.split(";");
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq <= 0) continue;
+    const key = trimmed.slice(0, eq);
+    if (key !== name) continue;
+    return decodeURIComponent(trimmed.slice(eq + 1));
+  }
+  return null;
+}
+
+function getClientLocaleFromCookie(): Locale | null {
+  const raw = readClientCookie(LOCALE_COOKIE_NAME);
+  return isLocale(raw) ? raw : null;
 }
 
 async function readJson(response: Response): Promise<
@@ -244,16 +266,54 @@ async function requestJsonSigned<T>(
   );
 }
 
-export function createApiClient(deps?: { signer?: Signer }) {
+export function createApiClient(deps?: { signer?: Signer; locale?: Locale }) {
   // Get signer lazily - deps.signer takes precedence, then default signer
   const getSigner = (): Signer | null => deps?.signer ?? getDefaultSigner();
+  const getLocale = (): Locale => deps?.locale ?? getClientLocaleFromCookie() ?? defaultLocale;
+  const getLocaleHeaders = (): Record<string, string> => ({ "x-epiphany-locale": getLocale() });
+
+  const requestJsonWithLocale = <T>(path: string, init: RequestInit, schema: z.ZodType<T>) => {
+    return requestJson(
+      path,
+      {
+        ...init,
+        headers: {
+          ...getLocaleHeaders(),
+          ...(init.headers ?? {}),
+        },
+      },
+      schema,
+    );
+  };
+
+  const requestJsonSignedWithLocale = <T>(
+    signer: Signer,
+    topicId: string,
+    path: string,
+    init: RequestInit,
+    schema: z.ZodType<T>,
+  ) => {
+    return requestJsonSigned(
+      signer,
+      topicId,
+      path,
+      {
+        ...init,
+        headers: {
+          ...getLocaleHeaders(),
+          ...(init.headers ?? {}),
+        },
+      },
+      schema,
+    );
+  };
 
   return {
     listTopics() {
-      return requestJson("/v1/topics", { method: "GET", cache: "no-store" }, zListTopicsResponse);
+      return requestJsonWithLocale("/v1/topics", { method: "GET", cache: "no-store" }, zListTopicsResponse);
     },
     createTopic(input: CreateTopicRequest) {
-      return requestJson(
+      return requestJsonWithLocale(
         "/v1/topics",
         {
           method: "POST",
@@ -271,7 +331,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
       const accessKeyHeaders = getTopicAccessKeyHeaders(topicId);
 
       if (signer) {
-        return requestJsonSigned(
+        return requestJsonSignedWithLocale(
           signer,
           topicId,
           path,
@@ -280,7 +340,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
         );
       }
 
-      return requestJson(path, { method: "GET", headers: accessKeyHeaders }, zTopicTreeResponse);
+      return requestJsonWithLocale(path, { method: "GET", headers: accessKeyHeaders }, zTopicTreeResponse);
     },
     listTopicArguments(input: { topicId: string; limit?: number; beforeId?: string }) {
       const signer = getSigner();
@@ -295,7 +355,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
       const accessKeyHeaders = getTopicAccessKeyHeaders(input.topicId);
 
       if (signer) {
-        return requestJsonSigned(
+        return requestJsonSignedWithLocale(
           signer,
           input.topicId,
           path,
@@ -304,7 +364,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
         );
       }
 
-      return requestJson(path, { method: "GET", headers: accessKeyHeaders }, zTopicArgumentsResponse);
+      return requestJsonWithLocale(path, { method: "GET", headers: accessKeyHeaders }, zTopicArgumentsResponse);
     },
     /**
      * God View semantic map (public read)
@@ -317,7 +377,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
       const accessKeyHeaders = getTopicAccessKeyHeaders(topicId);
 
       if (signer) {
-        return requestJsonSigned(
+        return requestJsonSignedWithLocale(
           signer,
           topicId,
           path,
@@ -326,7 +386,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
         );
       }
 
-      return requestJson(path, { method: "GET", headers: accessKeyHeaders }, zClusterMap);
+      return requestJsonWithLocale(path, { method: "GET", headers: accessKeyHeaders }, zClusterMap);
     },
     getArgumentChildren(input: {
       topicId?: string;
@@ -348,7 +408,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
       if (input.topicId) {
         const accessKeyHeaders = getTopicAccessKeyHeaders(input.topicId);
         if (signer) {
-          return requestJsonSigned(
+          return requestJsonSignedWithLocale(
             signer,
             input.topicId,
             path,
@@ -356,10 +416,10 @@ export function createApiClient(deps?: { signer?: Signer }) {
             zArgumentChildrenResponse,
           );
         }
-        return requestJson(path, { method: "GET", headers: accessKeyHeaders }, zArgumentChildrenResponse);
+        return requestJsonWithLocale(path, { method: "GET", headers: accessKeyHeaders }, zArgumentChildrenResponse);
       }
 
-      return requestJson(path, { method: "GET" }, zArgumentChildrenResponse);
+      return requestJsonWithLocale(path, { method: "GET" }, zArgumentChildrenResponse);
     },
     /**
      * Argument detail (public read)
@@ -373,7 +433,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
       if (topicId) {
         const accessKeyHeaders = getTopicAccessKeyHeaders(topicId);
         if (signer) {
-          return requestJsonSigned(
+          return requestJsonSignedWithLocale(
             signer,
             topicId,
             path,
@@ -381,10 +441,10 @@ export function createApiClient(deps?: { signer?: Signer }) {
             zArgumentResponse,
           );
         }
-        return requestJson(path, { method: "GET", headers: accessKeyHeaders }, zArgumentResponse);
+        return requestJsonWithLocale(path, { method: "GET", headers: accessKeyHeaders }, zArgumentResponse);
       }
 
-      return requestJson(path, { method: "GET" }, zArgumentResponse);
+      return requestJsonWithLocale(path, { method: "GET" }, zArgumentResponse);
     },
     editArgument(topicId: string, argumentId: string, input: EditArgumentRequest): Promise<ApiResult<z.infer<typeof zEditArgumentResponse>>> {
       const signer = getSigner();
@@ -396,7 +456,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
       }
       const encodedArgumentId = encodeURIComponent(argumentId);
       const body = JSON.stringify(input);
-      return requestJsonSigned(
+      return requestJsonSignedWithLocale(
         signer,
         topicId,
         `/v1/arguments/${encodedArgumentId}/edit`,
@@ -415,7 +475,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
       const accessKeyHeaders = getTopicAccessKeyHeaders(topicId);
 
       if (signer) {
-        return requestJsonSigned(
+        return requestJsonSignedWithLocale(
           signer,
           topicId,
           path,
@@ -424,7 +484,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
         );
       }
 
-      return requestJson(path, { method: "GET", headers: accessKeyHeaders }, zConsensusReportLatestResponse);
+      return requestJsonWithLocale(path, { method: "GET", headers: accessKeyHeaders }, zConsensusReportLatestResponse);
     },
     getConsensusReportById(topicId: string, reportId: string) {
       const signer = getSigner();
@@ -434,7 +494,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
       const accessKeyHeaders = getTopicAccessKeyHeaders(topicId);
 
       if (signer) {
-        return requestJsonSigned(
+        return requestJsonSignedWithLocale(
           signer,
           topicId,
           path,
@@ -443,7 +503,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
         );
       }
 
-      return requestJson(path, { method: "GET", headers: accessKeyHeaders }, zConsensusReportByIdResponse);
+      return requestJsonWithLocale(path, { method: "GET", headers: accessKeyHeaders }, zConsensusReportByIdResponse);
     },
     getLedgerMe(topicId: string): Promise<ApiResult<z.infer<typeof zLedgerMe>>> {
       const signer = getSigner();
@@ -454,7 +514,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
         });
       }
       const encodedTopicId = encodeURIComponent(topicId);
-      return requestJsonSigned(
+      return requestJsonSignedWithLocale(
         signer,
         topicId,
         `/v1/topics/${encodedTopicId}/ledger/me`,
@@ -475,7 +535,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
       }
       const encodedTopicId = encodeURIComponent(topicId);
       const body = JSON.stringify(input);
-      return requestJsonSigned(
+      return requestJsonSignedWithLocale(
         signer,
         topicId,
         `/v1/topics/${encodedTopicId}/profile/me`,
@@ -497,7 +557,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
       }
       const encodedTopicId = encodeURIComponent(topicId);
       const body = JSON.stringify(input);
-      return requestJsonSigned(
+      return requestJsonSignedWithLocale(
         signer,
         topicId,
         `/v1/topics/${encodedTopicId}/arguments`,
@@ -519,7 +579,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
       }
       const encodedArgumentId = encodeURIComponent(argumentId);
       const body = JSON.stringify(input);
-      return requestJsonSigned(
+      return requestJsonSignedWithLocale(
         signer,
         topicId,
         `/v1/arguments/${encodedArgumentId}/votes`,
@@ -541,7 +601,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
       }
       const encodedTopicId = encodeURIComponent(topicId);
       const body = JSON.stringify(command);
-      return requestJsonSigned(
+      return requestJsonSignedWithLocale(
         signer,
         topicId,
         `/v1/topics/${encodedTopicId}/commands`,
@@ -566,7 +626,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
         });
       }
       const encodedTopicId = encodeURIComponent(topicId);
-      return requestJsonSigned(
+      return requestJsonSignedWithLocale(
         signer,
         topicId,
         `/v1/topics/${encodedTopicId}/stakes/me`,
@@ -595,7 +655,7 @@ export function createApiClient(deps?: { signer?: Signer }) {
       }
       const body = JSON.stringify({ items });
 
-      return requestJson(
+      return requestJsonWithLocale(
         "/v1/user/batch-balance",
         {
           method: "POST",

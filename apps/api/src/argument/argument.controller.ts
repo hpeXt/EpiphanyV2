@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { zCreateArgumentRequest } from '@epiphany/shared-contracts';
 import { RequireSignature } from '../common/auth.guard.js';
+import { resolveRequestLocale } from '../common/locale.js';
 import { RiskControl } from '../risk-control/risk-control.decorator.js';
 import { ArgumentService } from './argument.service.js';
 
@@ -33,6 +34,8 @@ export class ArgumentController {
     @Body() body: unknown,
     @Headers('x-pubkey') pubkey: string,
     @Headers('x-topic-access-key') accessKey: string | undefined,
+    @Headers('x-epiphany-locale') localeHeader?: string,
+    @Headers('accept-language') acceptLanguage?: string,
   ) {
     const parsed = zCreateArgumentRequest.safeParse(body);
     if (!parsed.success) {
@@ -56,11 +59,14 @@ export class ArgumentController {
       });
     }
 
+    const locale = resolveRequestLocale({ localeHeader, acceptLanguage });
+
     return this.argumentService.createArgument({
       topicId,
       dto: { ...parsed.data, initialVotes },
       pubkeyHex: pubkey,
       accessKeyHex: accessKey,
+      locale,
     });
   }
 }

@@ -57,10 +57,12 @@ export {
   zSseTopicUpdated,
   zSseClusterUpdated,
   zSseReportUpdated,
+  zSseTranslationUpdated,
   zSseReloadRequired,
   type SseEnvelope,
   type ArgumentUpdatedReason,
   type TopicUpdatedReason,
+  type TranslationResourceType,
   type ReloadRequiredReason,
 } from './sse.js';
 

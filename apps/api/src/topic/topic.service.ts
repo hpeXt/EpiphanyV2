@@ -16,6 +16,8 @@ import { PrismaService } from '../infrastructure/prisma.module.js';
 import { RedisService } from '../infrastructure/redis.module.js';
 import { QueueService } from '../infrastructure/queue.module.js';
 import { TopicEventsPublisher } from '../sse/topic-events.publisher.js';
+import { TranslationService } from '../translation/translation.service.js';
+import type { Locale } from '../common/locale.js';
 import type {
   ClusterMap,
   ConsensusReport,
@@ -62,6 +64,7 @@ export class TopicService {
     private readonly redis: RedisService,
     private readonly queue: QueueService,
     private readonly topicEvents: TopicEventsPublisher,
+    private readonly translations: TranslationService,
   ) {}
 
   private assertIsTopicOwner(topic: { ownerPubkey: Uint8Array | null }, pubkeyHex: string): void {
@@ -148,7 +151,7 @@ export class TopicService {
     return /^[0-9a-f]+$/i.test(str);
   }
 
-  async getLatestConsensusReport(topicId: string): Promise<ConsensusReportLatestResponse> {
+  async getLatestConsensusReport(topicId: string, locale: Locale): Promise<ConsensusReportLatestResponse> {
     const topic = await this.prisma.topic.findUnique({
       where: { id: topicId },
       select: { id: true },
@@ -181,10 +184,37 @@ export class TopicService {
       return { report: null };
     }
 
-    return { report: this.toConsensusReportDto(latest) };
+    const report = this.toConsensusReportDto(latest);
+
+    if (report.status === 'ready' && report.contentMd) {
+      const overrides = await this.translations.getConsensusReportOverrides({
+        items: [{ id: report.id, contentMd: report.contentMd }],
+        targetLocale: locale,
+      });
+      const translated = overrides.get(report.id);
+      if (translated) {
+        return { report: { ...report, contentMd: translated } };
+      }
+
+      this.translations
+        .requestConsensusReportTranslation({
+          reportId: report.id,
+          contentMd: report.contentMd,
+          targetLocale: locale,
+        })
+        .catch((err) => {
+          console.warn(`[topic] Failed to request report translation reportId=${report.id}:`, err);
+        });
+    }
+
+    return { report };
   }
 
-  async getConsensusReportById(topicId: string, reportId: string): Promise<ConsensusReportByIdResponse> {
+  async getConsensusReportById(
+    topicId: string,
+    reportId: string,
+    locale: Locale,
+  ): Promise<ConsensusReportByIdResponse> {
     const topic = await this.prisma.topic.findUnique({
       where: { id: topicId },
       select: { id: true },
@@ -218,7 +248,30 @@ export class TopicService {
       });
     }
 
-    return { report: this.toConsensusReportDto(report) };
+    const dto = this.toConsensusReportDto(report);
+
+    if (dto.status === 'ready' && dto.contentMd) {
+      const overrides = await this.translations.getConsensusReportOverrides({
+        items: [{ id: dto.id, contentMd: dto.contentMd }],
+        targetLocale: locale,
+      });
+      const translated = overrides.get(dto.id);
+      if (translated) {
+        return { report: { ...dto, contentMd: translated } };
+      }
+
+      this.translations
+        .requestConsensusReportTranslation({
+          reportId: dto.id,
+          contentMd: dto.contentMd,
+          targetLocale: locale,
+        })
+        .catch((err) => {
+          console.warn(`[topic] Failed to request report translation reportId=${dto.id}:`, err);
+        });
+    }
+
+    return { report: dto };
   }
 
   private toConsensusReportDto(report: {
@@ -449,6 +502,16 @@ export class TopicService {
 
     const expiresAt = new Date(Date.now() + this.CLAIM_TOKEN_TTL_SECONDS * 1000).toISOString();
 
+    // Fire-and-forget: pre-translate topic title + root argument to the other locale.
+    this.translations.requestTopicTitleTranslation({ topicId, title: dto.title }).catch((err) => {
+      console.warn(`[topic] Failed to request title translation topicId=${topicId}:`, err);
+    });
+    this.translations
+      .requestArgumentTranslation({ argumentId: rootArgumentId, title: dto.title, body: dto.body })
+      .catch((err) => {
+        console.warn(`[topic] Failed to request root argument translation argumentId=${rootArgumentId}:`, err);
+      });
+
     return {
       topicId,
       rootArgumentId,
@@ -461,7 +524,7 @@ export class TopicService {
   /**
    * List topics with cursor pagination
    */
-  async listTopics(params: ListTopicsParams): Promise<ListTopicsResult> {
+  async listTopics(params: ListTopicsParams, locale: Locale): Promise<ListTopicsResult> {
     let limit = params.limit ?? this.DEFAULT_LIMIT;
     // Clamp to MAX_LIMIT
     if (limit > this.MAX_LIMIT) {
@@ -508,8 +571,14 @@ export class TopicService {
     const items = hasMore ? topics.slice(0, limit) : topics;
     const nextBeforeId = hasMore && items.length > 0 ? items[items.length - 1].id : null;
 
+    const dtos = items.map((t) => this.toTopicSummaryDto(t));
+    const overrides = await this.translations.getTopicTitleOverrides({
+      items: dtos.map((t) => ({ id: t.id, title: t.title })),
+      targetLocale: locale,
+    });
+
     return {
-      items: items.map((t) => this.toTopicSummaryDto(t)),
+      items: dtos.map((t) => ({ ...t, title: overrides.get(t.id) ?? t.title })),
       nextBeforeId,
     };
   }
@@ -905,6 +974,16 @@ export class TopicService {
       // ignore
     }
 
+    // Fire-and-forget: refresh translations for the updated content.
+    this.translations.requestTopicTitleTranslation({ topicId, title: input.title }).catch((err) => {
+      console.warn(`[topic] Failed to request title translation topicId=${topicId}:`, err);
+    });
+    this.translations
+      .requestArgumentTranslation({ argumentId: topic.rootArgumentId, title: input.title, body: input.body })
+      .catch((err) => {
+        console.warn(`[topic] Failed to request root argument translation argumentId=${topic.rootArgumentId}:`, err);
+      });
+
     return this.toTopicSummaryDto(updatedTopic);
   }
 
@@ -1174,7 +1253,7 @@ export class TopicService {
    * Get ledger for a user in a topic (auto-initializes if not exists)
    * @see docs/stage01/api-contract.md#3.8
    */
-  async getLedgerMe(topicId: string, pubkeyHex: string): Promise<LedgerMe> {
+  async getLedgerMe(topicId: string, pubkeyHex: string, locale: Locale): Promise<LedgerMe> {
     // Check if topic exists
     const topic = await this.prisma.topic.findUnique({
       where: { id: topicId },
@@ -1192,7 +1271,15 @@ export class TopicService {
       where: { topicId_pubkey: { topicId, pubkey: pubkeyBytes } },
       select: { displayName: true },
     });
-    const displayName = profile?.displayName ?? null;
+    let displayName = profile?.displayName ?? null;
+
+    if (displayName) {
+      const overrides = await this.translations.getDisplayNameOverrides({
+        items: [{ topicId, pubkeyHex, displayName }],
+        targetLocale: locale,
+      });
+      displayName = overrides.get(`${topicId}:${pubkeyHex}`) ?? displayName;
+    }
 
     // Try to find existing ledger, or return default values
     const ledger = await this.prisma.ledger.findUnique({
@@ -1255,6 +1342,11 @@ export class TopicService {
       update: { displayName },
       create: { topicId, pubkey: pubkeyBytes, displayName },
       select: { topicId: true },
+    });
+
+    // Fire-and-forget: translate displayName to the other locale.
+    this.translations.requestDisplayNameTranslation({ topicId, pubkeyHex, displayName }).catch((err) => {
+      console.warn(`[topic] Failed to request displayName translation topicId=${topicId}:`, err);
     });
 
     return { topicId, displayName };

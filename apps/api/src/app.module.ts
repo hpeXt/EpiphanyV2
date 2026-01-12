@@ -13,6 +13,7 @@ import { FocusViewModule } from './focus-view/focus-view.module.js';
 import { VotesModule } from './votes/votes.module.js';
 import { UserModule } from './user/user.module.js';
 import { SseModule } from './sse/sse.module.js';
+import { TranslationModule } from './translation/translation.module.js';
 
 loadEnv();
 
@@ -21,6 +22,7 @@ loadEnv();
     PrismaModule,
     RedisModule,
     QueueModule,
+    TranslationModule,
     CommonModule,
     HealthModule,
     TopicModule,

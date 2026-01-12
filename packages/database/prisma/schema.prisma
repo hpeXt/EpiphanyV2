@@ -31,6 +31,21 @@ enum report_status {
   failed
 }
 
+enum translation_status {
+  pending
+  ready
+  failed
+  skipped_budget
+}
+
+enum translation_resource_type {
+  topic_title
+  argument
+  consensus_report
+  camp
+  topic_profile_display_name
+}
+
 model Topic {
   id                       String    @id @db.Uuid
   rootArgumentId           String?   @map("root_argument_id") @db.Uuid
@@ -213,4 +228,24 @@ model ConsensusReport {
   topic Topic @relation(fields: [topicId], references: [id])
 
   @@map("consensus_reports")
+}
+
+model Translation {
+  id           String                    @id @db.Uuid
+  resourceType translation_resource_type @map("resource_type")
+  resourceId   String                    @map("resource_id") @db.Text
+  targetLocale String                    @map("target_locale") @db.Text
+  status       translation_status        @default(pending)
+  sourceLocale String?                   @map("source_locale") @db.Text
+  sourceHash   Bytes?                    @map("source_hash") @db.ByteA
+  data         Json?                     @db.JsonB
+  model        String?                   @db.Text
+  provider     String?                   @db.Text
+  error        String?                   @db.Text
+  createdAt    DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([resourceType, resourceId, targetLocale])
+  @@index([targetLocale, status])
+  @@map("translations")
 }
