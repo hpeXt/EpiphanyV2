@@ -456,6 +456,7 @@ const MESSAGES: Record<Locale, Messages> = {
     },
     my: {
       title: "我的动态",
+      languageHint: "默认中文；切换后会影响 UI 与内容显示语言。",
       identitySectionTitle: "身份管理",
       currentIdentity: "当前身份",
       identityReady: "已设置",
@@ -941,6 +942,7 @@ const MESSAGES: Record<Locale, Messages> = {
     },
     my: {
       title: "My Activity",
+      languageHint: "Default: Chinese. Switching affects UI + content language.",
       identitySectionTitle: "Identity",
       currentIdentity: "Current identity",
       identityReady: "Ready",

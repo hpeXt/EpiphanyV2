@@ -123,6 +123,23 @@ Worker 写入译文后向 Redis Stream `topic:events:${topicId}` 发布：
 
 前端 Topic SSE hook 已对除 `reload_required` 外的所有事件做 cache invalidation，因此译文自动生效。
 
+### 7.4 自动化补齐（Backfill）+ 持续巡检（Sweeper）
+
+为避免“历史内容缺译文导致英文页面仍显示中文”，Worker 默认启用一套后台自动化：
+
+- **Backfill（一次性补齐）**：启动后（或首次启用后）扫描 `topics / arguments / topic_identity_profiles`，为每条内容推断 `sourceLocale`，并向 `ai_translation` 入队“另一种语言”的翻译任务。
+  - 默认模式：`TRANSLATION_BACKFILL_MODE=auto`（只跑一次；使用 Redis 标记 `translation:backfill:done:v1`）
+  - 强制重跑：`TRANSLATION_BACKFILL_MODE=force`
+- **Sweeper（长期兜底）**：定时分页扫描上述内容，发现：
+  - 缺译文
+  - 译文失败（`failed`）
+  - 源内容变更导致 `source_hash` 不匹配（防止旧译文覆盖）
+  - 预算跳过（`skipped_budget`）且已跨月（允许下个月重试）
+  
+  则会重新入队，保证后续导入数据、异常重试也能补齐。
+
+幂等性：翻译 jobId 由 `sha256(resourceType|resourceId|targetLocale)` 派生，重复入队会被 BullMQ 去重。
+
 ## 8. 预算闸门（¥20/月）
 
 ### 8.1 为什么需要“硬闸门”
@@ -189,6 +206,7 @@ Worker 的保守估算是 `800 + 2 * 字符数`（含 prompt/输出与安全冗�
 - 本地开发建议：
   - 运行 `pnpm dev` 会自动执行 `pnpm --filter @epiphany/database db:generate`，避免 Prisma Client 生成不一致导致读接口 500。
   - 新库/新增迁移时需执行 `pnpm --filter @epiphany/database db:migrate:deploy`（未迁移时翻译会回退原文并打印 warn）。
+  - 如需禁用自动补齐/巡检：设置 `TRANSLATION_AUTOMATION_ENABLED=0`。
 - 验收路径：
   - 创建/编辑 Topic、Argument、displayName 后，Worker 能消费 `ai_translation` 队列并写入 `translations`
   - 前端切换语言后，API 返回对应语言（缺译文回退原文）
