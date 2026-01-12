@@ -217,13 +217,15 @@ function createMockConsensusReportProvider(): ConsensusReportProvider {
 }
 
 function createOpenRouterConsensusReportProvider(): ConsensusReportProvider {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  const baseUrl = (process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
-  const model = process.env.REPORT_MODEL ?? 'deepseek/deepseek-chat-v3-0324';
+  const apiKey = process.env.OPENROUTER_API_KEY?.trim();
+  const baseUrl = (process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1').trim().replace(/\/+$/, '');
+  const model = (process.env.REPORT_MODEL ?? 'deepseek/deepseek-chat-v3-0324').trim();
   const timeoutMs = Number(process.env.REPORT_TIMEOUT_MS ?? '900000');
   const temperature = Number(process.env.REPORT_TEMPERATURE ?? '0.2');
   const maxTokens = Number(process.env.REPORT_MAX_TOKENS ?? '50000');
   const maxAttempts = Number(process.env.REPORT_MAX_ATTEMPTS ?? '2');
+  const openRouterHttpReferer = process.env.OPENROUTER_HTTP_REFERER?.trim();
+  const openRouterTitle = process.env.OPENROUTER_TITLE?.trim();
 
   return {
     async generate(input: GenerateConsensusReportInput) {
@@ -279,6 +281,10 @@ function createOpenRouterConsensusReportProvider(): ConsensusReportProvider {
           maxTokens,
           timeoutMs,
           messages,
+          extraHeaders: {
+            ...(openRouterHttpReferer ? { 'HTTP-Referer': openRouterHttpReferer } : {}),
+            ...(openRouterTitle ? { 'X-Title': openRouterTitle } : {}),
+          },
         });
 
         const validation = validateLongformReport({
@@ -313,42 +319,140 @@ async function callOpenRouterChatCompletion(params: {
   maxTokens: number;
   timeoutMs: number;
   messages: Array<{ role: 'system' | 'user'; content: string }>;
+  extraHeaders?: Record<string, string>;
 }): Promise<{ contentMd: string; usedModel: string }> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), params.timeoutMs);
+  const url = `${params.baseUrl}/chat/completions`;
+  const maxFetchAttempts = parsePositiveInt(process.env.OPENROUTER_FETCH_MAX_ATTEMPTS, 2);
+  const baseRetryDelayMs = 750;
 
-  try {
-    const response = await fetch(`${params.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${params.apiKey}`,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: params.model,
-        temperature: params.temperature,
-        max_tokens: params.maxTokens,
-        messages: params.messages,
-      }),
-      signal: controller.signal,
-    });
+  for (let attempt = 1; attempt <= maxFetchAttempts; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), params.timeoutMs);
 
-    if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      throw new Error(`OpenRouter request failed: ${response.status} ${text || response.statusText}`);
+    try {
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${params.apiKey}`,
+            'Content-Type': 'application/json',
+            ...(params.extraHeaders ?? {}),
+          },
+          body: JSON.stringify({
+            model: params.model,
+            temperature: params.temperature,
+            max_tokens: params.maxTokens,
+            messages: params.messages,
+          }),
+          signal: controller.signal,
+        });
+      } catch (err) {
+        if (attempt < maxFetchAttempts && isRetryableNetworkError(err)) {
+          console.warn(
+            `[consensus-report] OpenRouter network error (attempt ${attempt}/${maxFetchAttempts}) url=${url} model=${params.model}: ${formatErrorWithCause(err)}`,
+          );
+          await sleep(baseRetryDelayMs * attempt);
+          continue;
+        }
+
+        throw new Error(`OpenRouter network error url=${url} model=${params.model}: ${formatErrorWithCause(err)}`, {
+          cause: err instanceof Error ? err : undefined,
+        });
+      }
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        const message = `OpenRouter request failed url=${url} model=${params.model}: ${response.status} ${text || response.statusText}`;
+
+        if (attempt < maxFetchAttempts && isRetryableHttpStatus(response.status)) {
+          console.warn(`[consensus-report] ${message} (attempt ${attempt}/${maxFetchAttempts}) retrying...`);
+          await sleep(baseRetryDelayMs * attempt);
+          continue;
+        }
+
+        throw new Error(message);
+      }
+
+      const json = (await response.json()) as any;
+      const content = json?.choices?.[0]?.message?.content;
+      if (typeof content !== 'string' || !content.trim()) {
+        throw new Error(`OpenRouter returned empty content url=${url} model=${params.model}`);
+      }
+
+      const usedModel = typeof json?.model === 'string' ? json.model : params.model;
+      const usage = json?.usage && typeof json.usage === 'object' ? json.usage : undefined;
+      if (usage) {
+        const promptTokens = typeof usage.prompt_tokens === 'number' ? usage.prompt_tokens : null;
+        const completionTokens = typeof usage.completion_tokens === 'number' ? usage.completion_tokens : null;
+        const totalTokens = typeof usage.total_tokens === 'number' ? usage.total_tokens : null;
+        const parts = [
+          promptTokens !== null ? `prompt=${promptTokens}` : null,
+          completionTokens !== null ? `completion=${completionTokens}` : null,
+          totalTokens !== null ? `total=${totalTokens}` : null,
+        ].filter((v): v is string => typeof v === 'string');
+        if (parts.length) console.log(`[consensus-report] OpenRouter usage model=${usedModel}: ${parts.join(' ')}`);
+      }
+
+      return { contentMd: content, usedModel };
+    } finally {
+      clearTimeout(timer);
     }
-
-    const json = (await response.json()) as any;
-    const content = json?.choices?.[0]?.message?.content;
-    if (typeof content !== 'string' || !content.trim()) {
-      throw new Error('OpenRouter returned empty content');
-    }
-
-    const usedModel = typeof json?.model === 'string' ? json.model : params.model;
-    return { contentMd: content, usedModel };
-  } finally {
-    clearTimeout(timer);
   }
+
+  throw new Error(`OpenRouter request failed after ${maxFetchAttempts} attempts url=${url} model=${params.model}`);
+}
+
+function parsePositiveInt(value: string | undefined, fallback: number): number {
+  if (!value) return fallback;
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return parsed;
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableHttpStatus(status: number): boolean {
+  return (
+    status === 408 ||
+    status === 409 ||
+    status === 425 ||
+    status === 429 ||
+    status === 500 ||
+    status === 502 ||
+    status === 503 ||
+    status === 504
+  );
+}
+
+function formatErrorWithCause(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+
+  const base = error.message || String(error);
+  const cause = (error as any).cause;
+  if (!cause) return base;
+
+  if (cause instanceof Error) {
+    const code = typeof (cause as any).code === 'string' ? String((cause as any).code) : null;
+    const msg = cause.message || String(cause);
+    return `${base} (cause: ${code ? `${code} ` : ''}${msg})`;
+  }
+
+  return `${base} (cause: ${String(cause)})`;
+}
+
+function isRetryableNetworkError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  if (error.name === 'AbortError') return false;
+
+  const cause = (error as any).cause;
+  const codeCandidate = cause && typeof cause === 'object' ? (cause as any).code : (error as any).code;
+  const code = typeof codeCandidate === 'string' ? codeCandidate : null;
+  if (!code) return false;
+
+  return ['ECONNRESET', 'ECONNREFUSED', 'EAI_AGAIN', 'ENOTFOUND', 'ETIMEDOUT'].includes(code);
 }
 
 function extractReportBodyOnly(contentMd: string): string {
