@@ -1,6 +1,6 @@
 "use client";
 
-import type { PointerEvent as ReactPointerEvent } from "react";
+import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import { buildSunburstLayout, type SunburstNode } from "@/lib/visualization/sunburst/layout";
@@ -192,9 +192,10 @@ export function Sunburst({
     [arcById, interactive, onNodeClick, onSelectedIdChange, resolvedSelectedId, selectedId],
   );
 
-  const handleBackgroundClick = useCallback(() => {
+  const handleBackgroundClick = useCallback((event: ReactMouseEvent) => {
     if (!interactive) return;
 
+    event.stopPropagation();
     clearHover();
     if (selectedId === undefined) {
       setUncontrolledSelectedId(null);

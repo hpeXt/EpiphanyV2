@@ -636,7 +636,8 @@ function ReportMarkdown(props: {
     <article className="prose prose-zinc max-w-none">
       {blocks.map((block) => {
         if (block.type === "heading") {
-          const Tag = block.level === 1 ? "h1" : block.level === 2 ? "h2" : "h3";
+          const Tag =
+            block.level === 1 ? "h1" : block.level === 2 ? "h2" : block.level === 3 ? "h3" : "h4";
           return (
             <Tag key={block.key} id={block.key} className="scroll-mt-24 text-zinc-900">
               {renderInline(block.text)}
@@ -657,6 +658,16 @@ function ReportMarkdown(props: {
             <pre key={block.key} className="overflow-x-auto rounded-md bg-zinc-950 p-3 text-zinc-50">
               <code>{block.text}</code>
             </pre>
+          );
+        }
+        if (block.type === "blockquote") {
+          return (
+            <blockquote
+              key={block.key}
+              className="border-l-4 border-zinc-300 bg-zinc-50 px-4 py-2 text-zinc-800"
+            >
+              <p className="whitespace-pre-wrap">{renderInline(block.text)}</p>
+            </blockquote>
           );
         }
         return (
@@ -709,9 +720,10 @@ function ReportMarkdown(props: {
 }
 
 type MarkdownBlock =
-  | { type: "heading"; level: 1 | 2 | 3; text: string; key: string }
+  | { type: "heading"; level: 1 | 2 | 3 | 4; text: string; key: string }
   | { type: "ul"; items: string[]; key: string }
   | { type: "code"; text: string; key: string }
+  | { type: "blockquote"; text: string; key: string }
   | { type: "p"; text: string; key: string };
 
 function parseMarkdown(content: string): MarkdownBlock[] {
@@ -721,6 +733,7 @@ function parseMarkdown(content: string): MarkdownBlock[] {
   let inCode = false;
   let codeLines: string[] = [];
   let listItems: string[] | null = null;
+  let quoteLines: string[] | null = null;
   let paragraphLines: string[] = [];
 
   function flushParagraph() {
@@ -739,6 +752,16 @@ function parseMarkdown(content: string): MarkdownBlock[] {
     listItems = null;
   }
 
+  function flushQuote() {
+    if (!quoteLines || quoteLines.length === 0) {
+      quoteLines = null;
+      return;
+    }
+    const text = quoteLines.join("\n").trimEnd();
+    blocks.push({ type: "blockquote", text, key: `bq-${blocks.length}` });
+    quoteLines = null;
+  }
+
   function flushCode() {
     const text = codeLines.join("\n");
     codeLines = [];
@@ -755,6 +778,7 @@ function parseMarkdown(content: string): MarkdownBlock[] {
       } else {
         flushParagraph();
         flushList();
+        flushQuote();
         inCode = true;
         codeLines = [];
       }
@@ -770,12 +794,14 @@ function parseMarkdown(content: string): MarkdownBlock[] {
     if (!trimmed.trim()) {
       flushParagraph();
       flushList();
+      flushQuote();
       continue;
     }
 
     if (trimmed.startsWith("# ")) {
       flushParagraph();
       flushList();
+      flushQuote();
       blocks.push({
         type: "heading",
         level: 1,
@@ -788,6 +814,7 @@ function parseMarkdown(content: string): MarkdownBlock[] {
     if (trimmed.startsWith("## ")) {
       flushParagraph();
       flushList();
+      flushQuote();
       blocks.push({
         type: "heading",
         level: 2,
@@ -800,6 +827,7 @@ function parseMarkdown(content: string): MarkdownBlock[] {
     if (trimmed.startsWith("### ")) {
       flushParagraph();
       flushList();
+      flushQuote();
       blocks.push({
         type: "heading",
         level: 3,
@@ -809,8 +837,30 @@ function parseMarkdown(content: string): MarkdownBlock[] {
       continue;
     }
 
+    if (trimmed.startsWith("#### ")) {
+      flushParagraph();
+      flushList();
+      flushQuote();
+      blocks.push({
+        type: "heading",
+        level: 4,
+        text: trimmed.slice(5).trim(),
+        key: `h4-${blocks.length}`,
+      });
+      continue;
+    }
+
+    if (trimmed.startsWith(">")) {
+      flushParagraph();
+      flushList();
+      quoteLines ??= [];
+      quoteLines.push(trimmed.replace(/^>\s?/, ""));
+      continue;
+    }
+
     if (trimmed.startsWith("- ")) {
       flushParagraph();
+      flushQuote();
       listItems ??= [];
       listItems.push(trimmed.slice(2).trim());
       continue;
@@ -826,6 +876,7 @@ function parseMarkdown(content: string): MarkdownBlock[] {
 
   flushParagraph();
   flushList();
+  flushQuote();
 
   return blocks;
 }

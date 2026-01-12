@@ -2,7 +2,7 @@
 
 本文件定义 Epiphany 的「AI 分析报告 / 共识报告」产品方案与内容标准：既能像 TalkToTheCity 一样**可追溯地总结**讨论，也能参考 DeepMind 的 Habermas Machine 一样**提炼可被多方接受的共识**，并把“角色（阵营/立场）—观点—证据”的结构组织成可视化图谱。
 
-> 范围：只做设计与文档，不进入开发实现。  
+> 范围：本文件以 Stage03 的产品/内容标准为主，同时记录与实现对齐的输出格式（便于稳定生成与渲染）。  
 > 参考与约束：`docs/stage03/prototype-core.md`、`docs/stage03/design-system.md`、`docs/stage03/topic-privacy.md`、`docs/stage01/prd.md`、`docs/stage01/api-contract.md`、`docs/stage01/database.md`、`docs/stage01/ai-worker.md`。
 
 ---
@@ -75,6 +75,49 @@
    - 输入口径、抽样策略、覆盖度指标、模型/版本、已知偏差。
 9. **Sources（证据清单）**
    - `S1..Sn` 的来源列表：短摘录 + 票数/层级等最小上下文 + 可点击回到原文（见 `docs/stage03/topic-privacy.md` 7.3 来源溯源方案）。
+
+## 3.3 输出格式（实现对齐：`consensus-report/v6-t3c-longform`）
+
+为保证报告“足够长、足够可审计、可被产品稳定渲染”，建议把 **TalkToTheCity 的 Topic/Claim/Quote 结构**映射成一套可约束的 Markdown 语法。
+
+### 3.3.1 必须的元数据块（Bridge Statement 卡）
+
+报告输出最开始必须包含：
+
+```md
+<!-- REPORT_META_START -->
+```json
+{ "bridges": { ... }, "share": { ... } }
+```
+<!-- REPORT_META_END -->
+```
+
+> 约束：JSON 必须是严格 JSON；不得包含 source 原文内容。
+
+### 3.3.2 正文必须章节（长文骨架）
+
+建议正文至少包含：
+
+- `## 导读（How to read）`
+- `## Executive Summary`
+- `## 讨论全景（Coverage & Caveats）`
+- `## 角色图谱（Role Atlas）`
+- `## 关键张力（Key Tensions）`
+- `## 主题地图（Themes, TalkToTheCity-style）`
+- `## 未决问题与下一步议程（Agenda）`
+- `## 方法（Method, brief）`
+
+### 3.3.3 主题/主张/引文的严格格式（可导航 + 可校验）
+
+把 TalkToTheCity 的“Topic → Claims → Quotes”落到 Markdown：
+
+- 每个主题用：`### T1 主题名`（建议 ≥ 6 个主题；材料较少时可降到 ≥ 4）
+- 每个主题先写 **2–4 段长描述**（每段 3–6 句，尽量每句末尾带 `[S#]`）
+- 每个原子主张用：`#### C1 Claim 标题`（每主题建议 ≥ 4 条）
+- 每条 Claim 下必须包含：
+  - 解释段落（2–4 句，带 `[S#]`）
+  - **逐字引用 Quotes**：每条 quote 用 blockquote（以 `>` 开头），并在同一行末尾带 `[S#]`
+  - 反例/反驳/边界条件（至少 1 句，带 `[S#]`）
 
 ---
 
@@ -209,6 +252,14 @@
 - **标签伤害**：Role 命名带侮辱/推断现实身份 → 强制中性命名 + Host 可改名
 - **隐私越界**：向外部模型发送内部稳定标识 → 只发送 `S*` 标签与去标识文本（参见 `docs/stage03/topic-privacy.md` 7.3）
 
+### 7.3 自动质量门禁（实现建议/实现对齐）
+
+为避免“短、空、不可审计”的报告流入产品页面，建议在生成侧加入**硬门禁 + 自动重试**：
+
+- 门禁维度：正文最小长度、主题数量（`### T*`）、Claim 数量（`#### C*`）、Quote 数量（`>`）、引用密度（`[S#]`）、REPORT_META 可解析性
+- 策略：不达标则追加反馈提示并重写，最多重试 `REPORT_MAX_ATTEMPTS` 次；仍失败则标记为 `failed`
+- 阈值：应随 `sources` 数量自适应（材料少时降低主题/Claim 门槛）
+
 ---
 
 ## 8. Stage03 的阅读体验落点（不开发，但先定交互语义）
@@ -232,7 +283,7 @@
 
 ```json
 {
-  "promptVersion": "report_v1.1_stage03",
+  "promptVersion": "consensus-report/v6-t3c-longform",
   "model": "deepseek/deepseek-chat-v3-0324",
   "selection": {
     "strategy": "root+topVotes+stratified",

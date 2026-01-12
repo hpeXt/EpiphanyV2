@@ -129,6 +129,18 @@ function createFetchMock(options: {
       });
     }
 
+    if (url.pathname === "/v1/arguments/arg-root/children") {
+      return jsonResponse({
+        ok: true,
+        status: 200,
+        json: {
+          parentArgumentId: "arg-root",
+          items: [],
+          nextBeforeId: null,
+        },
+      });
+    }
+
     if (url.pathname === "/v1/topics/topic-1/consensus-report/latest") {
       return jsonResponse({ ok: true, status: 200, json: options.latestReport });
     }

@@ -26,9 +26,8 @@ export function CreateTopicForm() {
   const [submitError, setSubmitError] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function validate(nextTitle: string, nextBody: string) {
+  function validate(nextBody: string) {
     const nextErrors: { title?: string; body?: string } = {};
-    if (!nextTitle.trim()) nextErrors.title = t("createTopic.titleRequired");
     if (!nextBody.trim()) nextErrors.body = t("createTopic.bodyRequired");
     return nextErrors;
   }
@@ -37,9 +36,9 @@ export function CreateTopicForm() {
     event.preventDefault();
     setSubmitError("");
 
-    const nextErrors = validate(title, body);
+    const nextErrors = validate(body);
     setErrors(nextErrors);
-    if (nextErrors.title || nextErrors.body) return;
+    if (nextErrors.body) return;
 
     setIsSubmitting(true);
     const result = await apiClient.createTopic({
@@ -95,7 +94,11 @@ export function CreateTopicForm() {
           name="title"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
+          placeholder={t("createTopic.titlePlaceholder")}
         />
+        <p className="text-xs text-muted-foreground">
+          {t("createTopic.titleHelp")}
+        </p>
         {errors.title ? (
           <p role="alert" className="text-sm text-[color:var(--rebel-red)]">
             {errors.title}

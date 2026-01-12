@@ -43,6 +43,7 @@ export function SunburstView({ rootId, nodes, selectedId, onSelect }: Props) {
     >
       <div
         className="overflow-hidden border-[3px] border-[color:var(--ink)] bg-[color:var(--concrete-200)] p-3 shadow-[2px_2px_0_var(--ink)]"
+        onClick={() => onSelect(null)}
         style={{
           clipPath: "polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%)",
         }}

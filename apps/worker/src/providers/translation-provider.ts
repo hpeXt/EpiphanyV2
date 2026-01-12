@@ -37,6 +37,10 @@ function getTranslationProviderType(): TranslationProviderType {
   if (explicit === 'openrouter' || explicit === 'real') return 'openrouter';
   if (explicit === 'mock') return 'mock';
 
+  // Auto-enable real translation when OpenRouter is configured, even if
+  // TRANSLATION_PROVIDER isn't explicitly set in `.env`.
+  if (process.env.OPENROUTER_API_KEY?.trim()) return 'openrouter';
+
   const fallback = process.env.AI_PROVIDER?.toLowerCase();
   if (fallback === 'openrouter' || fallback === 'real') return 'openrouter';
 
@@ -278,4 +282,3 @@ function validateTranslationData(resourceType: TranslationResourceType, parsed: 
 function assertNever(value: never): never {
   throw new Error(`Unexpected value: ${String(value)}`);
 }
-

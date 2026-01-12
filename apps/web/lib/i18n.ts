@@ -332,6 +332,11 @@ const MESSAGES: Record<Locale, Messages> = {
       confirmLeaveEdit: "你有未保存的修改，确定要离开当前编辑吗？",
       confirmCancelEdit: "你有未保存的修改，确定要取消吗？",
       votesUnit: "票",
+      relatedTitle: "相关观点",
+      relatedHint: "悬停预览 · 点击切换（父链/同层/子节点）",
+      relatedPath: "父链",
+      relatedSiblings: "同层观点",
+      relatedChildren: "子观点",
     },
     errors: {
       insufficientBalance: "余额不足",
@@ -388,6 +393,8 @@ const MESSAGES: Record<Locale, Messages> = {
     },
     createTopic: {
       titleLabel: "标题",
+      titlePlaceholder: "（可选）留空自动生成",
+      titleHelp: "留空将由 AI 自动生成标题。",
       bodyLabel: "正文",
       visibilityLabel: "可见性",
       titleRequired: "需要填写标题",
@@ -809,6 +816,11 @@ const MESSAGES: Record<Locale, Messages> = {
       confirmLeaveEdit: "You have unsaved changes. Leave editing?",
       confirmCancelEdit: "You have unsaved changes. Cancel editing?",
       votesUnit: "votes",
+      relatedTitle: "Related",
+      relatedHint: "Hover to preview · Click to switch",
+      relatedPath: "Path",
+      relatedSiblings: "Siblings",
+      relatedChildren: "Replies",
     },
     errors: {
       insufficientBalance: "Insufficient balance",
@@ -866,6 +878,8 @@ const MESSAGES: Record<Locale, Messages> = {
     },
     createTopic: {
       titleLabel: "Title",
+      titlePlaceholder: "(optional) Leave blank to auto-generate",
+      titleHelp: "Leave blank and AI will generate a title.",
       bodyLabel: "Body",
       visibilityLabel: "Visibility",
       titleRequired: "Title is required",

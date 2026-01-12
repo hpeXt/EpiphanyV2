@@ -452,10 +452,10 @@ function VoteStepper(props: {
   };
 
   return (
-    <div className="border-t border-border/60 bg-[color:var(--muted)] px-6 py-4">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-4">
-          <span className="text-sm text-muted-foreground">{t("stage.supportLabel")}:</span>
+    <div className="border-t border-border/60 bg-[color:var(--muted)] px-6 py-4 md:pr-[340px]">
+	        <div className="flex flex-wrap items-center justify-between gap-4">
+	          <div className="flex flex-wrap items-center gap-4">
+	          <span className="text-sm text-muted-foreground">{t("stage.supportLabel")}:</span>
           <div className="flex items-center gap-2">
             <Button
               size="sm"
@@ -1047,6 +1047,24 @@ export function TopicStage({ topicId }: Props) {
     return new Map(tree.arguments.map((arg) => [arg.id, arg]));
   }, [tree]);
 
+  const childrenByParentId = useMemo(() => {
+    const map = new Map<string, Argument[]>();
+    if (tree.status !== "success") return map;
+
+    for (const arg of tree.arguments) {
+      const parentId = arg.parentId;
+      if (!parentId) continue;
+      const list = map.get(parentId);
+      if (list) {
+        list.push(arg);
+      } else {
+        map.set(parentId, [arg]);
+      }
+    }
+
+    return map;
+  }, [tree]);
+
   const rootArgumentId = tree.status === "success" ? tree.topic.rootArgumentId : null;
   const readArgumentId = selectedArgumentId ?? rootArgumentId;
 
@@ -1098,6 +1116,41 @@ export function TopicStage({ topicId }: Props) {
     if (selectedArgumentDetail?.id === readArgumentId) return selectedArgumentDetail;
     return argumentById.get(readArgumentId) ?? null;
   }, [argumentById, readArgumentId, selectedArgumentDetail]);
+
+  const related = useMemo(() => {
+    if (!readArgument) return null;
+
+    const chain: Argument[] = [];
+    const visited = new Set<string>();
+    let current: Argument | null = readArgument;
+
+    while (current && !visited.has(current.id)) {
+      visited.add(current.id);
+      chain.push(current);
+      if (!current.parentId) break;
+      current = argumentById.get(current.parentId) ?? null;
+    }
+
+    chain.reverse();
+
+    const compareByVotesThenCreatedAt = (a: Argument, b: Argument) => {
+      if (a.totalVotes !== b.totalVotes) return b.totalVotes - a.totalVotes;
+      return Date.parse(a.createdAt) - Date.parse(b.createdAt);
+    };
+
+    const ancestors = chain.slice(0, -1).reverse();
+
+    const siblings =
+      readArgument.parentId !== null && readArgument.parentId !== undefined
+        ? [...(childrenByParentId.get(readArgument.parentId) ?? [])]
+            .filter((arg) => arg.id !== readArgument.id)
+            .sort(compareByVotesThenCreatedAt)
+        : [];
+
+    const children = [...(childrenByParentId.get(readArgument.id) ?? [])].sort(compareByVotesThenCreatedAt);
+
+    return { ancestors, siblings, children };
+  }, [argumentById, childrenByParentId, readArgument]);
 
   const canEditSelectedArgument =
     hasIdentity === true &&
@@ -2027,6 +2080,10 @@ export function TopicStage({ topicId }: Props) {
 
             <div
               className="flex flex-1 items-center justify-center overflow-hidden p-4"
+              onClick={() => {
+                hideHoverCard({ immediate: true });
+                requestSelectArgumentId(null);
+              }}
             >
               {sunburstTree ? (
                 <div className="relative" style={{ width: sunburstSize, height: sunburstSize }}>
@@ -2057,21 +2114,21 @@ export function TopicStage({ topicId }: Props) {
                       style={cardPosition(hoverCard.x, hoverCard.y)}
                       data-testid="sunburst-hover-card"
                     >
-                      <div className="rounded-lg border border-border/60 bg-background p-4 shadow-lg">
-                        <div className="mb-2">
-                          <h3 className="font-serif text-base font-semibold text-foreground leading-tight">
-                            {toTitle(hoverCard.argument)}
-                          </h3>
-                        </div>
+	                      <div className="rounded-lg border border-border/60 bg-background p-4 shadow-lg">
+	                        <div className="mb-2">
+	                          <h3 className="font-serif text-base font-semibold text-foreground leading-tight line-clamp-2">
+	                            {toTitle(hoverCard.argument)}
+	                          </h3>
+	                        </div>
 
-                        <p
-                          className={[
-                            "text-xs text-muted-foreground leading-relaxed",
-                            "line-clamp-3",
-                          ].join(" ")}
-                        >
-                          {toExcerpt(hoverCard.argument.body)}
-                        </p>
+	                        <p
+	                          className={[
+	                            "text-xs text-muted-foreground leading-relaxed",
+	                            "line-clamp-4",
+	                          ].join(" ")}
+	                        >
+	                          {toExcerpt(hoverCard.argument.body)}
+	                        </p>
 
                         <div className="mt-3 flex items-center justify-between border-t border-border/60 pt-2 text-[10px] text-muted-foreground">
                           <span>{authorLabel(hoverCard.argument.authorId, hoverCard.argument.authorDisplayName)}</span>
@@ -2155,8 +2212,8 @@ export function TopicStage({ topicId }: Props) {
           {/* Right: Reader */}
           <div ref={rightColumnRef} className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
             {readArgument ? (
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                <div className="border-b border-border/60 px-6 py-6">
+              <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+                <div className="border-b border-border/60 px-6 py-6 md:pr-[340px]">
                   {isEditingSelectedArgument ? (
                     <Input
                       aria-label={t("stage.editTitleAria")}
@@ -2235,8 +2292,138 @@ export function TopicStage({ topicId }: Props) {
                   ) : null}
                 </div>
 
-                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-8">
+                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-8 md:pr-[340px]">
 	                  <div className="mx-auto w-full max-w-[760px]">
+                      <div className="mb-6 rounded-lg border border-border/60 bg-background md:hidden">
+                        <div className="border-b border-border/60 px-4 py-4">
+                          <h2 className="font-serif text-sm font-semibold text-foreground">
+                            {t("stage.relatedTitle")}
+                          </h2>
+                          <p className="mt-1 text-xs text-muted-foreground">{t("stage.relatedHint")}</p>
+                        </div>
+
+                        <div className="px-4 py-4">
+                          {related ? (
+                            <div className="space-y-6">
+                              {related.ancestors.length > 0 ? (
+                                <div>
+                                  <h3 className="text-xs font-medium text-muted-foreground">{t("stage.relatedPath")}</h3>
+                                  <div className="mt-2 space-y-2">
+                                    {related.ancestors.map((arg) => {
+                                      const isRoot = rootArgumentId !== null && arg.id === rootArgumentId;
+                                      const title = isRoot ? topicTitle : toTitle(arg);
+                                      const excerpt = toExcerpt(arg.body);
+
+                                      return (
+                                        <button
+                                          key={arg.id}
+                                          type="button"
+                                          className={[
+                                            "w-full rounded-md border border-border/60 bg-background px-3 py-2 text-left",
+                                            "hover:bg-[color:var(--muted)] transition-colors",
+                                          ].join(" ")}
+                                          onClick={() => requestSelectArgumentId(isRoot ? null : arg.id)}
+                                        >
+                                          <div className="flex items-start justify-between gap-2">
+                                            <span className="font-serif text-sm leading-snug text-foreground">{title}</span>
+                                            <span className="shrink-0 text-[10px] text-muted-foreground">
+                                              {t("stage.votesCount", { count: arg.totalVotes })}
+                                            </span>
+                                          </div>
+                                          {excerpt ? (
+                                            <p className="mt-1 line-clamp-4 text-xs text-muted-foreground leading-relaxed">
+                                              {excerpt}
+                                            </p>
+                                          ) : null}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ) : null}
+
+                              {related.children.length > 0 ? (
+                                <div>
+                                  <h3 className="text-xs font-medium text-muted-foreground">
+                                    {t("stage.relatedChildren")}
+                                  </h3>
+                                  <div className="mt-2 space-y-2">
+                                    {related.children.map((arg) => {
+                                      const title = toTitle(arg);
+                                      const excerpt = toExcerpt(arg.body);
+
+                                      return (
+                                        <button
+                                          key={arg.id}
+                                          type="button"
+                                          className={[
+                                            "w-full rounded-md border border-border/60 bg-background px-3 py-2 text-left",
+                                            "hover:bg-[color:var(--muted)] transition-colors",
+                                          ].join(" ")}
+                                          onClick={() => requestSelectArgumentId(arg.id)}
+                                        >
+                                          <div className="flex items-start justify-between gap-2">
+                                            <span className="font-serif text-sm leading-snug text-foreground">{title}</span>
+                                            <span className="shrink-0 text-[10px] text-muted-foreground">
+                                              {t("stage.votesCount", { count: arg.totalVotes })}
+                                            </span>
+                                          </div>
+                                          {excerpt ? (
+                                            <p className="mt-1 line-clamp-4 text-xs text-muted-foreground leading-relaxed">
+                                              {excerpt}
+                                            </p>
+                                          ) : null}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ) : null}
+
+                              {related.siblings.length > 0 ? (
+                                <div>
+                                  <h3 className="text-xs font-medium text-muted-foreground">
+                                    {t("stage.relatedSiblings")}
+                                  </h3>
+                                  <div className="mt-2 space-y-2">
+                                    {related.siblings.map((arg) => {
+                                      const title = toTitle(arg);
+                                      const excerpt = toExcerpt(arg.body);
+
+                                      return (
+                                        <button
+                                          key={arg.id}
+                                          type="button"
+                                          className={[
+                                            "w-full rounded-md border border-border/60 bg-background px-3 py-2 text-left",
+                                            "hover:bg-[color:var(--muted)] transition-colors",
+                                          ].join(" ")}
+                                          onClick={() => requestSelectArgumentId(arg.id)}
+                                        >
+                                          <div className="flex items-start justify-between gap-2">
+                                            <span className="font-serif text-sm leading-snug text-foreground">{title}</span>
+                                            <span className="shrink-0 text-[10px] text-muted-foreground">
+                                              {t("stage.votesCount", { count: arg.totalVotes })}
+                                            </span>
+                                          </div>
+                                          {excerpt ? (
+                                            <p className="mt-1 line-clamp-4 text-xs text-muted-foreground leading-relaxed">
+                                              {excerpt}
+                                            </p>
+                                          ) : null}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+                          )}
+                        </div>
+                      </div>
+
                       {isEditingSelectedArgument ? (
                         <div>
                           <div
@@ -2319,7 +2506,7 @@ export function TopicStage({ topicId }: Props) {
                   />
                 ) : null}
 
-	                <div className="border-t border-border/60 px-6 py-4">
+	                <div className="border-t border-border/60 px-6 py-4 md:pr-[340px]">
 	                  <div className="mx-auto w-full max-w-[760px]">
 	                    <div className="overflow-hidden rounded-lg border border-border/60 bg-background">
 	                      <div className="border-b border-border/60 bg-background">
@@ -2536,6 +2723,134 @@ export function TopicStage({ topicId }: Props) {
                     </p>
                   ) : null}
                 </div>
+
+                <aside className="absolute right-0 top-0 bottom-0 hidden w-[320px] flex-col border-l border-border/60 bg-background md:flex">
+                  <div className="border-b border-border/60 px-4 py-4">
+                    <h2 className="font-serif text-sm font-semibold text-foreground">{t("stage.relatedTitle")}</h2>
+                    <p className="mt-1 text-xs text-muted-foreground">{t("stage.relatedHint")}</p>
+                  </div>
+
+                  <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+                    {related ? (
+                      <div className="space-y-6">
+                        {related.ancestors.length > 0 ? (
+                          <div>
+                            <h3 className="text-xs font-medium text-muted-foreground">{t("stage.relatedPath")}</h3>
+                            <div className="mt-2 space-y-2">
+                              {related.ancestors.map((arg) => {
+                                const isRoot = rootArgumentId !== null && arg.id === rootArgumentId;
+                                const title = isRoot ? topicTitle : toTitle(arg);
+                                const excerpt = toExcerpt(arg.body);
+
+                                return (
+                                  <button
+                                    key={arg.id}
+                                    type="button"
+                                    className={[
+                                      "w-full rounded-md border border-border/60 bg-background px-3 py-2 text-left",
+                                      "hover:bg-[color:var(--muted)] transition-colors",
+                                    ].join(" ")}
+                                    onClick={() => requestSelectArgumentId(isRoot ? null : arg.id)}
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <span className="font-serif text-sm leading-snug text-foreground">{title}</span>
+                                      <span className="shrink-0 text-[10px] text-muted-foreground">
+                                        {t("stage.votesCount", { count: arg.totalVotes })}
+                                      </span>
+                                    </div>
+                                    {excerpt ? (
+                                      <p className="mt-1 line-clamp-4 text-xs text-muted-foreground leading-relaxed">
+                                        {excerpt}
+                                      </p>
+                                    ) : null}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {related.children.length > 0 ? (
+                          <div>
+                            <h3 className="text-xs font-medium text-muted-foreground">
+                              {t("stage.relatedChildren")}
+                            </h3>
+                            <div className="mt-2 space-y-2">
+                              {related.children.map((arg) => {
+                                const title = toTitle(arg);
+                                const excerpt = toExcerpt(arg.body);
+
+                                return (
+                                  <button
+                                    key={arg.id}
+                                    type="button"
+                                    className={[
+                                      "w-full rounded-md border border-border/60 bg-background px-3 py-2 text-left",
+                                      "hover:bg-[color:var(--muted)] transition-colors",
+                                    ].join(" ")}
+                                    onClick={() => requestSelectArgumentId(arg.id)}
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <span className="font-serif text-sm leading-snug text-foreground">{title}</span>
+                                      <span className="shrink-0 text-[10px] text-muted-foreground">
+                                        {t("stage.votesCount", { count: arg.totalVotes })}
+                                      </span>
+                                    </div>
+                                    {excerpt ? (
+                                      <p className="mt-1 line-clamp-4 text-xs text-muted-foreground leading-relaxed">
+                                        {excerpt}
+                                      </p>
+                                    ) : null}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {related.siblings.length > 0 ? (
+                          <div>
+                            <h3 className="text-xs font-medium text-muted-foreground">
+                              {t("stage.relatedSiblings")}
+                            </h3>
+                            <div className="mt-2 space-y-2">
+                              {related.siblings.map((arg) => {
+                                const title = toTitle(arg);
+                                const excerpt = toExcerpt(arg.body);
+
+                                return (
+                                  <button
+                                    key={arg.id}
+                                    type="button"
+                                    className={[
+                                      "w-full rounded-md border border-border/60 bg-background px-3 py-2 text-left",
+                                      "hover:bg-[color:var(--muted)] transition-colors",
+                                    ].join(" ")}
+                                    onClick={() => requestSelectArgumentId(arg.id)}
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <span className="font-serif text-sm leading-snug text-foreground">{title}</span>
+                                      <span className="shrink-0 text-[10px] text-muted-foreground">
+                                        {t("stage.votesCount", { count: arg.totalVotes })}
+                                      </span>
+                                    </div>
+                                    {excerpt ? (
+                                      <p className="mt-1 line-clamp-4 text-xs text-muted-foreground leading-relaxed">
+                                        {excerpt}
+                                      </p>
+                                    ) : null}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+                    )}
+                  </div>
+                </aside>
               </div>
             )}
           </div>

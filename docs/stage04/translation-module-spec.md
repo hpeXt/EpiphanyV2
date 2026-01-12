@@ -183,7 +183,7 @@ Worker 的保守估算是 `800 + 2 * 字符数`（含 prompt/输出与安全冗�
   - `DATABASE_URL`（API/Worker/Prisma）
   - `REDIS_URL`（API SSE stream + BullMQ；Worker BullMQ + budget gate）
   - `OPENROUTER_API_KEY`
-  - `TRANSLATION_PROVIDER=openrouter`
+  - `TRANSLATION_PROVIDER=openrouter`（可选；未设置时若存在 `OPENROUTER_API_KEY` 会自动使用 OpenRouter）
   - `TRANSLATION_MODEL=z-ai/glm-4.7`（或留空走默认）
   - `TRANSLATION_BUDGET_TOKENS_PER_MONTH=200000`（按预算调整）
 - 本地开发建议：

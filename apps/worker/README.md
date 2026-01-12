@@ -8,7 +8,7 @@ BullMQ consumer process.
 - `REDIS_URL` (required) — Redis (BullMQ)
 - `PORT` / `WORKER_PORT` (default: `3002`) — worker HTTP port
 - `AI_PROVIDER` (default: `mock`) — `mock|openrouter` (openrouter currently falls back to mock)
-- `TRANSLATION_PROVIDER` (optional) — `mock|openrouter` (defaults to `AI_PROVIDER` if omitted)
+- `TRANSLATION_PROVIDER` (optional) — `mock|openrouter` (auto-detects `openrouter` if `OPENROUTER_API_KEY` is set)
 - `TRANSLATION_MODEL` (default: `z-ai/glm-4.7`) — OpenRouter model id
 - `TRANSLATION_BUDGET_TOKENS_PER_MONTH` (default: `200000`) — hard monthly token cap (0 disables; -1 unlimited)
 - `CLUSTER_ENGINE` (default: `node`) — `node|python`

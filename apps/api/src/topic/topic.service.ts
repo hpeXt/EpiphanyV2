@@ -438,16 +438,16 @@ export class TopicService {
    * Create a new topic with root argument
    */
   async createTopic(dto: CreateTopicRequest): Promise<CreateTopicResult> {
-    // Validate input
-    if (!dto.title || dto.title.trim() === '') {
-      throw new BadRequestException({
-        error: { code: 'BAD_REQUEST', message: 'title is required and cannot be empty' },
-      });
-    }
-    if (!dto.body || dto.body.trim() === '') {
+    const body = dto.body?.trim() ?? '';
+    if (!body) {
       throw new BadRequestException({
         error: { code: 'BAD_REQUEST', message: 'body is required and cannot be empty' },
       });
+    }
+
+    let title = dto.title?.trim() ?? '';
+    if (!title) {
+      title = await generateTopicTitleFromBody(body);
     }
 
     const topicId = uuidv7();
@@ -465,7 +465,7 @@ export class TopicService {
       await tx.topic.create({
         data: {
           id: topicId,
-          title: dto.title,
+          title,
           status: 'active',
           visibility,
           accessKeyHash,
@@ -481,8 +481,8 @@ export class TopicService {
           id: rootArgumentId,
           topicId,
           parentId: null,
-          title: dto.title,
-          body: dto.body,
+          title,
+          body,
           authorPubkey: emptyPubkey,
           analysisStatus: 'pending_analysis',
           totalVotes: 0,
@@ -503,11 +503,11 @@ export class TopicService {
     const expiresAt = new Date(Date.now() + this.CLAIM_TOKEN_TTL_SECONDS * 1000).toISOString();
 
     // Fire-and-forget: pre-translate topic title + root argument to the other locale.
-    this.translations.requestTopicTitleTranslation({ topicId, title: dto.title }).catch((err) => {
+    this.translations.requestTopicTitleTranslation({ topicId, title }).catch((err) => {
       console.warn(`[topic] Failed to request title translation topicId=${topicId}:`, err);
     });
     this.translations
-      .requestArgumentTranslation({ argumentId: rootArgumentId, title: dto.title, body: dto.body })
+      .requestArgumentTranslation({ argumentId: rootArgumentId, title, body })
       .catch((err) => {
         console.warn(`[topic] Failed to request root argument translation argumentId=${rootArgumentId}:`, err);
       });
@@ -1480,5 +1480,136 @@ export class TopicService {
         summary: c.summary,
       })),
     });
+  }
+}
+
+function hasCjk(text: string): boolean {
+  return /[\u4E00-\u9FFF]/.test(text);
+}
+
+function fallbackTopicTitleFromBody(body: string): string {
+  const trimmed = body.trim();
+  if (!trimmed) return hasCjk(body) ? '未命名议题' : 'Untitled topic';
+
+  const firstNonEmptyLine =
+    trimmed
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find((line) => line.length > 0) ?? trimmed;
+
+  const withoutHeading = firstNonEmptyLine.replace(/^#+\s*/, '').trim();
+  const sentenceEnd = withoutHeading.search(/[.?!。！？]/);
+  const firstSentence = sentenceEnd >= 0 ? withoutHeading.slice(0, sentenceEnd + 1) : withoutHeading;
+
+  let candidate = firstSentence.replace(/\s+/g, ' ').trim();
+  candidate = candidate.replace(/[.?!。！？；;:：、，,]+$/g, '').trim();
+
+  const maxChars = 60;
+  if (candidate.length > maxChars) candidate = candidate.slice(0, maxChars).trimEnd();
+
+  return candidate || (hasCjk(body) ? '未命名议题' : 'Untitled topic');
+}
+
+function parseJsonFromModel(content: string): unknown {
+  const fenced = content.match(/```json\s*([\s\S]*?)\s*```/i);
+  if (fenced) return JSON.parse(fenced[1]);
+
+  try {
+    return JSON.parse(content);
+  } catch {
+    // fallthrough
+  }
+
+  const first = content.indexOf('{');
+  const last = content.lastIndexOf('}');
+  if (first >= 0 && last > first) {
+    return JSON.parse(content.slice(first, last + 1));
+  }
+
+  throw new Error('Failed to parse JSON from model output');
+}
+
+function sanitizeTopicTitle(value: string): string {
+  const singleLine = value.replace(/\s+/g, ' ').trim();
+  return singleLine.replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim();
+}
+
+async function generateTopicTitleFromBody(body: string): Promise<string> {
+  const fallback = fallbackTopicTitleFromBody(body);
+  const apiKey = process.env.OPENROUTER_API_KEY?.trim();
+  if (!apiKey) return fallback;
+
+  const baseUrl = (process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
+  const model = process.env.TOPIC_TITLE_MODEL ?? 'google/gemini-3-flash-preview';
+  const timeoutMs = Number(process.env.TOPIC_TITLE_TIMEOUT_MS ?? '15000');
+  const temperature = Number(process.env.TOPIC_TITLE_TEMPERATURE ?? '0.2');
+  const maxTokens = Number(process.env.TOPIC_TITLE_MAX_TOKENS ?? '64');
+  const maxChars = Number(process.env.TOPIC_TITLE_MAX_CHARS ?? '2000');
+
+  const snippet = body.trim().slice(0, Number.isFinite(maxChars) && maxChars > 0 ? Math.floor(maxChars) : 2000);
+
+  const systemPrompt = [
+    '你是一个严格的议题标题生成器。',
+    '根据用户提供的正文，为这个议题生成一个简短、清晰的标题。',
+    '',
+    '硬性要求：',
+    '1) 只输出严格 JSON（不要 Markdown，不要解释，不要多余字段）。',
+    '2) 输出 JSON schema: {"title": string}',
+    '3) title 必须是单行字符串，避免空泛；尽量不要以标点结尾。',
+    '4) 使用与输入正文相同的语言（中文/英文）。',
+  ].join('\n');
+
+  const userPrompt = [
+    'BODY:',
+    '```text',
+    snippet,
+    '```',
+    '',
+    '请输出 OUTPUT_JSON（严格 JSON）：',
+  ].join('\n');
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        temperature,
+        max_tokens: maxTokens,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(`OpenRouter request failed: ${response.status} ${text || response.statusText}`);
+    }
+
+    const json = (await response.json()) as any;
+    const content = json?.choices?.[0]?.message?.content;
+    if (typeof content !== 'string' || !content.trim()) {
+      throw new Error('OpenRouter returned empty content');
+    }
+
+    const parsed = parseJsonFromModel(content);
+    const title = sanitizeTopicTitle((parsed as any)?.title ?? '');
+    if (!title) throw new Error('Model output missing title');
+
+    return title;
+  } catch (err) {
+    console.warn('[topic] Auto-title generation failed; falling back:', err);
+    return fallback;
+  } finally {
+    clearTimeout(timer);
   }
 }

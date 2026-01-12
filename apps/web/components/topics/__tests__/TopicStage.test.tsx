@@ -50,10 +50,22 @@ jest.mock("@/components/visualizations/Sunburst", () => ({
       >
         Hover arg-1
       </button>
-      <button type="button" onClick={() => props.onSelectedIdChange?.("arg-1")}>
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          props.onSelectedIdChange?.("arg-1");
+        }}
+      >
         Select arg-1
       </button>
-      <button type="button" onClick={() => props.onSelectedIdChange?.(null)}>
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          props.onSelectedIdChange?.(null);
+        }}
+      >
         Blank
       </button>
     </div>

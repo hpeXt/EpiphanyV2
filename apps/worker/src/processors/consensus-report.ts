@@ -55,12 +55,20 @@ export interface ConsensusReportSourceForModel {
   title: string | null;
   body: string;
   totalVotes: number;
+  depth: number | null;
+  stance: -1 | 0 | 1;
 }
 
 export interface GenerateConsensusReportInput {
   topicTitle: string;
   sources: ConsensusReportSourceForModel[];
   params: ConsensusReportParamsSnapshot;
+  coverage: {
+    argumentsTotal: number;
+    argumentsIncluded: number;
+    votesTotal: number;
+    votesIncluded: number;
+  };
 }
 
 export interface ConsensusReportProvider {
@@ -164,6 +172,8 @@ export async function processConsensusReport(
         title: arg.title,
         body: trimmedBody,
         totalVotes: arg.totalVotes,
+        depth: arg.depth,
+        stance: arg.stance,
       };
     });
 
@@ -200,6 +210,7 @@ export async function processConsensusReport(
       topicTitle,
       sources,
       params: paramsSnapshot,
+      coverage,
     });
 
     if (!contentMd || !contentMd.trim()) {
@@ -290,7 +301,7 @@ function getConsensusReportDefaults(): {
   return {
     maxArguments: parsePositiveInt(process.env.REPORT_MAX_ARGUMENTS, 120),
     maxCharsPerSource: parsePositiveInt(process.env.REPORT_MAX_CHARS_PER_SOURCE, 1200),
-    promptVersion: process.env.REPORT_PROMPT_VERSION ?? 'consensus-report/v3-stage03',
+    promptVersion: process.env.REPORT_PROMPT_VERSION ?? 'consensus-report/v6-t3c-longform',
   };
 }
 

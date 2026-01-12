@@ -66,11 +66,14 @@ export function TopicPage({ topicId }: Props) {
   const [ledger, setLedger] = useState<LedgerMe | null>(null);
   const [ledgerError, setLedgerError] = useState("");
 
+  const rootArgumentId = tree.status === "success" ? tree.topic.rootArgumentId : null;
+  const resolvedSelectedArgumentId = selectedArgumentId ?? rootArgumentId;
+
   // 获取选中节点
   const selectedNode = useMemo((): Argument | null => {
-    if (!selectedArgumentId || tree.status !== "success") return null;
-    return tree.arguments.find((n) => n.id === selectedArgumentId) || null;
-  }, [selectedArgumentId, tree]);
+    if (!resolvedSelectedArgumentId || tree.status !== "success") return null;
+    return tree.arguments.find((n) => n.id === resolvedSelectedArgumentId) || null;
+  }, [resolvedSelectedArgumentId, tree]);
 
   useEffect(() => {
     try {
@@ -338,15 +341,15 @@ export function TopicPage({ topicId }: Props) {
                 <SunburstView
                   rootId={tree.topic.rootArgumentId}
                   nodes={tree.nodes}
-                  selectedId={selectedArgumentId}
+                  selectedId={resolvedSelectedArgumentId}
                   onSelect={setSelectedArgumentId}
                 />
               ) : (
                 <FocusView
                   rootId={tree.topic.rootArgumentId}
                   nodes={tree.nodes}
-                  selectedId={selectedArgumentId}
-                  onSelect={setSelectedArgumentId}
+                  selectedId={resolvedSelectedArgumentId}
+                  onSelect={(id) => setSelectedArgumentId(id === rootArgumentId ? null : id)}
                 />
               )}
             </div>
@@ -363,7 +366,7 @@ export function TopicPage({ topicId }: Props) {
             <div className="min-h-0 flex-1 overflow-auto">
               <DialogueStream
                 topicId={topicId}
-                parentArgumentId={selectedArgumentId}
+                parentArgumentId={resolvedSelectedArgumentId}
                 topicStatus={tree.topic.status}
                 refreshToken={refreshToken}
                 onInvalidate={invalidate}
