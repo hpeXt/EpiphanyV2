@@ -70,6 +70,30 @@ describe("Sunburst (Step 24)", () => {
     expect(selected?.selected).toBe("true");
   });
 
+  it("clears selection when clicking empty space", () => {
+    const tree = createTreeFixture();
+    const onSelectedIdChange = jest.fn();
+
+    render(
+      <Sunburst
+        tree={tree}
+        width={320}
+        height={320}
+        padAngle={0}
+        interactive
+        defaultSelectedId="a2"
+        onSelectedIdChange={onSelectedIdChange}
+      />,
+    );
+
+    expect(getSegmentById("a2")).toHaveAttribute("data-selected", "true");
+
+    fireEvent.click(screen.getByTestId("sunburst-container"));
+
+    expect(getSegmentById("a2")).not.toHaveAttribute("data-selected");
+    expect(onSelectedIdChange).toHaveBeenCalledWith(null);
+  });
+
   it("supports hover tooltip + click selection when interactive", async () => {
     const tree = createTreeFixture();
     const onNodeClick = jest.fn();

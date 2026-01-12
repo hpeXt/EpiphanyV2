@@ -37,7 +37,6 @@ type HoverCardState = {
   argument: Argument;
   x: number;
   y: number;
-  phase: "compact" | "expanded";
 };
 
 function stripLeadMarkdownPrefix(input: string): string {
@@ -613,7 +612,6 @@ export function TopicStage({ topicId }: Props) {
   const hoverCardPendingRef = useRef<{ id: string; x: number; y: number } | null>(null);
   const hoverCardShowTimerRef = useRef<number | null>(null);
   const hoverCardHideTimerRef = useRef<number | null>(null);
-  const hoverCardExpandTimerRef = useRef<number | null>(null);
   const [quoteHint, setQuoteHint] = useState<{ text: string; x: number; y: number } | null>(null);
   const selectedArgumentIdRef = useRef<string | null>(null);
   selectedArgumentIdRef.current = selectedArgumentId;
@@ -626,10 +624,6 @@ export function TopicStage({ topicId }: Props) {
     if (hoverCardHideTimerRef.current !== null) {
       window.clearTimeout(hoverCardHideTimerRef.current);
       hoverCardHideTimerRef.current = null;
-    }
-    if (hoverCardExpandTimerRef.current !== null) {
-      window.clearTimeout(hoverCardExpandTimerRef.current);
-      hoverCardExpandTimerRef.current = null;
     }
   }, []);
 
@@ -1203,23 +1197,7 @@ export function TopicStage({ topicId }: Props) {
         hoverCardHideTimerRef.current = null;
       }
 
-      setHoverCard({ argument: arg, x: input.x, y: input.y, phase: "compact" });
-
-      if (hoverCardExpandTimerRef.current !== null) {
-        window.clearTimeout(hoverCardExpandTimerRef.current);
-        hoverCardExpandTimerRef.current = null;
-      }
-
-      const expandAfterMs = 650;
-      hoverCardExpandTimerRef.current = window.setTimeout(() => {
-        hoverCardExpandTimerRef.current = null;
-        if (hoverCardHoverIdRef.current !== input.id) return;
-        setHoverCard((prev) => {
-          if (!prev || prev.argument.id !== input.id) return prev;
-          if (prev.phase === "expanded") return prev;
-          return { ...prev, phase: "expanded" };
-        });
-      }, expandAfterMs);
+      setHoverCard({ argument: arg, x: input.x, y: input.y });
     },
     [argumentById],
   );
@@ -1231,10 +1209,6 @@ export function TopicStage({ topicId }: Props) {
       if (hoverCardShowTimerRef.current !== null) {
         window.clearTimeout(hoverCardShowTimerRef.current);
         hoverCardShowTimerRef.current = null;
-      }
-      if (hoverCardExpandTimerRef.current !== null) {
-        window.clearTimeout(hoverCardExpandTimerRef.current);
-        hoverCardExpandTimerRef.current = null;
       }
 
       hoverCardPendingRef.current = null;
@@ -1428,14 +1402,13 @@ export function TopicStage({ topicId }: Props) {
 
   const sunburstSize = selectedArgumentId ? (activeSide === "left" ? 320 : 240) : 360;
 
-  const cardPosition = (x: number, y: number, phase: HoverCardState["phase"]) => {
+  const cardPosition = (x: number, y: number) => {
     const padding = 16;
     const maxCardWidth = Math.max(180, sunburstSize - padding * 2);
     const cardWidth = Math.min(280, maxCardWidth);
 
     const maxCardHeight = Math.max(140, sunburstSize - padding * 2);
-    const desiredHeight = phase === "expanded" ? 260 : 180;
-    const cardHeight = Math.min(desiredHeight, maxCardHeight);
+    const cardHeight = Math.min(180, maxCardHeight);
 
     let left = x + padding;
     let top = y + padding;
@@ -2081,7 +2054,7 @@ export function TopicStage({ topicId }: Props) {
                   {hoverCard ? (
                     <div
                       className="pointer-events-none absolute z-10"
-                      style={cardPosition(hoverCard.x, hoverCard.y, hoverCard.phase)}
+                      style={cardPosition(hoverCard.x, hoverCard.y)}
                       data-testid="sunburst-hover-card"
                     >
                       <div className="rounded-lg border border-border/60 bg-background p-4 shadow-lg">
@@ -2094,11 +2067,7 @@ export function TopicStage({ topicId }: Props) {
                         <p
                           className={[
                             "text-xs text-muted-foreground leading-relaxed",
-                            hoverCard.phase === "expanded"
-                              ? sunburstSize <= 260
-                                ? "line-clamp-6"
-                                : "line-clamp-8"
-                              : "line-clamp-3",
+                            "line-clamp-3",
                           ].join(" ")}
                         >
                           {toExcerpt(hoverCard.argument.body)}

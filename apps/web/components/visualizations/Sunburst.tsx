@@ -211,6 +211,7 @@ export function Sunburst({
       className="relative w-full max-w-full"
       style={{ width, height }}
       onPointerLeave={interactive ? clearHover : undefined}
+      onClick={interactive ? handleBackgroundClick : undefined}
     >
       <svg
         data-testid="sunburst-svg"
@@ -220,7 +221,6 @@ export function Sunburst({
         role="img"
         aria-label={t("sunburst.ariaLabel")}
         className="block max-w-full"
-        onClick={interactive ? handleBackgroundClick : undefined}
       >
         <g transform={`translate(${width / 2} ${height / 2})`}>
           <circle

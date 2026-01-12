@@ -66,7 +66,7 @@ const MESSAGES: Record<Locale, Messages> = {
       heroTitleLine1: "Collective Vibemaking,",
       heroTitleLine2: "Mapped",
       heroSubtitle:
-        "Epiphany 把零散讨论变成一张可读的论证地图：匿名提交观点，二次方投票过滤噪音，用语义地图与 AI 报告形成阶段性结论。",
+        "匿名给你表达的安全感；只让观点自身赢得注意力。",
       manifesto: {
         title: "关于这个项目",
         p1: "我们不缺观点，缺的是结构；不缺热度，缺的是可追溯的推理链。Epiphany 把讨论从“信息流”改造成一张不断生长的论证地图：每个观点有位置，每个分歧可被指认，每次转向都有路径可查。",
@@ -541,7 +541,7 @@ const MESSAGES: Record<Locale, Messages> = {
       heroTitleLine1: "Collective Vibemaking,",
       heroTitleLine2: "Mapped",
       heroSubtitle:
-        "Epiphany turns messy debates into a readable argument map: post anonymously, filter with quadratic voting, and use a semantic map + AI reports to land on actionable takeaways.",
+        "Anonymity gives you the safety to speak; only ideas earn attention.",
       manifesto: {
         title: "About the project",
         p1: "We don’t lack opinions — we lack structure. Feeds make it easy to speak and hard to remember. Epiphany treats discussion as an evolving argument map: every claim has a place, every disagreement is addressable, and every shift has a traceable path.",
