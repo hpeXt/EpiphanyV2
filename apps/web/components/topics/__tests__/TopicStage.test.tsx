@@ -383,7 +383,7 @@ describe("TopicStage interactions", () => {
     expect(reply).toHaveTextContent("My body");
   });
 
-  it("auto-expands the layout when crossing the divider", async () => {
+  it("does not auto-expand the layout when crossing the divider", async () => {
     const { TopicStage } = require("@/components/topics/TopicStage");
 
     // JSDOM doesn't implement PointerEvent; React only wires `onPointerMove*` when it's available.
@@ -475,35 +475,20 @@ describe("TopicStage interactions", () => {
     expect(leftColumn.className).toContain("md:w-[420px]");
 
     fireEvent.pointerMove(leftColumn, { clientX: 100 });
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
     expect(leftColumn.className).toContain("md:w-[420px]");
 
-    await act(async () => {
-      jest.advanceTimersByTime(260);
-    });
-    expect(leftColumn.className).toContain("md:w-[55%]");
-
     fireEvent.pointerMove(leftColumn, { clientX: 300 });
-    expect(leftColumn.className).toContain("md:w-[55%]");
 
     await act(async () => {
-      jest.advanceTimersByTime(359);
+      jest.advanceTimersByTime(1000);
     });
-    expect(leftColumn.className).toContain("md:w-[55%]");
-
-    await act(async () => {
-      jest.advanceTimersByTime(1);
-    });
-    expect(leftColumn.className).toContain("md:w-[300px]");
-
-    fireEvent.pointerMove(leftColumn, { clientX: 100 });
-
-    await act(async () => {
-      jest.advanceTimersByTime(260);
-    });
-    expect(leftColumn.className).toContain("md:w-[55%]");
+    expect(leftColumn.className).toContain("md:w-[420px]");
   });
 
-  it("auto-expands the layout in read mode when moving to the left", async () => {
+  it("does not auto-expand the layout in read mode", async () => {
     const { TopicStage } = require("@/components/topics/TopicStage");
 
     // JSDOM doesn't implement PointerEvent; React only wires `onPointerMove*` when it's available.
@@ -618,26 +603,20 @@ describe("TopicStage interactions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Select arg-1" }));
     await screen.findByRole("heading", { name: "My Argument" });
 
-    expect(leftColumn.className).toContain("md:w-[280px]");
+    expect(leftColumn.className).toContain("md:w-[360px]");
 
-    // In read mode, moving to the left should expand immediately.
     jest.useFakeTimers();
     fireEvent.pointerMove(leftColumn, { clientX: 100 });
-    expect(leftColumn.className).toContain("md:w-[280px]");
-
     await act(async () => {
-      jest.advanceTimersByTime(260);
+      jest.advanceTimersByTime(1000);
     });
-    expect(leftColumn.className).toContain("md:w-[45%]");
+    expect(leftColumn.className).toContain("md:w-[360px]");
 
-    // And moving back to the right collapses again.
     fireEvent.pointerMove(leftColumn, { clientX: 300 });
-    expect(leftColumn.className).toContain("md:w-[45%]");
-
     await act(async () => {
-      jest.advanceTimersByTime(360);
+      jest.advanceTimersByTime(1000);
     });
-    expect(leftColumn.className).toContain("md:w-[280px]");
+    expect(leftColumn.className).toContain("md:w-[360px]");
   });
 
   it("can create argument, vote, open report, and edit own comment", async () => {

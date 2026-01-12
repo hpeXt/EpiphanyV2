@@ -599,12 +599,6 @@ export function TopicStage({ topicId }: Props) {
   const [selectedArgumentDetail, setSelectedArgumentDetail] = useState<Argument | null>(null);
   const [selectedArgumentDetailError, setSelectedArgumentDetailError] = useState("");
   const [isLoadingSelectedArgumentDetail, setIsLoadingSelectedArgumentDetail] = useState(false);
-  const [activeSide, setActiveSide] = useState<"left" | "right" | null>(null);
-  const activeSideRef = useRef<"left" | "right" | null>(null);
-  activeSideRef.current = activeSide;
-  const layoutPendingSideRef = useRef<"left" | "right" | null>(null);
-  const layoutSwitchTimerRef = useRef<number | null>(null);
-  const lastRightTypingAtRef = useRef<number>(Number.NEGATIVE_INFINITY);
   const [hoverCard, setHoverCard] = useState<HoverCardState | null>(null);
   const hoverCardRef = useRef<HoverCardState | null>(null);
   hoverCardRef.current = hoverCard;
@@ -613,7 +607,7 @@ export function TopicStage({ topicId }: Props) {
   const hoverCardShowTimerRef = useRef<number | null>(null);
   const hoverCardHideTimerRef = useRef<number | null>(null);
   const [relatedHoverId, setRelatedHoverId] = useState<string | null>(null);
-  const [isMobileRelatedOpen, setIsMobileRelatedOpen] = useState(false);
+  const [isMobileRelatedOpen, setIsMobileRelatedOpen] = useState(true);
   const [quoteHint, setQuoteHint] = useState<{ text: string; x: number; y: number } | null>(null);
   const selectedArgumentIdRef = useRef<string | null>(null);
   selectedArgumentIdRef.current = selectedArgumentId;
@@ -635,41 +629,6 @@ export function TopicStage({ topicId }: Props) {
     };
   }, [clearHoverCardTimers]);
 
-  const clearLayoutSwitchTimer = useCallback(() => {
-    if (layoutSwitchTimerRef.current !== null) {
-      window.clearTimeout(layoutSwitchTimerRef.current);
-      layoutSwitchTimerRef.current = null;
-    }
-    layoutPendingSideRef.current = null;
-  }, []);
-
-  const commitActiveSide = useCallback((next: "left" | "right" | null) => {
-    activeSideRef.current = next;
-    setActiveSide(next);
-  }, []);
-
-  const scheduleActiveSide = useCallback(
-    (next: "left" | "right" | null, delayMs: number) => {
-      if (layoutSwitchTimerRef.current !== null && layoutPendingSideRef.current === next) return;
-
-      clearLayoutSwitchTimer();
-      layoutPendingSideRef.current = next;
-      layoutSwitchTimerRef.current = window.setTimeout(() => {
-        layoutSwitchTimerRef.current = null;
-        if (layoutPendingSideRef.current !== next) return;
-        layoutPendingSideRef.current = null;
-        commitActiveSide(next);
-      }, delayMs);
-    },
-    [clearLayoutSwitchTimer, commitActiveSide],
-  );
-
-  useEffect(() => {
-    return () => {
-      clearLayoutSwitchTimer();
-    };
-  }, [clearLayoutSwitchTimer]);
-
   const isRightComposerFocused = useCallback(() => {
     if (typeof document === "undefined") return false;
 
@@ -686,23 +645,6 @@ export function TopicStage({ topicId }: Props) {
     if (el.closest("[contenteditable='true']")) return true;
     return false;
   }, []);
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Shift" || event.key === "Meta" || event.key === "Control" || event.key === "Alt") return;
-      if (!isRightComposerFocused()) return;
-
-      lastRightTypingAtRef.current = Date.now();
-
-      // User is actively composing on the right; avoid pending left expansion.
-      if (layoutPendingSideRef.current === "left") {
-        clearLayoutSwitchTimer();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown, true);
-    return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [clearLayoutSwitchTimer, isRightComposerFocused]);
 
   const [isEditingSelectedArgument, setIsEditingSelectedArgument] = useState(false);
   const [isEditEditorMode, setIsEditEditorMode] = useState(true);
@@ -1161,6 +1103,63 @@ export function TopicStage({ topicId }: Props) {
     return argumentById.get(relatedHoverId) ?? null;
   }, [argumentById, relatedHoverId]);
 
+  const relatedNavigationSequence = useMemo(() => {
+    if (!readArgument) return [];
+    if (!related) return [];
+
+    const sequence: Array<string | null> = [];
+    const seen = new Set<string>();
+    const push = (id: string | null) => {
+      const key = id ?? "__ROOT__";
+      if (seen.has(key)) return;
+      seen.add(key);
+      sequence.push(id);
+    };
+
+    for (const arg of [...related.ancestors].reverse()) {
+      push(rootArgumentId !== null && arg.id === rootArgumentId ? null : arg.id);
+    }
+
+    const canonicalSelectedId =
+      rootArgumentId !== null && selectedArgumentId === rootArgumentId ? null : selectedArgumentId ?? null;
+    push(canonicalSelectedId);
+
+    for (const arg of related.children) {
+      push(arg.id);
+    }
+
+    for (const arg of related.siblings) {
+      push(arg.id);
+    }
+
+    return sequence;
+  }, [readArgument, related, rootArgumentId, selectedArgumentId]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (isRightComposerFocused()) return;
+      if (relatedNavigationSequence.length <= 1) return;
+
+      const canonicalSelectedId =
+        rootArgumentId !== null && selectedArgumentId === rootArgumentId ? null : selectedArgumentId ?? null;
+      const currentIndex = relatedNavigationSequence.indexOf(canonicalSelectedId);
+      if (currentIndex === -1) return;
+
+      const nextIndex = event.key === "ArrowUp" ? currentIndex - 1 : currentIndex + 1;
+      if (nextIndex < 0 || nextIndex >= relatedNavigationSequence.length) return;
+
+      event.preventDefault();
+      setRelatedHoverId(null);
+      requestSelectArgumentIdRef.current(relatedNavigationSequence[nextIndex]);
+    };
+
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [isRightComposerFocused, relatedNavigationSequence, rootArgumentId, selectedArgumentId]);
+
   const canEditSelectedArgument =
     hasIdentity === true &&
     topicStatus === "active" &&
@@ -1352,48 +1351,12 @@ export function TopicStage({ topicId }: Props) {
     [hideHoverCard, showHoverCard],
   );
 
-  // Hide hover card + reset layout intent when entering/leaving read mode
+  // Hide hover card when entering/leaving read mode
   useEffect(() => {
     setQuoteHint(null);
-    clearLayoutSwitchTimer();
 
     if (selectedArgumentId) hideHoverCard({ immediate: true });
-    commitActiveSide(null);
-  }, [clearLayoutSwitchTimer, commitActiveSide, hideHoverCard, selectedArgumentId]);
-
-  const handlePointerMove = (event: React.PointerEvent<HTMLElement>) => {
-    if (event.buttons) return;
-    if (event.pointerType && event.pointerType !== "mouse") return;
-
-    const rect = leftColumnRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    const writingRecently = Date.now() - lastRightTypingAtRef.current < 800;
-    const writingFocused = isRightComposerFocused();
-    const isWriteProtected = writingFocused || writingRecently;
-
-    const enterDelayMs = isWriteProtected ? 350 : 260;
-    const leaveDelayMs = isWriteProtected ? 450 : 360;
-    const deadzonePx = isWriteProtected ? 64 : 40;
-
-    const dividerX = rect.right;
-    const x = event.clientX;
-    const intentSide = x <= dividerX - deadzonePx ? "left" : x >= dividerX + deadzonePx ? "right" : null;
-
-    if (!intentSide) {
-      clearLayoutSwitchTimer();
-      return;
-    }
-
-    const currentSide = activeSideRef.current;
-    if (currentSide === intentSide) {
-      clearLayoutSwitchTimer();
-      return;
-    }
-
-    const delayMs = currentSide === "left" && intentSide === "right" ? leaveDelayMs : enterDelayMs;
-    scheduleActiveSide(intentSide, delayMs);
-  };
+  }, [hideHoverCard, selectedArgumentId]);
 
   useEffect(() => {
     if (!selectedArgumentId) return;
@@ -1462,7 +1425,7 @@ export function TopicStage({ topicId }: Props) {
     };
   }, [isEditingSelectedArgument, selectedArgumentId]);
 
-  const sunburstSize = selectedArgumentId ? (activeSide === "left" ? 320 : 240) : 360;
+  const sunburstSize = selectedArgumentId ? 320 : 360;
 
   const cardPosition = (x: number, y: number) => {
     const padding = 16;
@@ -2035,14 +1998,7 @@ export function TopicStage({ topicId }: Props) {
           {t("editor.quote")}
         </Button>
       ) : null}
-      <div
-        className="flex min-h-0 flex-1 flex-col gap-4 p-4 md:p-6"
-        onPointerMoveCapture={handlePointerMove}
-        onPointerLeave={() => {
-          clearLayoutSwitchTimer();
-          commitActiveSide(null);
-        }}
-      >
+      <div className="flex min-h-0 flex-1 flex-col gap-4 p-4 md:p-6">
         {reloadRequired ? (
           <Alert title={t("topic.reloadRequiredTitle")} variant="warn" role="alert">
             <div className="flex items-center justify-between gap-3">
@@ -2056,21 +2012,13 @@ export function TopicStage({ topicId }: Props) {
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-background shadow-sm md:flex-row">
           {/* Left: Explorer */}
-          <div
-            ref={leftColumnRef}
-            className={[
-              "relative flex w-full flex-col overflow-hidden border-b border-border/60 bg-background transition-all duration-300 ease-out md:border-b-0 md:border-r",
-              selectedArgumentId
-                ? activeSide === "left"
-                  ? "md:w-[45%] md:min-w-[360px]"
-                  : "md:w-[280px] md:min-w-[280px]"
-                : activeSide === "left"
-                  ? "md:w-[55%] md:min-w-[450px]"
-                  : activeSide === "right"
-                    ? "md:w-[300px] md:min-w-[300px]"
-                    : "md:w-[420px] md:min-w-[420px]",
-            ].join(" ")}
-          >
+	          <div
+	            ref={leftColumnRef}
+	            className={[
+	              "relative flex w-full flex-col overflow-hidden border-b border-border/60 bg-background transition-all duration-300 ease-out md:border-b-0 md:border-r",
+	              selectedArgumentId ? "md:w-[360px] md:min-w-[360px]" : "md:w-[420px] md:min-w-[420px]",
+	            ].join(" ")}
+	          >
             <div className="flex items-start justify-between gap-3 border-b border-border/60 px-5 py-4">
               <div className="min-w-0">
                 <h2 className="truncate font-serif text-xl text-foreground" title={topicTitle}>
@@ -2303,17 +2251,30 @@ export function TopicStage({ topicId }: Props) {
 
                 <div className="min-h-0 flex-1 overflow-y-auto px-6 py-8 md:pr-[340px]">
 	                  <div className="mx-auto w-full max-w-[760px]">
-                      <div className="mb-6 rounded-lg border border-border/60 bg-background md:hidden">
+                      <div className="sticky top-0 z-20 mb-6 rounded-lg border border-border/60 bg-background md:hidden">
                         <div className="border-b border-border/60 px-4 py-4">
-                          <h2 className="font-serif text-sm font-semibold text-foreground">
-                            {t("stage.relatedTitle")}
-                          </h2>
-                          <p className="mt-1 text-xs text-muted-foreground">{t("stage.relatedHint")}</p>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <h2 className="truncate font-serif text-sm font-semibold text-foreground">
+                                {t("stage.relatedTitle")}
+                              </h2>
+                              <p className="mt-1 text-xs text-muted-foreground">{t("stage.relatedHint")}</p>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 px-3 border border-border bg-background"
+                              onClick={() => setIsMobileRelatedOpen((prev) => !prev)}
+                            >
+                              {isMobileRelatedOpen ? t("common.hide") : t("common.show")}
+                            </Button>
+                          </div>
                         </div>
 
-                        <div className="px-4 py-4">
-                          {related ? (
-                            <div className="space-y-6">
+                        {isMobileRelatedOpen ? (
+                          <div className="px-4 py-4">
+                            {related ? (
+                              <div className="space-y-6">
                               {related.ancestors.length > 0 ? (
                                 <div>
                                   <h3 className="text-xs font-medium text-muted-foreground">{t("stage.relatedPath")}</h3>
@@ -2430,7 +2391,8 @@ export function TopicStage({ topicId }: Props) {
                           ) : (
                             <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
                           )}
-                        </div>
+                          </div>
+                        ) : null}
                       </div>
 
                       {isEditingSelectedArgument ? (
@@ -2745,32 +2707,41 @@ export function TopicStage({ topicId }: Props) {
                   <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
                     {related ? (
                       <div className="space-y-6">
-                        {relatedHoverArgument ? (
-                          <div className="rounded-lg border border-border/60 bg-background p-3 shadow-sm">
-                            <div className="flex items-start justify-between gap-2">
-                              <h3 className="font-serif text-sm font-semibold text-foreground leading-snug line-clamp-2">
-                                {toTitle(relatedHoverArgument)}
-                              </h3>
-                              <span className="shrink-0 text-[10px] text-muted-foreground">
-                                {t("stage.votesCount", { count: relatedHoverArgument.totalVotes })}
-                              </span>
+                        {(() => {
+                          const previewArgument = relatedHoverArgument ?? readArgument;
+                          if (!previewArgument) return null;
+
+                          const isRoot = rootArgumentId !== null && previewArgument.id === rootArgumentId;
+                          const title = isRoot ? topicTitle : toTitle(previewArgument);
+                          const excerpt = previewArgument.body ? toExcerpt(previewArgument.body) : "";
+
+                          return (
+                            <div className="sticky top-0 z-10 bg-background pb-4">
+                              <div className="rounded-lg border border-border/60 bg-background p-3 shadow-sm">
+                                <div className="flex min-w-0 items-start justify-between gap-2">
+                                  <h3 className="min-h-[40px] min-w-0 flex-1 font-serif text-sm font-semibold text-foreground leading-snug line-clamp-2">
+                                    {title}
+                                  </h3>
+                                  <span className="shrink-0 text-[10px] text-muted-foreground">
+                                    {t("stage.votesCount", { count: previewArgument.totalVotes })}
+                                  </span>
+                                </div>
+                                <p className="mt-2 min-h-[80px] line-clamp-4 text-xs text-muted-foreground leading-relaxed">
+                                  {excerpt}
+                                </p>
+                                <div className="mt-3 flex min-w-0 items-center justify-between border-t border-border/60 pt-2 text-[10px] text-muted-foreground">
+                                  <span className="min-w-0 truncate">
+                                    {authorLabel(
+                                      previewArgument.authorId,
+                                      previewArgument.authorDisplayName,
+                                    )}
+                                  </span>
+                                  <span className="shrink-0">{new Date(previewArgument.createdAt).toLocaleDateString()}</span>
+                                </div>
+                              </div>
                             </div>
-                            {relatedHoverArgument.body ? (
-                              <p className="mt-2 line-clamp-4 text-xs text-muted-foreground leading-relaxed">
-                                {toExcerpt(relatedHoverArgument.body)}
-                              </p>
-                            ) : null}
-                            <div className="mt-3 flex items-center justify-between border-t border-border/60 pt-2 text-[10px] text-muted-foreground">
-                              <span>
-                                {authorLabel(
-                                  relatedHoverArgument.authorId,
-                                  relatedHoverArgument.authorDisplayName,
-                                )}
-                              </span>
-                              <span>{new Date(relatedHoverArgument.createdAt).toLocaleDateString()}</span>
-                            </div>
-                          </div>
-                        ) : null}
+                          );
+                        })()}
                         {related.ancestors.length > 0 ? (
                           <div>
                             <h3 className="text-xs font-medium text-muted-foreground">{t("stage.relatedPath")}</h3>
