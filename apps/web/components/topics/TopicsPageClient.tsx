@@ -64,6 +64,7 @@ export function TopicsPageClient({ publicTopics }: { publicTopics: TopicLite[] }
       }));
 
       let failedCount = 0;
+      let removedCount = 0;
       const topics: TopicLite[] = [];
 
       const results = await Promise.all(
@@ -73,7 +74,9 @@ export function TopicsPageClient({ publicTopics }: { publicTopics: TopicLite[] }
 
           const result = await apiClient.getTopicTree(topicId, 1);
           if (!result.ok) {
-            return { ok: false as const };
+            const shouldRemove =
+              result.error.kind === "http" && result.error.code === "TOPIC_NOT_FOUND";
+            return { ok: false as const, topicId, shouldRemove };
           }
 
           const topic = result.data.topic;
@@ -94,6 +97,10 @@ export function TopicsPageClient({ publicTopics }: { publicTopics: TopicLite[] }
       for (const result of results) {
         if (!result.ok) {
           failedCount += 1;
+          if (result.shouldRemove) {
+            removedCount += 1;
+            store.removeTopic(result.topicId);
+          }
           continue;
         }
         topics.push(result.topic);
@@ -104,7 +111,7 @@ export function TopicsPageClient({ publicTopics }: { publicTopics: TopicLite[] }
       setVisited({
         status: "success",
         topics,
-        totalCount: visitedIds.length,
+        totalCount: Math.max(0, visitedIds.length - removedCount),
         failedCount,
       });
     }

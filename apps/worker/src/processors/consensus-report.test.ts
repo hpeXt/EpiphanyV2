@@ -10,7 +10,7 @@
  * - Event: XADD topic:events:{topicId} with report_updated
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import { getPrisma, type PrismaClient } from '@epiphany/database';
 import Redis from 'ioredis';
 import { v7 as uuidv7 } from 'uuid';
@@ -20,6 +20,7 @@ import {
   type ConsensusReportProvider,
   type GenerateConsensusReportInput,
 } from './consensus-report.js';
+import { cleanupTopicTestData } from '../test/cleanup.js';
 
 describe('Consensus Report Processor', () => {
   let prisma: PrismaClient;
@@ -49,6 +50,7 @@ describe('Consensus Report Processor', () => {
       data: {
         id: topicId,
         title: `Test Topic ${topicId}`,
+        visibility: 'private',
         status: 'active',
       },
     });
@@ -88,6 +90,10 @@ describe('Consensus Report Processor', () => {
     });
 
     await redis.del(`topic:events:${topicId}`);
+  });
+
+  afterEach(async () => {
+    await cleanupTopicTestData({ prisma, redis, topicId });
   });
 
   it('should write status=ready with contentMd and publish report_updated', async () => {

@@ -44,15 +44,17 @@ function parseArgs(argv) {
   const args = {
     apply: false,
     all: false,
+    delete: false,
     sinceHours: 24,
-    prefix: 'Test Topic ',
+    prefixes: [],
   };
 
   for (const raw of argv) {
     if (raw === '--apply') args.apply = true;
     else if (raw === '--all') args.all = true;
+    else if (raw === '--delete') args.delete = true;
     else if (raw.startsWith('--since-hours=')) args.sinceHours = Number(raw.split('=', 2)[1]);
-    else if (raw.startsWith('--prefix=')) args.prefix = raw.split('=', 2)[1] ?? args.prefix;
+    else if (raw.startsWith('--prefix=')) args.prefixes.push(raw.split('=', 2)[1] ?? '');
     else if (raw === '--help' || raw === '-h') {
       printHelp();
       process.exit(0);
@@ -60,6 +62,7 @@ function parseArgs(argv) {
   }
 
   if (!Number.isFinite(args.sinceHours) || args.sinceHours <= 0) args.sinceHours = 24;
+  if (!args.prefixes.length) args.prefixes = ['Test Topic '];
 
   return args;
 }
@@ -68,14 +71,20 @@ function printHelp() {
   console.log(
     [
       'Usage:',
-      '  node scripts/cleanup-test-topics.mjs [--apply] [--all] [--since-hours=24] [--prefix="Test Topic "]',
+      '  node scripts/cleanup-test-topics.mjs [--apply] [--delete] [--all] [--since-hours=24] [--prefix="Test Topic "] [--prefix="E2E::"]',
       '',
       'Default behavior is dry-run (prints how many would be affected).',
+      '',
+      'When --apply is set:',
+      '- default: set matched topics visibility=private (hide from public list)',
+      '- with --delete: delete matched topics and all related rows (destructive)',
       '',
       'Examples:',
       '  node scripts/cleanup-test-topics.mjs',
       '  node scripts/cleanup-test-topics.mjs --apply',
       '  node scripts/cleanup-test-topics.mjs --apply --all',
+      '  node scripts/cleanup-test-topics.mjs --apply --delete --all',
+      '  node scripts/cleanup-test-topics.mjs --apply --delete --all --prefix="Test Topic " --prefix="E2E::"',
     ].join('\n'),
   );
 }
@@ -88,17 +97,11 @@ if (!process.env.DATABASE_URL) {
   process.exit(1);
 }
 
-const { getPrisma } = await import('@epiphany/database');
+// Import from built workspace package path so this script works without adding root deps.
+const { getPrisma } = await import('../packages/database/dist/index.js');
 const prisma = getPrisma();
 
-const where = {
-  title: { startsWith: args.prefix },
-  ...(args.all
-    ? {}
-    : {
-        createdAt: { gte: new Date(Date.now() - args.sinceHours * 60 * 60 * 1000) },
-      }),
-};
+const where = buildWhere(args);
 
 try {
   const count = await prisma.topic.count({ where });
@@ -119,15 +122,62 @@ try {
   }
 
   if (!args.apply) {
-    console.log('[cleanup-test-topics] Dry-run only. Re-run with --apply to set visibility=private.');
+    console.log(
+      '[cleanup-test-topics] Dry-run only. Re-run with --apply to hide, or --apply --delete to remove.',
+    );
   } else {
-    const result = await prisma.topic.updateMany({
-      where,
-      data: { visibility: 'private' },
-    });
+    if (!args.delete) {
+      const result = await prisma.topic.updateMany({
+        where,
+        data: { visibility: 'private' },
+      });
 
-    console.log(`[cleanup-test-topics] Updated topics: ${result.count}`);
+      console.log(`[cleanup-test-topics] Updated topics (visibility=private): ${result.count}`);
+    } else {
+      const topics = await prisma.topic.findMany({ where, select: { id: true } });
+      const ids = topics.map((t) => t.id);
+
+      console.log(`[cleanup-test-topics] Deleting topics: ${ids.length}`);
+      if (!ids.length) {
+        console.log('[cleanup-test-topics] Nothing to delete.');
+      } else {
+        // IMPORTANT: topic has a FK to root argument, so we must null rootArgumentId first,
+        // then delete children (in correct order), then delete topics.
+        const result = await prisma.$transaction([
+          prisma.topic.updateMany({
+            where: { id: { in: ids } },
+            data: { rootArgumentId: null },
+          }),
+          prisma.stake.deleteMany({ where: { topicId: { in: ids } } }),
+          prisma.clusterData.deleteMany({ where: { topicId: { in: ids } } }),
+          prisma.camp.deleteMany({ where: { topicId: { in: ids } } }),
+          prisma.consensusReport.deleteMany({ where: { topicId: { in: ids } } }),
+          prisma.argument.deleteMany({ where: { topicId: { in: ids } } }),
+          prisma.ledger.deleteMany({ where: { topicId: { in: ids } } }),
+          prisma.topicIdentityProfile.deleteMany({ where: { topicId: { in: ids } } }),
+          prisma.topicPubkeyBlacklist.deleteMany({ where: { topicId: { in: ids } } }),
+          prisma.topic.deleteMany({ where: { id: { in: ids } } }),
+        ]);
+
+        const deleted = result[result.length - 1];
+        console.log(`[cleanup-test-topics] Deleted topics: ${deleted.count}`);
+      }
+    }
   }
 } finally {
   await prisma.$disconnect();
+}
+
+function buildWhere(args) {
+  const normalizedPrefixes = args.prefixes.map((p) => String(p ?? '')).filter((p) => p.trim().length > 0);
+  const prefixes = normalizedPrefixes.length ? normalizedPrefixes : ['Test Topic '];
+
+  return {
+    OR: prefixes.map((prefix) => ({ title: { startsWith: prefix } })),
+    ...(args.all
+      ? {}
+      : {
+          createdAt: { gte: new Date(Date.now() - args.sinceHours * 60 * 60 * 1000) },
+        }),
+  };
 }

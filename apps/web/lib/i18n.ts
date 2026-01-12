@@ -61,11 +61,18 @@ const MESSAGES: Record<Locale, Messages> = {
       archived: "归档",
     },
     home: {
+      slogan: "Collective Vibemaking,Mapped",
       heroEyebrow: "匿名、结构化、可治理的讨论",
-      heroTitleLine1: "让每个观点有位置，",
-      heroTitleLine2: "让每次投票有意义",
+      heroTitleLine1: "Collective Vibemaking,",
+      heroTitleLine2: "Mapped",
       heroSubtitle:
         "Epiphany 把零散讨论变成一张可读的论证地图：匿名提交观点，二次方投票过滤噪音，用语义地图与 AI 报告形成阶段性结论。",
+      manifesto: {
+        title: "关于这个项目",
+        p1: "我们不缺观点，缺的是结构；不缺热度，缺的是可追溯的推理链。Epiphany 把讨论从“信息流”改造成一张不断生长的论证地图：每个观点有位置，每个分歧可被指认，每次转向都有路径可查。",
+        p2: "匿名不是为了逃避责任，而是为了让想法先于身份出现。每个议题生成独立身份，让参与者可以更自由地提出补充、反驳、以及“我也不确定但值得一想”的部分。",
+        p3: "共识往往先以一种“vibe”出现：我们感觉哪里不对、哪里更重要。二次方投票为注意力定价，把强烈偏好变成有成本的表达；语义地图与阶段报告把这种集体直觉固定下来——从 vibe 到 map。",
+      },
       heroBullets: {
         anonymous: "无需注册，匿名参与；每个议题独立身份",
         structure: "观点以树状结构沉淀，便于追溯与引用",
@@ -529,11 +536,18 @@ const MESSAGES: Record<Locale, Messages> = {
       archived: "archived",
     },
     home: {
+      slogan: "Collective Vibemaking,Mapped",
       heroEyebrow: "Anonymous, structured, governable discussions",
-      heroTitleLine1: "Give every idea a place,",
-      heroTitleLine2: "give every vote meaning",
+      heroTitleLine1: "Collective Vibemaking,",
+      heroTitleLine2: "Mapped",
       heroSubtitle:
         "Epiphany turns messy debates into a readable argument map: post anonymously, filter with quadratic voting, and use a semantic map + AI reports to land on actionable takeaways.",
+      manifesto: {
+        title: "About the project",
+        p1: "We don’t lack opinions — we lack structure. Feeds make it easy to speak and hard to remember. Epiphany treats discussion as an evolving argument map: every claim has a place, every disagreement is addressable, and every shift has a traceable path.",
+        p2: "Anonymity isn’t an excuse; it’s a tool. Each topic generates its own identity so ideas can arrive before status — including the half-formed “I’m not sure, but it matters” kind.",
+        p3: "Consensus often shows up first as a vibe: we sense what’s off and what’s important. Quadratic voting prices attention, turning intensity into a costly signal; semantic maps and stage reports then pin that collective intuition down — from vibe to map.",
+      },
       heroBullets: {
         anonymous: "No sign-up; identity is scoped to each topic",
         structure: "Arguments live in a traceable tree, not a feed",

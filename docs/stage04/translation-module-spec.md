@@ -180,10 +180,15 @@ Worker 的保守估算是 `800 + 2 * 字符数`（含 prompt/输出与安全冗�
 ## 10. 最小配置与验收
 
 - `.env` 至少需要：
+  - `DATABASE_URL`（API/Worker/Prisma）
+  - `REDIS_URL`（API SSE stream + BullMQ；Worker BullMQ + budget gate）
   - `OPENROUTER_API_KEY`
   - `TRANSLATION_PROVIDER=openrouter`
   - `TRANSLATION_MODEL=z-ai/glm-4.7`（或留空走默认）
   - `TRANSLATION_BUDGET_TOKENS_PER_MONTH=200000`（按预算调整）
+- 本地开发建议：
+  - 运行 `pnpm dev` 会自动执行 `pnpm --filter @epiphany/database db:generate`，避免 Prisma Client 生成不一致导致读接口 500。
+  - 新库/新增迁移时需执行 `pnpm --filter @epiphany/database db:migrate:deploy`（未迁移时翻译会回退原文并打印 warn）。
 - 验收路径：
   - 创建/编辑 Topic、Argument、displayName 后，Worker 能消费 `ai_translation` 队列并写入 `translations`
   - 前端切换语言后，API 返回对应语言（缺译文回退原文）

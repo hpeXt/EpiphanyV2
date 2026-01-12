@@ -7,12 +7,13 @@
  * - cluster_updated invalidation is published after successful write
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { getPrisma, type PrismaClient } from '@epiphany/database';
 import Redis from 'ioredis';
 import { v7 as uuidv7 } from 'uuid';
 
 import { processTopicCluster, type TopicClusterEngine } from '../processors/topic-cluster.js';
+import { cleanupTopicTestData } from '../test/cleanup.js';
 
 const EMBEDDING_DIMENSIONS = 4096;
 
@@ -42,6 +43,7 @@ describe('Topic Cluster Processor - DB overwrite idempotency', () => {
       data: {
         id: topicId,
         title: `Test Topic ${topicId}`,
+        visibility: 'private',
         status: 'active',
         lastClusterArgumentCount: 0,
         lastClusterTotalVotes: 0,
@@ -69,6 +71,10 @@ describe('Topic Cluster Processor - DB overwrite idempotency', () => {
     });
 
     await redis.del(`topic:events:${topicId}`);
+  });
+
+  afterEach(async () => {
+    await cleanupTopicTestData({ prisma, redis, topicId });
   });
 
   it('should overwrite latest camps/cluster_data on re-run (no table bloat)', async () => {

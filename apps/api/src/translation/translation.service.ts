@@ -65,10 +65,61 @@ function readNullableStringField(obj: Record<string, unknown>, key: string): str
 
 @Injectable()
 export class TranslationService {
+  private didWarnMissingModel = false;
+  private didWarnQueryError = false;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly queue: QueueService,
   ) {}
+
+  private getTranslationModel():
+    | {
+        findMany: (args: unknown) => Promise<unknown[]>;
+        findUnique: (args: unknown) => Promise<unknown | null>;
+        create: (args: unknown) => Promise<unknown>;
+        update: (args: unknown) => Promise<unknown>;
+      }
+    | null {
+    const model = (this.prisma as unknown as { translation?: unknown }).translation;
+    if (!model || typeof model !== 'object') return null;
+
+    const candidate = model as Record<string, unknown>;
+    if (
+      typeof candidate.findMany !== 'function' ||
+      typeof candidate.findUnique !== 'function' ||
+      typeof candidate.create !== 'function' ||
+      typeof candidate.update !== 'function'
+    ) {
+      return null;
+    }
+
+    return model as {
+      findMany: (args: unknown) => Promise<unknown[]>;
+      findUnique: (args: unknown) => Promise<unknown | null>;
+      create: (args: unknown) => Promise<unknown>;
+      update: (args: unknown) => Promise<unknown>;
+    };
+  }
+
+  private warnMissingModelOnce(action: string): void {
+    if (this.didWarnMissingModel) return;
+    this.didWarnMissingModel = true;
+    console.warn(
+      `[translation] Prisma client missing Translation model; skipping translation ${action}. Run prisma generate to enable translations.`,
+    );
+  }
+
+  private warnQueryErrorOnce(error: unknown): void {
+    if (this.didWarnQueryError) return;
+    this.didWarnQueryError = true;
+
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(
+      `[translation] Failed to query translations; falling back to original content. (If schema is missing, run pnpm --filter @epiphany/database db:migrate:deploy.)`,
+      message,
+    );
+  }
 
   private computeSourceHash(params:
     | { resourceType: 'topic_title'; source: { title: string } }
@@ -113,19 +164,31 @@ export class TranslationService {
   > {
     if (!params.resourceIds.length) return [];
 
-    const rows = await this.prisma.translation.findMany({
-      where: {
-        resourceType: params.resourceType,
-        resourceId: { in: params.resourceIds },
-        targetLocale: params.targetLocale,
-        status: 'ready',
-      },
-      select: {
-        resourceId: true,
-        sourceHash: true,
-        data: true,
-      },
-    });
+    const model = this.getTranslationModel();
+    if (!model) {
+      this.warnMissingModelOnce('overrides');
+      return [];
+    }
+
+    let rows: Array<{ resourceId: string; sourceHash: Uint8Array | null; data: Prisma.JsonValue | null }> = [];
+    try {
+      rows = (await model.findMany({
+        where: {
+          resourceType: params.resourceType,
+          resourceId: { in: params.resourceIds },
+          targetLocale: params.targetLocale,
+          status: 'ready',
+        },
+        select: {
+          resourceId: true,
+          sourceHash: true,
+          data: true,
+        },
+      })) as Array<{ resourceId: string; sourceHash: Uint8Array | null; data: Prisma.JsonValue | null }>;
+    } catch (error) {
+      this.warnQueryErrorOnce(error);
+      return [];
+    }
 
     return rows.map((row) => ({
       resourceId: row.resourceId,
@@ -384,7 +447,13 @@ export class TranslationService {
     sourceLocale: Locale;
     sourceHash: Buffer;
   }): Promise<void> {
-    const existing = await this.prisma.translation.findUnique({
+    const model = this.getTranslationModel();
+    if (!model) {
+      this.warnMissingModelOnce('enqueue');
+      return;
+    }
+
+    const existing = (await model.findUnique({
       where: {
         resourceType_resourceId_targetLocale: {
           resourceType: params.resourceType,
@@ -393,7 +462,7 @@ export class TranslationService {
         },
       },
       select: { id: true, status: true, sourceHash: true },
-    });
+    })) as { id: string; status: string; sourceHash: Uint8Array | null } | null;
 
     const existingHash = toBuffer(existing?.sourceHash ?? null);
     const sameHash = existingHash ? existingHash.equals(params.sourceHash) : false;
@@ -403,7 +472,7 @@ export class TranslationService {
     }
 
     if (!existing) {
-      await this.prisma.translation.create({
+      await model.create({
         data: {
           id: uuidv7(),
           resourceType: params.resourceType,
@@ -419,7 +488,7 @@ export class TranslationService {
         },
       });
     } else if (!sameHash || existing.status === 'failed' || existing.status === 'skipped_budget') {
-      await this.prisma.translation.update({
+      await model.update({
         where: { id: existing.id },
         data: {
           status: 'pending',

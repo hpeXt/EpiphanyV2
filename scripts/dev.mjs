@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -42,6 +42,24 @@ function loadRootEnv() {
 }
 
 loadRootEnv();
+
+function runPrismaGenerate() {
+  const pnpmBin = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+
+  console.log('[dev] Ensuring Prisma Client is generated (@epiphany/database db:generate)...');
+
+  const result = spawnSync(pnpmBin, ['--filter', '@epiphany/database', 'db:generate'], {
+    stdio: 'inherit',
+    env: process.env,
+    shell: process.platform === 'win32',
+  });
+
+  if (result.error) throw result.error;
+  if (result.status === 0) return;
+  process.exit(result.status ?? 1);
+}
+
+runPrismaGenerate();
 
 const extraArgs = process.argv.slice(2);
 const child = spawn('turbo', ['dev', ...extraArgs], {

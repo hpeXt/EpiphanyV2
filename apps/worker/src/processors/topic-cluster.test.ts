@@ -8,7 +8,7 @@
  * - Debounce: same topic enqueue within 5min is deduped via jobId
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { Queue } from 'bullmq';
 import { getPrisma, type PrismaClient } from '@epiphany/database';
 import Redis from 'ioredis';
@@ -21,6 +21,7 @@ import {
   enqueueTopicClusterDebounced,
   getTopicClusterableStats,
 } from '../processors/topic-cluster.js';
+import { cleanupTopicTestData } from '../test/cleanup.js';
 
 const EMBEDDING_DIMENSIONS = 4096;
 
@@ -50,6 +51,7 @@ describe('Topic Cluster Threshold + Debounce', () => {
       data: {
         id: topicId,
         title: `Test Topic ${topicId}`,
+        visibility: 'private',
         status: 'active',
         lastClusterArgumentCount: 0,
         lastClusterTotalVotes: 0,
@@ -78,6 +80,10 @@ describe('Topic Cluster Threshold + Debounce', () => {
 
     // Clear any existing events for this topic
     await redis.del(`topic:events:${topicId}`);
+  });
+
+  afterEach(async () => {
+    await cleanupTopicTestData({ prisma, redis, topicId });
   });
 
   it('should compute clusterable stats by filtering pruned + only ready&embedding!=NULL', async () => {

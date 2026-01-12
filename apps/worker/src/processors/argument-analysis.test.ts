@@ -10,7 +10,7 @@
  * - stanceScore range: clamp/validate in [-1,1]; invalid output is failure
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import { getPrisma, type PrismaClient } from '@epiphany/database';
 import Redis from 'ioredis';
 import { v7 as uuidv7 } from 'uuid';
@@ -18,6 +18,7 @@ import { v7 as uuidv7 } from 'uuid';
 import { processArgumentAnalysis } from '../processors/argument-analysis.js';
 import type { AIProvider } from '../providers/ai-provider.js';
 import { createMockAIProvider } from '../providers/mock-ai-provider.js';
+import { cleanupTopicTestData } from '../test/cleanup.js';
 
 describe('Argument Analysis Processor', () => {
   let prisma: PrismaClient;
@@ -47,6 +48,7 @@ describe('Argument Analysis Processor', () => {
       data: {
         id: topicId,
         title: `Test Topic ${topicId}`,
+        visibility: 'private',
         status: 'active',
       },
     });
@@ -76,6 +78,10 @@ describe('Argument Analysis Processor', () => {
     // Clear any existing events for this topic
     const streamKey = `topic:events:${topicId}`;
     await redis.del(streamKey);
+  });
+
+  afterEach(async () => {
+    await cleanupTopicTestData({ prisma, redis, topicId });
   });
 
   describe('Success Path', () => {
