@@ -2428,17 +2428,17 @@ export function TopicStage({ topicId }: Props) {
           </div>
 
           {/* Right: Reader */}
-          <div
-            ref={rightColumnRef}
-            className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background"
-          >
-            {readArgument ? (
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                  <div className="border-b border-border/60 px-6 py-6">
-                  {isEditingSelectedArgument ? (
-                    <Input
-                      aria-label={t("stage.editTitleAria")}
+	          <div
+	            ref={rightColumnRef}
+	            className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background"
+	          >
+	            <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
+	              {readArgument ? (
+	                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+	                  <div className="border-b border-border/60 px-6 py-6">
+	                  {isEditingSelectedArgument ? (
+	                    <Input
+	                      aria-label={t("stage.editTitleAria")}
                       value={editTitle}
                       onChange={(e) => {
                         isEditDirtyRef.current = true;
@@ -2956,13 +2956,15 @@ export function TopicStage({ topicId }: Props) {
                       {t("stage.topicReadonlyCannotPost", {
                         status: t(`status.${topic.status}`),
                       })}
-                    </p>
-                  ) : null}
-                </div>
+		                    </p>
+		                  ) : null}
+		                </div>
+		              </div>
+		            )}
 
-                <div
-                  role="separator"
-                  aria-orientation="vertical"
+	                <div
+	                  role="separator"
+	                  aria-orientation="vertical"
                   aria-label="Resize panels"
                   className={[
                     "relative hidden w-2 shrink-0 cursor-col-resize touch-none lg:block",
@@ -3125,13 +3127,12 @@ export function TopicStage({ topicId }: Props) {
                     ) : (
                       <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
                     )}
-                  </div>
-                </aside>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+	                  </div>
+	                </aside>
+	              </div>
+	          </div>
+	        </div>
+	      </div>
 
       {isOwner && isManageOpen ? (
         <TopicManagePanel
