@@ -16,6 +16,8 @@ const REPORT_META_START_RE = /<!--\s*REPORT_META_START\s*-->/i;
 const REPORT_META_END_RE = /<!--\s*REPORT_META_END\s*-->/i;
 const CHAINED_PROMPT_VERSION = 'consensus-report/v7-stage03-chained';
 
+type OpenRouterUsage = { promptTokens?: number; completionTokens?: number; totalTokens?: number };
+
 function stanceLabel(stance: -1 | 0 | 1): 'oppose' | 'neutral' | 'support' {
   if (stance === -1) return 'oppose';
   if (stance === 1) return 'support';
@@ -250,12 +252,12 @@ function buildSystemPrompt(promptVersion: string): string {
       '',
       '对标标准（TalkToTheCity 风格）：Theme/Topic 的长描述 + 大量原子 Claim + 每条 Claim 的原文 Quotes 证据。',
       '',
-      '硬性事实与引用纪律（必须严格遵守）：',
+      '硬性事实与引用纪律（尽量遵守；材料不足时可从简，但不要编造）：',
       '1) 只能使用用户提供的 Sources（以及用户额外给出的 Coverage/Params 信息）；不要引入外部事实。',
-      '2) 凡是关于讨论内容的断言（事实、归纳、评价、建议、因果、归因、预测），必须在句末紧跟 1 个或多个引用 [S#]。',
+      '2) 关键断言尽量在句末附 1 个或多个引用 [S#]；不要求每一句都带引用，但每个主题/关键 Claim 至少要有可追溯的引用支撑。',
       '3) 不要输出 Sources 列表/参考文献/脚注列表（产品会把 [S#] 渲染成脚注并链接回原文）。',
       '4) 不要输出任何内部 ID、URL 或不存在的引用；引用只能来自给定的 source labels（S1..Sn）。',
-      '5) Quote 必须是对 source body 的“逐字短摘录”（1-3 句），用 Markdown blockquote（以 > 开头）输出，并在同一行末尾带 [S#]。',
+      '5) Quote 若出现，必须是对 source body 的“逐字短摘录”（1-3 句），用 Markdown blockquote（以 > 开头）输出，并在同一行末尾带 [S#]。',
       '6) 若需要提出推测/建议，必须写清楚前提条件，并用来源解释该建议的动机或风险点 [S#]。',
       '',
       '输出必须是中文 Markdown，并且在最开始包含一个可机器解析的 JSON 元数据块（用于 Bridge Statement 卡片）。',
@@ -278,14 +280,14 @@ function buildSystemPrompt(promptVersion: string): string {
       '}',
       '',
       'Bridge Statements 约束：',
-      '- bridges.statements 至少 7 条，最多 12 条',
+      '- bridges.statements 建议 5–10 条；材料较少时允许输出 3–6 条（至少 3 条）',
       '- id 必须按 B1..B12 的格式（只允许 B + 数字）',
-      '- 每条 sourceLabels 至少 3 个，且必须来自给定的 [S#] labels',
+      '- 每条 sourceLabels 尽量 ≥ 2 个（材料不足可 1 个），且必须来自给定的 [S#] labels',
       '- bridge.text 必须是“可签字句子”，避免空泛套话；若是条件共识，conditions 必须具体且可操作/可验证',
       '',
       '报告正文必须在元数据块之后输出，并且必须包含以下章节（顺序可微调，但都要出现）：',
       '## 导读（How to read）',
-      '## Executive Summary（8–12 条，全部带引用）',
+      '## Executive Summary（建议 6–10 条；关键条目尽量带引用）',
       '## 讨论全景（Coverage & Caveats）— 可使用用户提供的 coverage 数字；本节可少量无引用',
       '## 角色图谱（Role Atlas）— 4–8 个角色，每个角色给：关切/价值框架、核心主张、核心反对、可接受条件（都要引用）',
       '## 关键张力（Key Tensions）— 2–5 条“分歧轴”，明确两端各自最强理由（都要引用）',
@@ -293,14 +295,14 @@ function buildSystemPrompt(promptVersion: string): string {
       '## 未决问题与下一步议程（Agenda）— 把分歧转成可继续推进的问题清单（都要引用）',
       '## 方法（Method, brief）— 只描述你如何从 sources 抽取主题/角色/主张；可少量无引用',
       '',
-      '“主题地图”必须按严格格式输出，便于产品解析与读者导航：',
-      '- 每个主题用三级标题：### T1 主题名 / ### T2 ...（至少 6 个主题；若 sources 很少可降到 4 个）',
-      '- 每个主题先写 2–4 段“长描述”（每段 3–6 句，尽量每句末尾都有引用）',
-      '- 然后列出该主题的原子 Claims：每条 Claim 用四级标题：#### C1 Claim 标题（每个主题至少 4 条 Claim）',
+      '“主题地图”请按可解析的格式输出（材料少可从简，但尽量保留骨架）：',
+      '- 每个主题用三级标题：### T1 主题名 / ### T2 ...（至少 2 个主题；建议 3–6 个；材料较少时 2–4 个）',
+      '- 每个主题先写 1–3 段“主题长描述”（每段 2–5 句；关键句尽量带引用）',
+      '- 然后列出该主题的原子 Claims：每条 Claim 用四级标题：#### C1 Claim 标题（每个主题至少 1–2 条；建议 2–4 条）',
       '- 每条 Claim 下：',
-      '  1) 先写一段 Claim 解释（2–4 句）并带引用 [S#]',
-      '  2) 再给 2–4 条 Quotes，用 > 开头逐字摘录并带 [S#]',
-      '  3) 最后写“反例/反驳/边界条件”小段（至少 1 句）并带引用 [S#]',
+      '  1) 先写一段 Claim 解释（1–3 句），关键句尽量带引用 [S#]',
+      '  2) Quotes：建议给 1–2 条逐字摘录，用 > 开头并带 [S#]（材料不足可省略）',
+      '  3) 最后写“反例/反驳/边界条件”小段（至少 1 句），尽量带引用 [S#]',
       '',
       '写作风格：',
       '- 避免空泛形容词（“很重要/显然/大家都”）；用具体机制、条件、边界、反例来写',
@@ -324,6 +326,34 @@ function getConsensusReportProviderType(): ConsensusReportProviderType {
   if (process.env.OPENROUTER_API_KEY?.trim()) return 'openrouter';
 
   return 'mock';
+}
+
+export function getConsensusReportProviderDiagnostics(): {
+  provider: ConsensusReportProviderType;
+  promptVersion: string;
+  model: string;
+  baseUrl: string;
+  hasApiKey: boolean;
+  timeoutMs: number;
+  temperature: number;
+  maxTokens: number;
+  maxAttempts: number;
+} {
+  const provider = getConsensusReportProviderType();
+  const baseUrl = (process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1').trim().replace(/\/+$/, '');
+  const model = (process.env.REPORT_MODEL ?? 'deepseek/deepseek-chat-v3-0324').trim();
+
+  return {
+    provider,
+    promptVersion: process.env.REPORT_PROMPT_VERSION ?? 'consensus-report/v6-t3c-longform',
+    model,
+    baseUrl,
+    hasApiKey: Boolean(process.env.OPENROUTER_API_KEY?.trim()),
+    timeoutMs: Number(process.env.REPORT_TIMEOUT_MS ?? '900000'),
+    temperature: Number(process.env.REPORT_TEMPERATURE ?? '0.2'),
+    maxTokens: Number(process.env.REPORT_MAX_TOKENS ?? '50000'),
+    maxAttempts: Number(process.env.REPORT_MAX_ATTEMPTS ?? '2'),
+  };
 }
 
 export function createConsensusReportProvider(): ConsensusReportProvider {
@@ -447,6 +477,10 @@ function createOpenRouterConsensusReportProvider(): ConsensusReportProvider {
   const openRouterHttpReferer = process.env.OPENROUTER_HTTP_REFERER?.trim();
   const openRouterTitle = process.env.OPENROUTER_TITLE?.trim();
 
+  console.log(
+    `[consensus-report] OpenRouter config baseUrl=${baseUrl} model=${model} timeoutMs=${timeoutMs} maxTokens=${maxTokens} maxAttempts=${maxAttempts}`,
+  );
+
   return {
     async generate(input: GenerateConsensusReportInput) {
       const sourceLabels = input.sources.map((s) => s.label);
@@ -497,11 +531,13 @@ function createOpenRouterConsensusReportProvider(): ConsensusReportProvider {
           let metaObj: Record<string, unknown> | null = null;
           let lastMetaError: string | null = null;
           let usedModel: string | null = null;
+          let metaUsage: OpenRouterUsage | undefined;
+          let metaRequestId: string | undefined;
 
           for (let attempt = 1; attempt <= metaAttempts; attempt += 1) {
             console.log(`[consensus-report] OpenRouter meta attempt ${attempt}/${metaAttempts} model=${model}`);
 
-            const { contentMd, usedModel: m } = await callOpenRouterChatCompletion({
+            const { contentMd, usedModel: m, usage, requestId } = await callOpenRouterChatCompletion({
               baseUrl,
               apiKey,
               model,
@@ -524,6 +560,8 @@ function createOpenRouterConsensusReportProvider(): ConsensusReportProvider {
             });
 
             usedModel = m;
+            metaUsage = usage;
+            metaRequestId = requestId;
             const parsed = parseJsonObjectFromText(contentMd);
             if (parsed && looksLikeReportMeta(parsed)) {
               metaObj = parsed;
@@ -557,7 +595,12 @@ function createOpenRouterConsensusReportProvider(): ConsensusReportProvider {
           ].join('\n');
 
           console.log(`[consensus-report] OpenRouter body attempt 1/1 model=${model}`);
-          const { contentMd: rawBody, usedModel: bodyUsedModel } = await callOpenRouterChatCompletion({
+          const {
+            contentMd: rawBody,
+            usedModel: bodyUsedModel,
+            usage: bodyUsage,
+            requestId: bodyRequestId,
+          } = await callOpenRouterChatCompletion({
             baseUrl,
             apiKey,
             model,
@@ -572,7 +615,32 @@ function createOpenRouterConsensusReportProvider(): ConsensusReportProvider {
           });
 
           const cleanedBody = unwrapMarkdownFence(extractReportMetaAndBody(rawBody).body);
-          const metaBlock = [REPORT_META_START, '```json', JSON.stringify(normalizedMeta, null, 2), '```', REPORT_META_END].join('\n');
+          const metaWithDiagnostics = {
+            ...normalizedMeta,
+            analysis: {
+              ...(isPlainObject((normalizedMeta as any).analysis) ? ((normalizedMeta as any).analysis as Record<string, unknown>) : {}),
+              generation: {
+                provider: 'openrouter',
+                promptVersion: input.params.promptVersion,
+                baseUrl,
+                modelRequested: model,
+                modelUsedMeta: usedModel,
+                modelUsedBody: bodyUsedModel,
+                requestIdMeta: metaRequestId,
+                requestIdBody: bodyRequestId,
+                usageMeta: metaUsage,
+                usageBody: bodyUsage,
+              },
+            },
+          };
+
+          const metaBlock = [
+            REPORT_META_START,
+            '```json',
+            JSON.stringify(metaWithDiagnostics, null, 2),
+            '```',
+            REPORT_META_END,
+          ].join('\n');
           const contentMd = [metaBlock, cleanedBody.trim()].filter(Boolean).join('\n\n');
 
           const validation = validateLongformReport({ contentMd, sourceLabels, sourceCount: input.sources.length });
@@ -966,26 +1034,26 @@ function validateLongformReport(params: {
 
   // Basic length gate (adaptive to material volume).
   const minChars =
-    params.sourceCount >= 40 ? 7000 : params.sourceCount >= 24 ? 5500 : params.sourceCount >= 12 ? 3500 : 1800;
+    params.sourceCount >= 40 ? 4500 : params.sourceCount >= 24 ? 3200 : params.sourceCount >= 12 ? 1800 : 1200;
   if (body && body.length < minChars) warnings.push(`正文偏短（${body.length}/${minChars} chars）`);
 
   // Required sections (soft-ish but helps avoid barebones output).
-  const requiredHeadings = ['## 导读', '## Executive Summary', '## 角色图谱', '## 关键张力', '## 主题地图', '## 未决问题', '## 方法'];
+  const requiredHeadings = ['## 导读', '## Executive Summary', '## 主题地图', '## 方法'];
   for (const h of requiredHeadings) {
     if (body && !body.includes(h)) warnings.push(`缺少章节：${h}`);
   }
 
   const themeMatches = body ? [...body.matchAll(/^###\s+T\d+\b.*$/gm)] : [];
-  const minThemes = params.sourceCount >= 24 ? 4 : params.sourceCount >= 12 ? 3 : 2;
+  const minThemes = params.sourceCount >= 24 ? 3 : params.sourceCount >= 12 ? 2 : 1;
   if (body && themeMatches.length < minThemes) warnings.push(`主题数量偏少（${themeMatches.length}/${minThemes}）`);
 
   const claimMatches = body ? [...body.matchAll(/^####\s+C\d+\b.*$/gm)] : [];
-  const minClaimsPerTheme = params.sourceCount >= 24 ? 2 : params.sourceCount >= 12 ? 2 : 1;
+  const minClaimsPerTheme = params.sourceCount >= 24 ? 2 : 1;
   const minClaimsTotal = minThemes * minClaimsPerTheme;
   if (body && claimMatches.length < minClaimsTotal) warnings.push(`Claim 数量偏少（${claimMatches.length}/${minClaimsTotal}）`);
 
   const quoteLines = body ? [...body.matchAll(/^>\s+.*$/gm)] : [];
-  const quotesPerClaim = 1;
+  const quotesPerClaim = 0;
   const minQuotesTotal = Math.max(0, claimMatches.length * quotesPerClaim);
   if (body && quoteLines.length < minQuotesTotal) warnings.push(`Quote 数量偏少（${quoteLines.length}/${minQuotesTotal}）`);
 
@@ -994,7 +1062,8 @@ function validateLongformReport(params: {
     : [];
   const citationSet = new Set(params.sourceLabels);
   const invalid = citations.filter((label) => !citationSet.has(label));
-  if (body && citations.length < Math.max(6, claimMatches.length)) warnings.push(`引用密度偏低（citations=${citations.length}）`);
+  const minCitations = Math.max(2, Math.ceil(claimMatches.length * 0.5));
+  if (body && citations.length < minCitations) warnings.push(`引用密度偏低（citations=${citations.length}/${minCitations}）`);
   if (invalid.length > 0) {
     const unique = Array.from(new Set(invalid)).slice(0, 5);
     warnings.push(`包含无效引用标签：${unique.join(', ')}`);
