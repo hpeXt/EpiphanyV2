@@ -202,8 +202,15 @@ async function maybeRunBackfillOnce(params: {
 
   const elapsedMs = Date.now() - startedAt;
   console.log(
-    `[worker] Translation backfill done topics=${topicsEnqueued} arguments=${argumentsEnqueued} profiles=${profilesEnqueued} elapsedMs=${elapsedMs}`,
+    `[worker] Translation backfill done topics=${topicsEnqueued.created} arguments=${argumentsEnqueued.created} profiles=${profilesEnqueued.created} elapsedMs=${elapsedMs}`,
   );
+
+  const deduped = topicsEnqueued.alreadyQueued + argumentsEnqueued.alreadyQueued + profilesEnqueued.alreadyQueued;
+  if (deduped) {
+    console.warn(
+      `[worker] Translation backfill skipped alreadyQueued topics=${topicsEnqueued.alreadyQueued} arguments=${argumentsEnqueued.alreadyQueued} profiles=${profilesEnqueued.alreadyQueued}`,
+    );
+  }
 }
 
 async function runSweepOnce(params: { prisma: PrismaClient; redis: Redis; queue: Queue }): Promise<void> {
@@ -232,9 +239,19 @@ async function runSweepOnce(params: { prisma: PrismaClient; redis: Redis; queue:
     enqueueConcurrency,
   });
 
-  if (topicsEnqueued || argumentsEnqueued || profilesEnqueued) {
+  const created = topicsEnqueued.created + argumentsEnqueued.created + profilesEnqueued.created;
+  const deduped = topicsEnqueued.alreadyQueued + argumentsEnqueued.alreadyQueued + profilesEnqueued.alreadyQueued;
+
+  if (created) {
     console.log(
-      `[worker] Translation sweep enqueued topics=${topicsEnqueued} arguments=${argumentsEnqueued} profiles=${profilesEnqueued}`,
+      `[worker] Translation sweep enqueued topics=${topicsEnqueued.created} arguments=${argumentsEnqueued.created} profiles=${profilesEnqueued.created}`,
+    );
+  }
+
+  if (deduped) {
+    const counts = await params.queue.getJobCounts('waiting', 'active', 'delayed');
+    console.warn(
+      `[worker] Translation sweep skipped alreadyQueued topics=${topicsEnqueued.alreadyQueued} arguments=${argumentsEnqueued.alreadyQueued} profiles=${profilesEnqueued.alreadyQueued} waiting=${counts.waiting ?? 0} active=${counts.active ?? 0} delayed=${counts.delayed ?? 0}`,
     );
   }
 }
@@ -300,19 +317,20 @@ async function backfillTopics(params: {
   queue: Queue;
   batchSize: number;
   enqueueConcurrency: number;
-}): Promise<number> {
+}): Promise<EnqueueStats> {
   await params.redis.del(CURSOR_TOPICS_KEY);
-  let totalEnqueued = 0;
+  const total = zeroStats();
 
   for (;;) {
     const enqueued = await sweepTopics(params);
-    totalEnqueued += enqueued;
+    total.created += enqueued.created;
+    total.alreadyQueued += enqueued.alreadyQueued;
 
     const cursor = await params.redis.get(CURSOR_TOPICS_KEY);
     if (!cursor) break;
   }
 
-  return totalEnqueued;
+  return total;
 }
 
 async function backfillArguments(params: {
@@ -321,19 +339,20 @@ async function backfillArguments(params: {
   queue: Queue;
   batchSize: number;
   enqueueConcurrency: number;
-}): Promise<number> {
+}): Promise<EnqueueStats> {
   await params.redis.del(CURSOR_ARGUMENTS_KEY);
-  let totalEnqueued = 0;
+  const total = zeroStats();
 
   for (;;) {
     const enqueued = await sweepArguments(params);
-    totalEnqueued += enqueued;
+    total.created += enqueued.created;
+    total.alreadyQueued += enqueued.alreadyQueued;
 
     const cursor = await params.redis.get(CURSOR_ARGUMENTS_KEY);
     if (!cursor) break;
   }
 
-  return totalEnqueued;
+  return total;
 }
 
 async function backfillProfiles(params: {
@@ -342,19 +361,20 @@ async function backfillProfiles(params: {
   queue: Queue;
   batchSize: number;
   enqueueConcurrency: number;
-}): Promise<number> {
+}): Promise<EnqueueStats> {
   await params.redis.del(CURSOR_PROFILES_KEY);
-  let totalEnqueued = 0;
+  const total = zeroStats();
 
   for (;;) {
     const enqueued = await sweepProfiles(params);
-    totalEnqueued += enqueued;
+    total.created += enqueued.created;
+    total.alreadyQueued += enqueued.alreadyQueued;
 
     const cursor = await params.redis.get(CURSOR_PROFILES_KEY);
     if (!cursor) break;
   }
 
-  return totalEnqueued;
+  return total;
 }
 
 async function sweepTopics(params: {
@@ -363,7 +383,7 @@ async function sweepTopics(params: {
   queue: Queue;
   batchSize: number;
   enqueueConcurrency: number;
-}): Promise<number> {
+}): Promise<EnqueueStats> {
   const cursorId = await params.redis.get(CURSOR_TOPICS_KEY);
 
   let rows: Array<{ id: string; title: string }> = [];
@@ -389,7 +409,7 @@ async function sweepTopics(params: {
 
   if (!rows.length) {
     await params.redis.del(CURSOR_TOPICS_KEY);
-    return 0;
+    return zeroStats();
   }
 
   const nextCursor = rows[rows.length - 1]!.id;
@@ -422,7 +442,7 @@ async function sweepArguments(params: {
   queue: Queue;
   batchSize: number;
   enqueueConcurrency: number;
-}): Promise<number> {
+}): Promise<EnqueueStats> {
   const cursorId = await params.redis.get(CURSOR_ARGUMENTS_KEY);
 
   let rows: Array<{ id: string; title: string | null; body: string; prunedAt: Date | null }> = [];
@@ -448,7 +468,7 @@ async function sweepArguments(params: {
 
   if (!rows.length) {
     await params.redis.del(CURSOR_ARGUMENTS_KEY);
-    return 0;
+    return zeroStats();
   }
 
   const nextCursor = rows[rows.length - 1]!.id;
@@ -487,7 +507,7 @@ async function sweepProfiles(params: {
   queue: Queue;
   batchSize: number;
   enqueueConcurrency: number;
-}): Promise<number> {
+}): Promise<EnqueueStats> {
   const cursorRaw = await params.redis.get(CURSOR_PROFILES_KEY);
   const cursor = cursorRaw ? parseCursor(cursorRaw) : null;
 
@@ -519,7 +539,7 @@ async function sweepProfiles(params: {
 
   if (!rows.length) {
     await params.redis.del(CURSOR_PROFILES_KEY);
-    return 0;
+    return zeroStats();
   }
 
   const last = rows[rows.length - 1]!;
@@ -562,8 +582,8 @@ async function enqueueIfNeeded(params: {
   enqueueConcurrency: number;
   resourceType: TranslationResourceType;
   items: Array<{ resourceId: string; targetLocale: TranslationLocale; sourceHash: Buffer }>;
-}): Promise<number> {
-  if (!params.items.length) return 0;
+}): Promise<EnqueueStats> {
+  if (!params.items.length) return zeroStats();
 
   const grouped = new Map<TranslationLocale, Array<{ resourceId: string; sourceHash: Buffer }>>();
   for (const item of params.items) {
@@ -574,6 +594,8 @@ async function enqueueIfNeeded(params: {
 
   const now = new Date();
   const toEnqueue: TranslationJobData[] = [];
+  const retryPendingAfterMs = getRetryPendingAfterMs();
+  const retryFailedAfterMs = getRetryFailedAfterMs();
 
   for (const [targetLocale, group] of grouped.entries()) {
     const resourceIds = group.map((g) => g.resourceId);
@@ -606,6 +628,16 @@ async function enqueueIfNeeded(params: {
 
       if (row.status === 'ready' && sameHash && hasData) continue;
 
+      if (row.status === 'pending' && sameHash && retryPendingAfterMs > 0) {
+        const ageMs = now.getTime() - row.updatedAt.getTime();
+        if (ageMs >= 0 && ageMs < retryPendingAfterMs) continue;
+      }
+
+      if (row.status === 'failed' && sameHash && retryFailedAfterMs > 0) {
+        const ageMs = now.getTime() - row.updatedAt.getTime();
+        if (ageMs >= 0 && ageMs < retryFailedAfterMs) continue;
+      }
+
       if (row.status === 'skipped_budget' && sameHash && isSameUtcMonth(row.updatedAt, now)) {
         continue;
       }
@@ -614,13 +646,16 @@ async function enqueueIfNeeded(params: {
     }
   }
 
-  if (!toEnqueue.length) return 0;
+  if (!toEnqueue.length) return zeroStats();
 
+  const stats = zeroStats();
   await mapLimit(toEnqueue, params.enqueueConcurrency, async (job) => {
-    await enqueueTranslationJob(params.queue, job);
+    const result = await enqueueTranslationJob(params.queue, job);
+    if (result.created) stats.created += 1;
+    else stats.alreadyQueued += 1;
   });
 
-  return toEnqueue.length;
+  return stats;
 }
 
 function translationJobId(job: TranslationJobData): string {
@@ -628,7 +663,10 @@ function translationJobId(job: TranslationJobData): string {
   return `tr_${createHash('sha256').update(key).digest('hex').slice(0, 24)}`;
 }
 
-async function enqueueTranslationJob(queue: Queue, job: TranslationJobData): Promise<string> {
+async function enqueueTranslationJob(
+  queue: Queue,
+  job: TranslationJobData,
+): Promise<{ jobId: string; created: boolean }> {
   const jobId = translationJobId(job);
   try {
     const created = await queue.add('translate', job, {
@@ -636,10 +674,10 @@ async function enqueueTranslationJob(queue: Queue, job: TranslationJobData): Pro
       removeOnComplete: true,
       removeOnFail: true,
     });
-    return created.id ?? jobId;
+    return { jobId: created.id ?? jobId, created: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes('already exists')) return jobId;
+    if (msg.includes('already exists')) return { jobId, created: false };
     throw err;
   }
 }

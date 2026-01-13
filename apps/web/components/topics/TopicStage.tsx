@@ -39,6 +39,16 @@ type HoverCardState = {
   y: number;
 };
 
+const LEFT_PANE_WIDTH_STORAGE_KEY = "topicStage:leftPaneWidth:v1";
+const DEFAULT_LEFT_PANE_WIDTH = 380;
+const MIN_LEFT_PANE_WIDTH = 280;
+const MAX_LEFT_PANE_WIDTH = 560;
+
+const RELATED_PANE_WIDTH_STORAGE_KEY = "topicStage:relatedPaneWidth:v1";
+const DEFAULT_RELATED_PANE_WIDTH = 320;
+const MIN_RELATED_PANE_WIDTH = 260;
+const MAX_RELATED_PANE_WIDTH = 480;
+
 function stripLeadMarkdownPrefix(input: string): string {
   let out = input.trimStart();
   let prev: string | null = null;
@@ -530,9 +540,240 @@ export function TopicStage({ topicId }: Props) {
   const visitedStore = useMemo(() => createLocalStorageVisitedTopicsStore(), []);
   const claimTokenStore = useMemo(() => createLocalStorageClaimTokenStore(), []);
   const draftStore = useMemo(() => createLocalStorageDraftStore(), []);
+  const stageRef = useRef<HTMLDivElement | null>(null);
   const leftColumnRef = useRef<HTMLDivElement | null>(null);
   const rightColumnRef = useRef<HTMLDivElement | null>(null);
   const readerContentRef = useRef<HTMLDivElement | null>(null);
+
+  const [leftPaneWidth, setLeftPaneWidth] = useState<number>(() => {
+    if (typeof window === "undefined") return DEFAULT_LEFT_PANE_WIDTH;
+    try {
+      const raw = window.localStorage.getItem(LEFT_PANE_WIDTH_STORAGE_KEY);
+      if (!raw) return DEFAULT_LEFT_PANE_WIDTH;
+      const parsed = Number(raw);
+      if (!Number.isFinite(parsed)) return DEFAULT_LEFT_PANE_WIDTH;
+      return Math.min(MAX_LEFT_PANE_WIDTH, Math.max(MIN_LEFT_PANE_WIDTH, parsed));
+    } catch {
+      return DEFAULT_LEFT_PANE_WIDTH;
+    }
+  });
+
+  const [relatedPaneWidth, setRelatedPaneWidth] = useState<number>(() => {
+    if (typeof window === "undefined") return DEFAULT_RELATED_PANE_WIDTH;
+    try {
+      const raw = window.localStorage.getItem(RELATED_PANE_WIDTH_STORAGE_KEY);
+      if (!raw) return DEFAULT_RELATED_PANE_WIDTH;
+      const parsed = Number(raw);
+      if (!Number.isFinite(parsed)) return DEFAULT_RELATED_PANE_WIDTH;
+      return Math.min(MAX_RELATED_PANE_WIDTH, Math.max(MIN_RELATED_PANE_WIDTH, parsed));
+    } catch {
+      return DEFAULT_RELATED_PANE_WIDTH;
+    }
+  });
+
+  const clampLeftPaneWidth = useCallback(
+    (nextWidth: number) => {
+      const fallback = DEFAULT_LEFT_PANE_WIDTH;
+      const desired = Number.isFinite(nextWidth) ? nextWidth : fallback;
+
+      if (typeof window === "undefined") {
+        return Math.min(MAX_LEFT_PANE_WIDTH, Math.max(MIN_LEFT_PANE_WIDTH, desired));
+      }
+
+      const containerRect = stageRef.current?.getBoundingClientRect();
+      const containerWidth =
+        containerRect && containerRect.width > 0 ? containerRect.width : window.innerWidth;
+
+      const isLg = window.innerWidth >= 1024;
+      const resizerWidth = 8; // Tailwind w-2
+      const minCenterWidth = 420;
+      const minRightWidth = isLg ? relatedPaneWidth + minCenterWidth + resizerWidth : minCenterWidth;
+      const maxByContainer = containerWidth - resizerWidth - minRightWidth;
+      const maxAllowed = Math.min(MAX_LEFT_PANE_WIDTH, Math.max(MIN_LEFT_PANE_WIDTH, maxByContainer));
+      const minAllowed = Math.min(MIN_LEFT_PANE_WIDTH, maxAllowed);
+
+      return Math.min(maxAllowed, Math.max(minAllowed, desired));
+    },
+    [relatedPaneWidth],
+  );
+
+  const clampRelatedPaneWidth = useCallback(
+    (nextWidth: number) => {
+      const fallback = DEFAULT_RELATED_PANE_WIDTH;
+      const desired = Number.isFinite(nextWidth) ? nextWidth : fallback;
+
+      if (typeof window === "undefined") {
+        return Math.min(MAX_RELATED_PANE_WIDTH, Math.max(MIN_RELATED_PANE_WIDTH, desired));
+      }
+
+      const isLg = window.innerWidth >= 1024;
+      if (!isLg) {
+        return Math.min(MAX_RELATED_PANE_WIDTH, Math.max(MIN_RELATED_PANE_WIDTH, desired));
+      }
+
+      const containerRect = stageRef.current?.getBoundingClientRect();
+      const containerWidth =
+        containerRect && containerRect.width > 0 ? containerRect.width : window.innerWidth;
+
+      const resizerWidth = 8; // Tailwind w-2
+      const minCenterWidth = 420;
+      const availableForRelated = containerWidth - leftPaneWidth - resizerWidth * 2 - minCenterWidth;
+      const maxAllowed = Math.min(
+        MAX_RELATED_PANE_WIDTH,
+        Math.max(MIN_RELATED_PANE_WIDTH, availableForRelated),
+      );
+      const minAllowed = Math.min(MIN_RELATED_PANE_WIDTH, maxAllowed);
+
+      return Math.min(maxAllowed, Math.max(minAllowed, desired));
+    },
+    [leftPaneWidth],
+  );
+
+  useEffect(() => {
+    setLeftPaneWidth((prev) => clampLeftPaneWidth(prev));
+  }, [clampLeftPaneWidth]);
+
+  useEffect(() => {
+    setRelatedPaneWidth((prev) => clampRelatedPaneWidth(prev));
+  }, [clampRelatedPaneWidth]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(LEFT_PANE_WIDTH_STORAGE_KEY, String(leftPaneWidth));
+    } catch {
+      // ignore
+    }
+  }, [leftPaneWidth]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(RELATED_PANE_WIDTH_STORAGE_KEY, String(relatedPaneWidth));
+    } catch {
+      // ignore
+    }
+  }, [relatedPaneWidth]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleResize = () => {
+      setLeftPaneWidth((prev) => clampLeftPaneWidth(prev));
+      setRelatedPaneWidth((prev) => clampRelatedPaneWidth(prev));
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [clampLeftPaneWidth, clampRelatedPaneWidth]);
+
+  type ResizeSession =
+    | { kind: "left"; startX: number; startWidth: number }
+    | { kind: "related"; startX: number; startWidth: number };
+
+  const resizeSessionRef = useRef<ResizeSession | null>(null);
+
+  const stopResizing = useCallback(() => {
+    resizeSessionRef.current = null;
+    try {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const session = resizeSessionRef.current;
+      if (!session) return;
+
+      if (session.kind === "left") {
+        const nextWidth = session.startWidth + (event.clientX - session.startX);
+        setLeftPaneWidth(clampLeftPaneWidth(nextWidth));
+        return;
+      }
+
+      const nextWidth = session.startWidth - (event.clientX - session.startX);
+      setRelatedPaneWidth(clampRelatedPaneWidth(nextWidth));
+    };
+
+    const handlePointerUp = () => {
+      if (!resizeSessionRef.current) return;
+      stopResizing();
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+      stopResizing();
+    };
+  }, [clampLeftPaneWidth, clampRelatedPaneWidth, stopResizing]);
+
+  const startResizingLeft = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      resizeSessionRef.current = { kind: "left", startX: event.clientX, startWidth: leftPaneWidth };
+
+      try {
+        document.body.style.cursor = "col-resize";
+        document.body.style.userSelect = "none";
+      } catch {
+        // ignore
+      }
+    },
+    [leftPaneWidth],
+  );
+
+  const startResizingRelated = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      resizeSessionRef.current = { kind: "related", startX: event.clientX, startWidth: relatedPaneWidth };
+
+      try {
+        document.body.style.cursor = "col-resize";
+        document.body.style.userSelect = "none";
+      } catch {
+        // ignore
+      }
+    },
+    [relatedPaneWidth],
+  );
+
+  const [leftColumnWidth, setLeftColumnWidth] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const el = leftColumnRef.current;
+    if (!el) return;
+
+    const update = () => setLeftColumnWidth(el.getBoundingClientRect().width);
+    update();
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", update);
+      return () => window.removeEventListener("resize", update);
+    }
+
+    const observer = new ResizeObserver(() => update());
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const [hasIdentity, setHasIdentity] = useState<boolean | null>(null);
   const [identityFingerprint, setIdentityFingerprint] = useState<string | null>(null);
@@ -1425,7 +1666,11 @@ export function TopicStage({ topicId }: Props) {
     };
   }, [isEditingSelectedArgument, selectedArgumentId]);
 
-  const sunburstSize = selectedArgumentId ? 320 : 360;
+  const sunburstSize = useMemo(() => {
+    const width = leftColumnWidth ?? leftPaneWidth;
+    const available = width - 32;
+    return Math.max(240, Math.min(360, Math.floor(available)));
+  }, [leftColumnWidth, leftPaneWidth]);
 
   const cardPosition = (x: number, y: number) => {
     const padding = 16;
@@ -2010,15 +2255,22 @@ export function TopicStage({ topicId }: Props) {
           </Alert>
         ) : null}
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-background shadow-sm md:flex-row">
+        <div
+          ref={stageRef}
+          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-background shadow-sm md:flex-row"
+          style={{
+            ["--topic-left-width" as any]: `${leftPaneWidth}px`,
+            ["--topic-related-width" as any]: `${relatedPaneWidth}px`,
+          }}
+        >
           {/* Left: Explorer */}
-	          <div
-	            ref={leftColumnRef}
-	            className={[
-	              "relative flex w-full flex-col overflow-hidden border-b border-border/60 bg-background transition-all duration-300 ease-out md:border-b-0 md:border-r",
-	              selectedArgumentId ? "md:w-[360px] md:min-w-[360px]" : "md:w-[420px] md:min-w-[420px]",
-	            ].join(" ")}
-	          >
+		          <div
+		            ref={leftColumnRef}
+		            className={[
+		              "relative flex w-full flex-col overflow-hidden border-b border-border/60 bg-background md:border-b-0",
+		              "md:w-[var(--topic-left-width)] md:min-w-[var(--topic-left-width)] md:border-r",
+		            ].join(" ")}
+		          >
             <div className="flex items-start justify-between gap-3 border-b border-border/60 px-5 py-4">
               <div className="min-w-0">
                 <h2 className="truncate font-serif text-xl text-foreground" title={topicTitle}>

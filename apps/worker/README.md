@@ -16,6 +16,8 @@ BullMQ consumer process.
 - `TRANSLATION_SWEEPER_INTERVAL_MS` (default: `300000`) — sweeper interval
 - `TRANSLATION_SWEEPER_BATCH_SIZE` (default: `200`) — scan page size
 - `TRANSLATION_SWEEPER_ENQUEUE_CONCURRENCY` (default: `10`) — enqueue concurrency
+- `TRANSLATION_SWEEPER_RETRY_PENDING_AFTER_MS` (default: `1200000`) — skip re-enqueueing `pending` rows newer than this (retries stale `pending`)
+- `TRANSLATION_SWEEPER_RETRY_FAILED_AFTER_MS` (default: `1800000`) — skip re-enqueueing `failed` rows newer than this
 - `TRANSLATION_AUTOMATION_ALLOW_MOCK` (default: `0`) — allow automation even when provider is `mock`
 - `CLUSTER_ENGINE` (default: `node`) — `node|python`
 - `WORKER_DEBUG_TOKEN` (optional) — enables debug enqueue endpoint (see HTTP section)
