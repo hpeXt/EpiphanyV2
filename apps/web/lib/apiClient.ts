@@ -25,7 +25,7 @@ import {
   type SetTopicProfileMeRequest,
   type TopicCommand,
 } from "@epiphany/shared-contracts";
-import type { z } from "zod";
+import { z } from "zod";
 
 import { createLocalStorageKeyStore, createV1Signer, type Signer, type SignedHeadersV1 } from "@/lib/signing";
 import { createLocalStorageTopicAccessKeyStore, type TopicAccessKeyStore } from "@/lib/topicAccessKeyStore";
@@ -38,6 +38,16 @@ export type ApiError =
   | { kind: "parse"; message: string };
 
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: ApiError };
+
+const zArgumentRelatedItem = z.object({
+  argumentId: z.string(),
+  similarity: z.number().min(-1).max(1),
+});
+
+const zArgumentRelatedResponse = z.object({
+  argumentId: z.string(),
+  items: z.array(zArgumentRelatedItem),
+});
 
 export function getApiBaseUrl(): string | null {
   const baseUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -445,6 +455,28 @@ export function createApiClient(deps?: { signer?: Signer; locale?: Locale }) {
       }
 
       return requestJsonWithLocale(path, { method: "GET" }, zArgumentResponse);
+    },
+    getArgumentRelated(input: { topicId?: string; argumentId: string; limit: number }) {
+      const signer = input.topicId ? getSigner() : null;
+      const encodedArgumentId = encodeURIComponent(input.argumentId);
+      const params = new URLSearchParams({ limit: String(input.limit) });
+      const path = `/v1/arguments/${encodedArgumentId}/related?${params.toString()}`;
+
+      if (input.topicId) {
+        const accessKeyHeaders = getTopicAccessKeyHeaders(input.topicId);
+        if (signer) {
+          return requestJsonSignedWithLocale(
+            signer,
+            input.topicId,
+            path,
+            { method: "GET", headers: accessKeyHeaders },
+            zArgumentRelatedResponse,
+          );
+        }
+        return requestJsonWithLocale(path, { method: "GET", headers: accessKeyHeaders }, zArgumentRelatedResponse);
+      }
+
+      return requestJsonWithLocale(path, { method: "GET" }, zArgumentRelatedResponse);
     },
     editArgument(topicId: string, argumentId: string, input: EditArgumentRequest): Promise<ApiResult<z.infer<typeof zEditArgumentResponse>>> {
       const signer = getSigner();

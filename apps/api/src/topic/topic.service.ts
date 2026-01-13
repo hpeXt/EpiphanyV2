@@ -500,6 +500,12 @@ export class TopicService {
       });
     });
 
+    // Enqueue root argument for AI analysis (stance + embedding)
+    // Fire-and-forget: don't block the response on queue
+    this.queue.enqueueArgumentAnalysis(rootArgumentId).catch((err) => {
+      console.error(`[topic] Failed to enqueue analysis for root argumentId=${rootArgumentId}:`, err);
+    });
+
     // Store claim token in Redis with TTL
     await this.redis.setClaimToken(topicId, claimToken, this.CLAIM_TOKEN_TTL_SECONDS);
 
@@ -558,13 +564,23 @@ export class TopicService {
     await this.prisma.$transaction(async (tx: TransactionClient) => {
       await tx.argument.update({
         where: { topicId_id: { topicId: params.topicId, id: params.rootArgumentId } },
-        data: { title: generatedTitle },
+        data: {
+          title: generatedTitle,
+          analysisStatus: 'pending_analysis',
+          stanceScore: null,
+          embeddingModel: null,
+        },
       });
 
       await tx.topic.update({
         where: { id: params.topicId },
         data: { title: generatedTitle },
       });
+    });
+
+    // Fire-and-forget: refresh embedding for updated title.
+    this.queue.enqueueArgumentAnalysis(params.rootArgumentId).catch((err) => {
+      console.error(`[topic] Failed to enqueue analysis for auto-title root argumentId=${params.rootArgumentId}:`, err);
     });
 
     // SSE invalidation (best-effort)
@@ -1012,6 +1028,9 @@ export class TopicService {
         data: {
           title: input.title,
           body: input.body,
+          analysisStatus: 'pending_analysis',
+          stanceScore: null,
+          embeddingModel: null,
         },
       });
 
@@ -1040,6 +1059,12 @@ export class TopicService {
     } catch {
       // ignore
     }
+
+    // Enqueue root argument for AI analysis (stance + embedding)
+    // Fire-and-forget: don't block the response on queue
+    this.queue.enqueueArgumentAnalysis(topic.rootArgumentId).catch((err) => {
+      console.error(`[topic] Failed to enqueue analysis for edited root argumentId=${topic.rootArgumentId}:`, err);
+    });
 
     // Fire-and-forget: refresh translations for the updated content.
     this.translations.requestTopicTitleTranslation({ topicId, title: input.title }).catch((err) => {

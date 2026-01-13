@@ -848,6 +848,10 @@ export function TopicStage({ topicId }: Props) {
   const hoverCardShowTimerRef = useRef<number | null>(null);
   const hoverCardHideTimerRef = useRef<number | null>(null);
   const [relatedHoverId, setRelatedHoverId] = useState<string | null>(null);
+  type RelatedSimilarItem = { argumentId: string; similarity: number };
+  const [relatedSimilarItems, setRelatedSimilarItems] = useState<RelatedSimilarItem[]>([]);
+  const [relatedSimilarStatus, setRelatedSimilarStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [relatedSimilarError, setRelatedSimilarError] = useState("");
   const [isMobileRelatedOpen, setIsMobileRelatedOpen] = useState(true);
   const [quoteHint, setQuoteHint] = useState<{ text: string; x: number; y: number } | null>(null);
   const selectedArgumentIdRef = useRef<string | null>(null);
@@ -1302,6 +1306,45 @@ export function TopicStage({ topicId }: Props) {
     return argumentById.get(readArgumentId) ?? null;
   }, [argumentById, readArgumentId, selectedArgumentDetail]);
 
+  useEffect(() => {
+    if (!readArgument) {
+      setRelatedSimilarItems([]);
+      setRelatedSimilarStatus("idle");
+      setRelatedSimilarError("");
+      return;
+    }
+
+    if (readArgument.analysisStatus !== "ready") {
+      setRelatedSimilarItems([]);
+      setRelatedSimilarStatus("idle");
+      setRelatedSimilarError("");
+      return;
+    }
+
+    let cancelled = false;
+    setRelatedSimilarStatus("loading");
+    setRelatedSimilarError("");
+
+    (async () => {
+      const result = await apiClient.getArgumentRelated({ topicId, argumentId: readArgument.id, limit: 10 });
+      if (cancelled) return;
+
+      if (!result.ok) {
+        setRelatedSimilarStatus("error");
+        setRelatedSimilarError(result.error.message);
+        setRelatedSimilarItems([]);
+        return;
+      }
+
+      setRelatedSimilarStatus("success");
+      setRelatedSimilarItems(result.data.items);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [readArgument?.analysisStatus, readArgument?.id, refreshToken, topicId]);
+
   const related = useMemo(() => {
     if (!readArgument) return null;
 
@@ -1339,6 +1382,16 @@ export function TopicStage({ topicId }: Props) {
     return { ancestors, siblings, children };
   }, [argumentById, childrenByParentId, readArgument]);
 
+  const relatedSimilar = useMemo(() => {
+    return relatedSimilarItems
+      .map((item) => {
+        const arg = argumentById.get(item.argumentId);
+        if (!arg) return null;
+        return { arg, similarity: item.similarity };
+      })
+      .filter((row): row is { arg: Argument; similarity: number } => row !== null);
+  }, [argumentById, relatedSimilarItems]);
+
   const relatedHoverArgument = useMemo(() => {
     if (!relatedHoverId) return null;
     return argumentById.get(relatedHoverId) ?? null;
@@ -1365,6 +1418,10 @@ export function TopicStage({ topicId }: Props) {
       rootArgumentId !== null && selectedArgumentId === rootArgumentId ? null : selectedArgumentId ?? null;
     push(canonicalSelectedId);
 
+    for (const item of relatedSimilarItems) {
+      push(rootArgumentId !== null && item.argumentId === rootArgumentId ? null : item.argumentId);
+    }
+
     for (const arg of related.children) {
       push(arg.id);
     }
@@ -1374,7 +1431,7 @@ export function TopicStage({ topicId }: Props) {
     }
 
     return sequence;
-  }, [readArgument, related, rootArgumentId, selectedArgumentId]);
+  }, [readArgument, related, relatedSimilarItems, rootArgumentId, selectedArgumentId]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -2540,6 +2597,51 @@ export function TopicStage({ topicId }: Props) {
                           <div className="px-4 py-4">
                             {related ? (
                               <div className="space-y-6">
+                                <div>
+                                  <h3 className="text-xs font-medium text-muted-foreground">{t("stage.relatedSimilar")}</h3>
+                                  <div className="mt-2 space-y-2">
+                                    {readArgument?.analysisStatus !== "ready" ? (
+                                      <p className="text-xs text-muted-foreground">{t("stage.relatedSimilarPending")}</p>
+                                    ) : relatedSimilarStatus === "loading" ? (
+                                      <p className="text-xs text-muted-foreground">{t("common.loading")}</p>
+                                    ) : relatedSimilarStatus === "error" ? (
+                                      <p role="alert" className="text-xs text-destructive">
+                                        {relatedSimilarError}
+                                      </p>
+                                    ) : relatedSimilar.length === 0 ? (
+                                      <p className="text-xs text-muted-foreground">{t("stage.relatedSimilarEmpty")}</p>
+                                    ) : (
+                                      relatedSimilar.map(({ arg, similarity }) => {
+                                        const isRoot = rootArgumentId !== null && arg.id === rootArgumentId;
+                                        const title = isRoot ? topicTitle : toTitle(arg);
+                                        const excerpt = toExcerpt(arg.body);
+                                        const score = Math.round(similarity * 100);
+
+                                        return (
+                                          <button
+                                            key={arg.id}
+                                            type="button"
+                                            className={[
+                                              "w-full rounded-md border border-border/60 bg-background px-3 py-2 text-left",
+                                              "hover:bg-[color:var(--muted)] transition-colors",
+                                            ].join(" ")}
+                                            onClick={() => requestSelectArgumentId(isRoot ? null : arg.id)}
+                                          >
+                                            <div className="flex items-start justify-between gap-2">
+                                              <span className="font-serif text-sm leading-snug text-foreground">{title}</span>
+                                              <span className="shrink-0 text-[10px] text-muted-foreground">{score}%</span>
+                                            </div>
+                                            {excerpt ? (
+                                              <p className="mt-1 line-clamp-4 text-xs text-muted-foreground leading-relaxed">
+                                                {excerpt}
+                                              </p>
+                                            ) : null}
+                                          </button>
+                                        );
+                                      })
+                                    )}
+                                  </div>
+                                </div>
                               {related.ancestors.length > 0 ? (
                                 <div>
                                   <h3 className="text-xs font-medium text-muted-foreground">{t("stage.relatedPath")}</h3>
@@ -3023,6 +3125,47 @@ export function TopicStage({ topicId }: Props) {
                             </div>
                           );
                         })()}
+                        <div>
+                          <h3 className="text-xs font-medium text-muted-foreground">{t("stage.relatedSimilar")}</h3>
+                          <div className="mt-2 space-y-2">
+                            {readArgument?.analysisStatus !== "ready" ? (
+                              <p className="text-xs text-muted-foreground">{t("stage.relatedSimilarPending")}</p>
+                            ) : relatedSimilarStatus === "loading" ? (
+                              <p className="text-xs text-muted-foreground">{t("common.loading")}</p>
+                            ) : relatedSimilarStatus === "error" ? (
+                              <p role="alert" className="text-xs text-destructive">
+                                {relatedSimilarError}
+                              </p>
+                            ) : relatedSimilar.length === 0 ? (
+                              <p className="text-xs text-muted-foreground">{t("stage.relatedSimilarEmpty")}</p>
+                            ) : (
+                              relatedSimilar.map(({ arg, similarity }) => {
+                                const isRoot = rootArgumentId !== null && arg.id === rootArgumentId;
+                                const title = isRoot ? topicTitle : toTitle(arg);
+                                const score = Math.round(similarity * 100);
+
+                                return (
+                                  <button
+                                    key={arg.id}
+                                    type="button"
+                                    className={[
+                                      "w-full rounded-md border border-border/60 bg-background px-3 py-2 text-left",
+                                      "hover:bg-[color:var(--muted)] transition-colors",
+                                    ].join(" ")}
+                                    onPointerEnter={() => setRelatedHoverId(arg.id)}
+                                    onFocus={() => setRelatedHoverId(arg.id)}
+                                    onClick={() => requestSelectArgumentId(isRoot ? null : arg.id)}
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <span className="font-serif text-sm leading-snug text-foreground">{title}</span>
+                                      <span className="shrink-0 text-[10px] text-muted-foreground">{score}%</span>
+                                    </div>
+                                  </button>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
                         {related.ancestors.length > 0 ? (
                           <div>
                             <h3 className="text-xs font-medium text-muted-foreground">{t("stage.relatedPath")}</h3>

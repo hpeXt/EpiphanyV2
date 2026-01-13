@@ -95,6 +95,24 @@ export const zArgumentResponse = z.object({
 export type ArgumentResponse = z.infer<typeof zArgumentResponse>;
 
 // ============================================================================
+// GET /v1/arguments/:argumentId/related - Argument Related (embedding similarity)
+// ============================================================================
+
+export const zArgumentRelatedItem = z.object({
+  argumentId: z.string(),
+  similarity: z.number().min(-1).max(1),
+});
+
+export type ArgumentRelatedItem = z.infer<typeof zArgumentRelatedItem>;
+
+export const zArgumentRelatedResponse = z.object({
+  argumentId: z.string(),
+  items: z.array(zArgumentRelatedItem),
+});
+
+export type ArgumentRelatedResponse = z.infer<typeof zArgumentRelatedResponse>;
+
+// ============================================================================
 // POST /v1/arguments/:argumentId/edit - Edit Argument
 // ============================================================================
 

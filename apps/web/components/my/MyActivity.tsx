@@ -33,6 +33,7 @@ import { P5Button, P5LinkButton } from "@/components/ui/P5Button";
 import { P5Panel } from "@/components/ui/P5Panel";
 import { MnemonicDisplay } from "@/components/my/MnemonicDisplay";
 import { ImportIdentityModal } from "@/components/my/ImportIdentityModal";
+import { LanguageSettings } from "@/components/my/LanguageSettings";
 import { useI18n } from "@/components/i18n/I18nProvider";
 
 type TopicBalance = {
@@ -318,6 +319,8 @@ export function MyActivity() {
       <h1 className="font-display text-2xl uppercase tracking-wide text-[color:var(--ink)]">
         {t("my.title")}
       </h1>
+
+      <LanguageSettings />
 
       {/* 身份管理区域 */}
       <P5Panel

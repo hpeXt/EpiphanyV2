@@ -88,6 +88,11 @@ export {
   // GET /v1/arguments/:argumentId
   zArgumentResponse,
   type ArgumentResponse,
+  // GET /v1/arguments/:argumentId/related
+  zArgumentRelatedItem,
+  zArgumentRelatedResponse,
+  type ArgumentRelatedItem,
+  type ArgumentRelatedResponse,
   // POST /v1/arguments/:argumentId/edit
   zEditArgumentRequest,
   zEditArgumentResponse,
