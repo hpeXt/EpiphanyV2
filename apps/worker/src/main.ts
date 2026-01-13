@@ -36,6 +36,30 @@ const QUEUE_TOPIC_CLUSTER = 'ai_topic-cluster';
 const QUEUE_CONSENSUS_REPORT = 'ai_consensus-report';
 const QUEUE_TRANSLATION = 'ai_translation';
 
+type WorkerHeartbeat = {
+  readyAtMs: number | null;
+  lastActiveAtMs: number | null;
+  lastCompletedAtMs: number | null;
+  lastFailedAtMs: number | null;
+  lastError: string | null;
+  paused: boolean;
+  stalledCount: number;
+  lockRenewalFailedCount: number;
+};
+
+function createWorkerHeartbeat(): WorkerHeartbeat {
+  return {
+    readyAtMs: null,
+    lastActiveAtMs: null,
+    lastCompletedAtMs: null,
+    lastFailedAtMs: null,
+    lastError: null,
+    paused: false,
+    stalledCount: 0,
+    lockRenewalFailedCount: 0,
+  };
+}
+
 // Configuration
 loadEnv();
 const port = Number(process.env.PORT ?? process.env.WORKER_PORT ?? 3002);
@@ -59,6 +83,13 @@ const argumentAnalysisQueue = new Queue(QUEUE_ARGUMENT_ANALYSIS, { connection })
 const topicClusterQueue = new Queue(QUEUE_TOPIC_CLUSTER, { connection });
 const consensusReportQueue = new Queue(QUEUE_CONSENSUS_REPORT, { connection });
 const translationQueue = new Queue(QUEUE_TRANSLATION, { connection });
+
+const workerHeartbeats = {
+  argumentAnalysis: createWorkerHeartbeat(),
+  topicCluster: createWorkerHeartbeat(),
+  consensusReport: createWorkerHeartbeat(),
+  translation: createWorkerHeartbeat(),
+};
 
 function getTopicClusterEngine(): TopicClusterEngine {
   const configured = (process.env.CLUSTER_ENGINE ?? 'node').toLowerCase();
@@ -247,83 +278,199 @@ const translationWorker = new Worker<TranslationJobData>(
 );
 
 topicClusterWorker.on('ready', () => {
+  workerHeartbeats.topicCluster.readyAtMs = Date.now();
   console.log(
     `[worker] Topic cluster worker ready queue=${QUEUE_TOPIC_CLUSTER} redis=${connection.host}:${connection.port}`
   );
 });
 
+topicClusterWorker.on('active', () => {
+  workerHeartbeats.topicCluster.lastActiveAtMs = Date.now();
+});
+
 topicClusterWorker.on('completed', (job) => {
+  workerHeartbeats.topicCluster.lastCompletedAtMs = Date.now();
   console.log(`[worker] Completed job=${job.id} name=${job.name}`);
 });
 
 topicClusterWorker.on('failed', (job, err) => {
+  workerHeartbeats.topicCluster.lastFailedAtMs = Date.now();
+  workerHeartbeats.topicCluster.lastError = err?.message ?? String(err);
   console.error(
     `[worker] Failed job=${job?.id ?? 'unknown'} name=${job?.name ?? 'unknown'} err=${err?.message ?? err}`
   );
 });
 
+topicClusterWorker.on('stalled', (jobId) => {
+  workerHeartbeats.topicCluster.stalledCount += 1;
+  console.warn(`[worker] Stalled job=${jobId} queue=${QUEUE_TOPIC_CLUSTER}`);
+});
+
+topicClusterWorker.on('lockRenewalFailed', (jobIds) => {
+  workerHeartbeats.topicCluster.lockRenewalFailedCount += 1;
+  console.warn(`[worker] Lock renewal failed queue=${QUEUE_TOPIC_CLUSTER} jobIds=${jobIds.join(',')}`);
+});
+
+topicClusterWorker.on('paused', () => {
+  workerHeartbeats.topicCluster.paused = true;
+  console.warn(`[worker] Queue paused queue=${QUEUE_TOPIC_CLUSTER}`);
+});
+
+topicClusterWorker.on('resumed', () => {
+  workerHeartbeats.topicCluster.paused = false;
+  console.log(`[worker] Queue resumed queue=${QUEUE_TOPIC_CLUSTER}`);
+});
+
 topicClusterWorker.on('error', (err) => {
+  workerHeartbeats.topicCluster.lastError = err?.message ?? String(err);
   console.error(`[worker] Worker error: ${err?.message ?? err}`);
 });
 
 // Worker event handlers
 argumentAnalysisWorker.on('ready', () => {
+  workerHeartbeats.argumentAnalysis.readyAtMs = Date.now();
   console.log(
     `[worker] Argument analysis worker ready queue=${QUEUE_ARGUMENT_ANALYSIS} redis=${connection.host}:${connection.port}`
   );
 });
 
+argumentAnalysisWorker.on('active', () => {
+  workerHeartbeats.argumentAnalysis.lastActiveAtMs = Date.now();
+});
+
 argumentAnalysisWorker.on('completed', (job) => {
+  workerHeartbeats.argumentAnalysis.lastCompletedAtMs = Date.now();
   console.log(`[worker] Completed job=${job.id} name=${job.name}`);
 });
 
 argumentAnalysisWorker.on('failed', (job, err) => {
+  workerHeartbeats.argumentAnalysis.lastFailedAtMs = Date.now();
+  workerHeartbeats.argumentAnalysis.lastError = err?.message ?? String(err);
   console.error(
     `[worker] Failed job=${job?.id ?? 'unknown'} name=${job?.name ?? 'unknown'} err=${err?.message ?? err}`
   );
 });
 
+argumentAnalysisWorker.on('stalled', (jobId) => {
+  workerHeartbeats.argumentAnalysis.stalledCount += 1;
+  console.warn(`[worker] Stalled job=${jobId} queue=${QUEUE_ARGUMENT_ANALYSIS}`);
+});
+
+argumentAnalysisWorker.on('lockRenewalFailed', (jobIds) => {
+  workerHeartbeats.argumentAnalysis.lockRenewalFailedCount += 1;
+  console.warn(`[worker] Lock renewal failed queue=${QUEUE_ARGUMENT_ANALYSIS} jobIds=${jobIds.join(',')}`);
+});
+
+argumentAnalysisWorker.on('paused', () => {
+  workerHeartbeats.argumentAnalysis.paused = true;
+  console.warn(`[worker] Queue paused queue=${QUEUE_ARGUMENT_ANALYSIS}`);
+});
+
+argumentAnalysisWorker.on('resumed', () => {
+  workerHeartbeats.argumentAnalysis.paused = false;
+  console.log(`[worker] Queue resumed queue=${QUEUE_ARGUMENT_ANALYSIS}`);
+});
+
 argumentAnalysisWorker.on('error', (err) => {
+  workerHeartbeats.argumentAnalysis.lastError = err?.message ?? String(err);
   console.error(`[worker] Worker error: ${err?.message ?? err}`);
 });
 
 consensusReportWorker.on('ready', () => {
+  workerHeartbeats.consensusReport.readyAtMs = Date.now();
   console.log(
     `[worker] Consensus report worker ready queue=${QUEUE_CONSENSUS_REPORT} redis=${connection.host}:${connection.port}`,
   );
 });
 
+consensusReportWorker.on('active', () => {
+  workerHeartbeats.consensusReport.lastActiveAtMs = Date.now();
+});
+
 consensusReportWorker.on('completed', (job) => {
+  workerHeartbeats.consensusReport.lastCompletedAtMs = Date.now();
   console.log(`[worker] Completed job=${job.id} name=${job.name}`);
 });
 
 consensusReportWorker.on('failed', (job, err) => {
+  workerHeartbeats.consensusReport.lastFailedAtMs = Date.now();
+  workerHeartbeats.consensusReport.lastError = err?.message ?? String(err);
   console.error(
     `[worker] Failed job=${job?.id ?? 'unknown'} name=${job?.name ?? 'unknown'} err=${err?.message ?? err}`,
   );
 });
 
+consensusReportWorker.on('stalled', (jobId) => {
+  workerHeartbeats.consensusReport.stalledCount += 1;
+  console.warn(`[worker] Stalled job=${jobId} queue=${QUEUE_CONSENSUS_REPORT}`);
+});
+
+consensusReportWorker.on('lockRenewalFailed', (jobIds) => {
+  workerHeartbeats.consensusReport.lockRenewalFailedCount += 1;
+  console.warn(`[worker] Lock renewal failed queue=${QUEUE_CONSENSUS_REPORT} jobIds=${jobIds.join(',')}`);
+});
+
+consensusReportWorker.on('paused', () => {
+  workerHeartbeats.consensusReport.paused = true;
+  console.warn(`[worker] Queue paused queue=${QUEUE_CONSENSUS_REPORT}`);
+});
+
+consensusReportWorker.on('resumed', () => {
+  workerHeartbeats.consensusReport.paused = false;
+  console.log(`[worker] Queue resumed queue=${QUEUE_CONSENSUS_REPORT}`);
+});
+
 consensusReportWorker.on('error', (err) => {
+  workerHeartbeats.consensusReport.lastError = err?.message ?? String(err);
   console.error(`[worker] Worker error: ${err?.message ?? err}`);
 });
 
 translationWorker.on('ready', () => {
+  workerHeartbeats.translation.readyAtMs = Date.now();
   console.log(
     `[worker] Translation worker ready queue=${QUEUE_TRANSLATION} redis=${connection.host}:${connection.port}`,
   );
 });
 
+translationWorker.on('active', () => {
+  workerHeartbeats.translation.lastActiveAtMs = Date.now();
+});
+
 translationWorker.on('completed', (job) => {
+  workerHeartbeats.translation.lastCompletedAtMs = Date.now();
   console.log(`[worker] Completed job=${job.id} name=${job.name}`);
 });
 
 translationWorker.on('failed', (job, err) => {
+  workerHeartbeats.translation.lastFailedAtMs = Date.now();
+  workerHeartbeats.translation.lastError = err?.message ?? String(err);
   console.error(
     `[worker] Failed job=${job?.id ?? 'unknown'} name=${job?.name ?? 'unknown'} err=${err?.message ?? err}`,
   );
 });
 
+translationWorker.on('stalled', (jobId) => {
+  workerHeartbeats.translation.stalledCount += 1;
+  console.warn(`[worker] Stalled job=${jobId} queue=${QUEUE_TRANSLATION}`);
+});
+
+translationWorker.on('lockRenewalFailed', (jobIds) => {
+  workerHeartbeats.translation.lockRenewalFailedCount += 1;
+  console.warn(`[worker] Lock renewal failed queue=${QUEUE_TRANSLATION} jobIds=${jobIds.join(',')}`);
+});
+
+translationWorker.on('paused', () => {
+  workerHeartbeats.translation.paused = true;
+  console.warn(`[worker] Queue paused queue=${QUEUE_TRANSLATION}`);
+});
+
+translationWorker.on('resumed', () => {
+  workerHeartbeats.translation.paused = false;
+  console.log(`[worker] Queue resumed queue=${QUEUE_TRANSLATION}`);
+});
+
 translationWorker.on('error', (err) => {
+  workerHeartbeats.translation.lastError = err?.message ?? String(err);
   console.error(`[worker] Worker error: ${err?.message ?? err}`);
 });
 
@@ -364,9 +511,24 @@ const server = http.createServer(async (req, res) => {
         const client4 = await translationQueue.client;
         await client4.ping();
         await prisma.$queryRaw`SELECT 1`;
+
+        const [argumentAnalysisCounts, topicClusterCounts, consensusReportCounts, translationCounts] = await Promise.all([
+          argumentAnalysisQueue.getJobCounts('waiting', 'active', 'delayed', 'failed'),
+          topicClusterQueue.getJobCounts('waiting', 'active', 'delayed', 'failed'),
+          consensusReportQueue.getJobCounts('waiting', 'active', 'delayed', 'failed'),
+          translationQueue.getJobCounts('waiting', 'active', 'delayed', 'failed'),
+        ]);
+
         writeJson(res, 200, {
           ok: true,
           queues: [QUEUE_ARGUMENT_ANALYSIS, QUEUE_TOPIC_CLUSTER, QUEUE_CONSENSUS_REPORT, QUEUE_TRANSLATION],
+          queueCounts: {
+            [QUEUE_ARGUMENT_ANALYSIS]: argumentAnalysisCounts,
+            [QUEUE_TOPIC_CLUSTER]: topicClusterCounts,
+            [QUEUE_CONSENSUS_REPORT]: consensusReportCounts,
+            [QUEUE_TRANSLATION]: translationCounts,
+          },
+          workerHeartbeats,
           providers: {
             translation: translationProvider.provider,
           },

@@ -452,7 +452,7 @@ function VoteStepper(props: {
   };
 
   return (
-    <div className="border-t border-border/60 bg-[color:var(--muted)] px-6 py-4 md:pr-[340px]">
+    <div className="border-t border-border/60 bg-[color:var(--muted)] px-6 py-4">
 	        <div className="flex flex-wrap items-center justify-between gap-4">
 	          <div className="flex flex-wrap items-center gap-4">
 	          <span className="text-sm text-muted-foreground">{t("stage.supportLabel")}:</span>
@@ -2157,8 +2157,22 @@ export function TopicStage({ topicId }: Props) {
                     )}
                   </Link>
                 ) : null}
-              </div>
-            </div>
+	              </div>
+	            </div>
+	          </div>
+
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize panels"
+            className={[
+              "relative hidden w-2 shrink-0 cursor-col-resize touch-none md:block",
+              "hover:bg-[color:var(--muted)]",
+            ].join(" ")}
+            onPointerDown={startResizingLeft}
+            onDoubleClick={() => setLeftPaneWidth(clampLeftPaneWidth(DEFAULT_LEFT_PANE_WIDTH))}
+          >
+            <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-border/60" />
           </div>
 
           {/* Right: Reader */}
@@ -2167,7 +2181,7 @@ export function TopicStage({ topicId }: Props) {
             className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background"
           >
             {readArgument ? (
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                   <div className="border-b border-border/60 px-6 py-6">
                   {isEditingSelectedArgument ? (
@@ -2250,7 +2264,7 @@ export function TopicStage({ topicId }: Props) {
 
                   <div className="min-h-0 flex-1 overflow-y-auto px-6 py-8">
 		                  <div className="mx-auto w-full max-w-[760px]">
-                      <div className="sticky top-0 z-20 mb-6 rounded-lg border border-border/60 bg-background md:hidden">
+                      <div className="sticky top-0 z-20 mb-6 rounded-lg border border-border/60 bg-background lg:hidden">
                         <div className="border-b border-border/60 px-4 py-4">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
@@ -2476,7 +2490,7 @@ export function TopicStage({ topicId }: Props) {
                   />
                 ) : null}
 
-	                <div className="border-t border-border/60 px-6 py-4 md:pr-[340px]">
+	                <div className="border-t border-border/60 px-6 py-4">
 	                  <div className="mx-auto w-full max-w-[760px]">
 	                    <div className="overflow-hidden rounded-lg border border-border/60 bg-background">
 	                      <div className="border-b border-border/60 bg-background">
@@ -2694,8 +2708,22 @@ export function TopicStage({ topicId }: Props) {
                   ) : null}
                 </div>
 
+                <div
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Resize panels"
+                  className={[
+                    "relative hidden w-2 shrink-0 cursor-col-resize touch-none lg:block",
+                    "hover:bg-[color:var(--muted)]",
+                  ].join(" ")}
+                  onPointerDown={startResizingRelated}
+                  onDoubleClick={() => setRelatedPaneWidth(clampRelatedPaneWidth(DEFAULT_RELATED_PANE_WIDTH))}
+                >
+                  <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-border/60" />
+                </div>
+
                 <aside
-                  className="absolute right-0 top-0 bottom-0 hidden w-[320px] flex-col border-l border-border/60 bg-background md:flex"
+                  className="hidden min-h-0 w-[var(--topic-related-width)] shrink-0 flex-col border-l border-border/60 bg-background lg:flex"
                   onPointerLeave={() => setRelatedHoverId(null)}
                 >
                   <div className="border-b border-border/60 px-4 py-4">

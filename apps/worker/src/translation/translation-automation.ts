@@ -18,9 +18,17 @@ type TranslationJobData = {
 
 type BackfillMode = 'auto' | 'force' | 'disabled';
 
+type EnqueueStats = {
+  created: number;
+  alreadyQueued: number;
+};
+
 const DEFAULT_INTERVAL_MS = 5 * 60 * 1000;
 const DEFAULT_BATCH_SIZE = 200;
 const DEFAULT_ENQUEUE_CONCURRENCY = 10;
+
+const DEFAULT_RETRY_PENDING_AFTER_MS = 20 * 60 * 1000;
+const DEFAULT_RETRY_FAILED_AFTER_MS = 30 * 60 * 1000;
 
 const LOCK_KEY = 'translation:automation:lock:v1';
 const LOCK_TTL_MS = 4 * 60 * 1000;
@@ -87,6 +95,10 @@ export function startTranslationAutomation(params: {
   console.log(`[worker] Translation automation started intervalMs=${intervalMs} backfillMode=${backfillMode}`);
 }
 
+function zeroStats(): EnqueueStats {
+  return { created: 0, alreadyQueued: 0 };
+}
+
 function getAutomationEnabled(): boolean {
   const raw = process.env.TRANSLATION_AUTOMATION_ENABLED;
   if (!raw) return true;
@@ -127,6 +139,22 @@ function getEnqueueConcurrency(): number {
   const parsed = Number.parseInt(raw, 10);
   if (!Number.isFinite(parsed) || parsed < 1) return DEFAULT_ENQUEUE_CONCURRENCY;
   return Math.min(parsed, 100);
+}
+
+function getRetryPendingAfterMs(): number {
+  const raw = process.env.TRANSLATION_SWEEPER_RETRY_PENDING_AFTER_MS;
+  if (!raw) return DEFAULT_RETRY_PENDING_AFTER_MS;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return DEFAULT_RETRY_PENDING_AFTER_MS;
+  return parsed;
+}
+
+function getRetryFailedAfterMs(): number {
+  const raw = process.env.TRANSLATION_SWEEPER_RETRY_FAILED_AFTER_MS;
+  if (!raw) return DEFAULT_RETRY_FAILED_AFTER_MS;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return DEFAULT_RETRY_FAILED_AFTER_MS;
+  return parsed;
 }
 
 async function maybeRunBackfillOnce(params: {
