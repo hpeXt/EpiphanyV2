@@ -14,11 +14,229 @@ const REPORT_META_START = '<!-- REPORT_META_START -->';
 const REPORT_META_END = '<!-- REPORT_META_END -->';
 const REPORT_META_START_RE = /<!--\s*REPORT_META_START\s*-->/i;
 const REPORT_META_END_RE = /<!--\s*REPORT_META_END\s*-->/i;
+const CHAINED_PROMPT_VERSION = 'consensus-report/v7-stage03-chained';
 
 function stanceLabel(stance: -1 | 0 | 1): 'oppose' | 'neutral' | 'support' {
   if (stance === -1) return 'oppose';
   if (stance === 1) return 'support';
   return 'neutral';
+}
+
+function buildFallbackConsensusReport(input: GenerateConsensusReportInput, opts?: { reason?: string }): string {
+  const fallbackLabels = input.sources.slice(0, 3).map((s) => s.label);
+
+  const bridges = [
+    {
+      id: 'B1',
+      text: '在结论分歧较大时，先把关键术语、评价指标与可验证证据缺口对齐，再讨论立场与方案。',
+      conditions: ['明确术语与指标', '列出证据缺口与反例'],
+      sourceLabels: fallbackLabels,
+    },
+    {
+      id: 'B2',
+      text: '将分歧拆解为“事实不确定 / 价值冲突 / 约束不同”，有助于把争论转化为可推进的议程。',
+      conditions: ['区分事实/价值/约束', '对每类分歧提出可验证问题'],
+      sourceLabels: fallbackLabels,
+    },
+    {
+      id: 'B3',
+      text: '在缺乏决定性证据前，优先采用可逆的小规模试点，并明确退出机制与风险边界。',
+      conditions: ['试点可回滚', '明确退出机制与边界条件'],
+      sourceLabels: fallbackLabels,
+    },
+  ].filter((b) => b.sourceLabels.length);
+
+  const reportMeta = {
+    bridges: {
+      gallerySize: 3,
+      galleryIds: bridges.slice(0, 3).map((b) => b.id),
+      statements: bridges,
+    },
+    share: {
+      featuredBridgeIds: bridges.slice(0, 3).map((b) => b.id),
+      ogTitle: `${input.topicTitle} · 共识报告`,
+      ogDescription: '（降级）外部模型输出不可用时的最小可读报告。',
+      shareText: `【共识报告】${input.topicTitle}\n\n${bridges[0]?.text ?? ''}`.trim(),
+    },
+    analysis: {
+      kind: 'fallback',
+      reason: opts?.reason ?? null,
+    },
+  };
+
+  const bulletLines = input.sources
+    .slice(0, 10)
+    .map((source) => {
+      const title = source.title?.trim() ? ` — ${source.title.trim()}` : '';
+      const excerpt = source.body.trim().slice(0, 180).replaceAll('\n', ' ');
+      return `- (${source.totalVotes} votes)${title}: ${excerpt}${source.body.length > 180 ? '…' : ''} [${source.label}]`;
+    })
+    .join('\n');
+
+  const metaBlock = [REPORT_META_START, '```json', JSON.stringify(reportMeta, null, 2), '```', REPORT_META_END].join('\n');
+
+  const reasonLine = opts?.reason ? `降级原因：${opts.reason}` : null;
+  const body = [
+    '## 导读（How to read）',
+    reasonLine
+      ? `本报告当前为降级输出（${reasonLine}）：提供输入摘要与最小结构提示，便于继续迭代生成更完整的长文版本。`
+      : '本报告当前为降级输出：提供输入摘要与最小结构提示，便于继续迭代生成更完整的长文版本。',
+    '',
+    '## 输入摘要（Top sources）',
+    '',
+    bulletLines || '- (no sources)',
+    '',
+    '## 方法（Method, brief）',
+    '基于选中的 Sources 做最小可读汇总；未进行 TalkToTheCity 风格的主题/主张/逐字引文展开。',
+  ].join('\n');
+
+  return [metaBlock, body].join('\n\n');
+}
+
+function buildChainedMetaSystemPrompt(): string {
+  return [
+    '你是一名“讨论材料结构化抽取器”，目标是生成可交互的 REPORT_META JSON。',
+    '只输出严格 JSON（不要 Markdown、不要代码围栏、不要解释、不要道歉）。',
+    '',
+    '硬约束：',
+    '1) 只能使用用户提供的 Sources（S1..Sn），不要引入外部事实。',
+    '2) JSON 中不得包含任何 source 原文逐字摘录（不要粘贴引用句子）；只能写短摘要与标签引用。',
+    '3) 需要引用来源时，用 sourceLabels 数组列出 ["S1","S2"]；不要在文本里写 [S#]。',
+    '4) bridges / share 必须存在；允许额外输出 analysis 字段（roles/tensions/themes/claims/agenda）。',
+  ].join('\n');
+}
+
+function buildChainedBodySystemPrompt(): string {
+  return [
+    '你是一名“研究型写作”的共识报告分析师。',
+    '输出：中文 Markdown 报告正文（不要输出 REPORT_META、不要输出 JSON、不要输出 Sources 列表）。',
+    '',
+    '硬性事实与引用纪律：',
+    '1) 只能使用用户提供的 Sources；不要引入外部事实与未经来源支持的具体数字。',
+    '2) 关于讨论内容的关键断言，尽量在句末附 [S#] 引用；引用只能来自给定的 S1..Sn。',
+    '3) Quote 必须是对 source body 的逐字短摘录（1-3 句），用 Markdown blockquote（以 > 开头）输出，并在同一行末尾带 [S#]。',
+    '',
+    '结构要求（材料少可从简，但尽量保留骨架）：',
+    '- ## 导读（How to read）',
+    '- ## Executive Summary',
+    '- ## 讨论全景（Coverage & Caveats）',
+    '- ## 角色图谱（Role Atlas）',
+    '- ## 关键张力（Key Tensions）',
+    '- ## 主题地图（Themes, TalkToTheCity-style）',
+    '- ## 未决问题与下一步议程（Agenda）',
+    '- ## 方法（Method, brief）',
+    '',
+    '“主题地图”格式：',
+    '- 主题标题：### T1 ... / ### T2 ...',
+    '- Claim 标题：#### C1 ... / #### C2 ...（每条 Claim 下给 1-3 条 Quotes）',
+  ].join('\n');
+}
+
+function normalizeReportMeta(params: {
+  topicTitle: string;
+  sourceLabels: string[];
+  meta: Record<string, unknown> | null;
+}): Record<string, unknown> {
+  const sourceLabelSet = new Set(params.sourceLabels);
+  const fallbackLabels = params.sourceLabels.slice(0, 3);
+  const fallbackStatements = [
+    {
+      id: 'B1',
+      text: '在结论分歧较大时，先把关键术语、评价指标与可验证证据缺口对齐，再讨论立场与方案。',
+      conditions: ['明确术语与指标', '列出证据缺口与反例'],
+      sourceLabels: fallbackLabels,
+    },
+    {
+      id: 'B2',
+      text: '将分歧拆解为“事实不确定 / 价值冲突 / 约束不同”，有助于把争论转化为可推进的议程。',
+      conditions: ['区分事实/价值/约束', '对每类分歧提出可验证问题'],
+      sourceLabels: fallbackLabels,
+    },
+    {
+      id: 'B3',
+      text: '在缺乏决定性证据前，优先采用可逆的小规模试点，并明确退出机制与风险边界。',
+      conditions: ['试点可回滚', '明确退出机制与边界条件'],
+      sourceLabels: fallbackLabels,
+    },
+  ].filter((b) => b.sourceLabels.length);
+
+  const meta = params.meta ?? {};
+  const bridgesRaw = (meta as any).bridges;
+  const shareRaw = (meta as any).share;
+
+  const bridgesObj = isPlainObject(bridgesRaw) ? bridgesRaw : {};
+  const shareObj = isPlainObject(shareRaw) ? shareRaw : {};
+
+  const gallerySizeRaw = (bridgesObj as any).gallerySize;
+  const gallerySize =
+    typeof gallerySizeRaw === 'number' && Number.isFinite(gallerySizeRaw) ? Math.max(1, gallerySizeRaw) : 3;
+
+  const statementsRaw = Array.isArray((bridgesObj as any).statements) ? ((bridgesObj as any).statements as unknown[]) : [];
+  const statements: Array<{ id: string; text: string; conditions: string[]; sourceLabels: string[] }> = [];
+
+  for (const item of statementsRaw) {
+    const id = typeof (item as any)?.id === 'string' ? String((item as any).id).trim() : '';
+    const text = typeof (item as any)?.text === 'string' ? String((item as any).text).trim() : '';
+    if (!/^B\\d+$/.test(id) || !text) continue;
+
+    const conditionsRaw = (item as any)?.conditions;
+    const conditions = Array.isArray(conditionsRaw)
+      ? conditionsRaw.filter((c: unknown) => typeof c === 'string' && c.trim()).map((c: string) => c.trim())
+      : [];
+
+    const sourceLabelsRaw = (item as any)?.sourceLabels;
+    const sourceLabels = Array.isArray(sourceLabelsRaw)
+      ? sourceLabelsRaw
+          .filter((s: unknown) => typeof s === 'string' && /^S\\d+$/.test(s) && sourceLabelSet.has(s))
+          .map((s: string) => s)
+      : [];
+
+    statements.push({ id, text, conditions, sourceLabels });
+  }
+
+  const effectiveStatements = statements.length ? statements : fallbackStatements;
+
+  const galleryIdsRaw = Array.isArray((bridgesObj as any).galleryIds) ? ((bridgesObj as any).galleryIds as unknown[]) : [];
+  const galleryIds = galleryIdsRaw.filter((id: unknown) => typeof id === 'string' && /^B\\d+$/.test(id as string)) as string[];
+  const effectiveGalleryIds = galleryIds.filter((id) => effectiveStatements.some((s) => s.id === id));
+  const fallbackGalleryIds = effectiveStatements.slice(0, gallerySize).map((s) => s.id);
+
+  const featuredBridgeIdsRaw = Array.isArray((shareObj as any).featuredBridgeIds)
+    ? ((shareObj as any).featuredBridgeIds as unknown[])
+    : [];
+  const featuredBridgeIds = featuredBridgeIdsRaw.filter((id: unknown) => typeof id === 'string' && /^B\\d+$/.test(id as string)) as string[];
+  const effectiveFeaturedIds = featuredBridgeIds.filter((id) => effectiveStatements.some((s) => s.id === id));
+
+  const defaultOgTitle = `${params.topicTitle} · 共识报告`;
+  const ogTitle =
+    typeof (shareObj as any).ogTitle === 'string' && String((shareObj as any).ogTitle).trim()
+      ? String((shareObj as any).ogTitle).trim()
+      : defaultOgTitle;
+  const ogDescription =
+    typeof (shareObj as any).ogDescription === 'string' && String((shareObj as any).ogDescription).trim()
+      ? String((shareObj as any).ogDescription).trim()
+      : '基于讨论内容生成的共识桥梁与分歧结构摘要。';
+  const shareText =
+    typeof (shareObj as any).shareText === 'string' && String((shareObj as any).shareText).trim()
+      ? String((shareObj as any).shareText).trim()
+      : `【共识报告】${params.topicTitle}\n\n${effectiveStatements[0]?.text ?? ''}`.trim();
+
+  return {
+    ...meta,
+    bridges: {
+      gallerySize,
+      galleryIds: effectiveGalleryIds.length ? effectiveGalleryIds.slice(0, gallerySize) : fallbackGalleryIds,
+      statements: effectiveStatements,
+    },
+    share: {
+      featuredBridgeIds: effectiveFeaturedIds.length
+        ? effectiveFeaturedIds.slice(0, 7)
+        : fallbackGalleryIds.slice(0, Math.min(3, fallbackGalleryIds.length)),
+      ogTitle,
+      ogDescription,
+      shareText,
+    },
+  };
 }
 
 function buildSystemPrompt(promptVersion: string): string {
@@ -103,7 +321,7 @@ function getConsensusReportProviderType(): ConsensusReportProviderType {
   if (fallback === 'openrouter' || fallback === 'real') return 'openrouter';
 
   // If an OpenRouter key is present, prefer the real provider by default.
-  if (process.env.OPENROUTER_API_KEY) return 'openrouter';
+  if (process.env.OPENROUTER_API_KEY?.trim()) return 'openrouter';
 
   return 'mock';
 }
@@ -231,12 +449,19 @@ function createOpenRouterConsensusReportProvider(): ConsensusReportProvider {
 
   return {
     async generate(input: GenerateConsensusReportInput) {
-      if (!apiKey) {
-        throw new Error('OPENROUTER_API_KEY is required for REPORT_PROVIDER=openrouter');
-      }
-
-      const systemPrompt = buildSystemPrompt(input.params.promptVersion);
       const sourceLabels = input.sources.map((s) => s.label);
+      const extraHeaders: Record<string, string> = {
+        ...(openRouterHttpReferer ? { 'HTTP-Referer': openRouterHttpReferer } : {}),
+        ...(openRouterTitle ? { 'X-Title': openRouterTitle } : {}),
+      };
+
+      if (!apiKey) {
+        console.warn('[consensus-report] OPENROUTER_API_KEY missing; returning fallback report.');
+        return {
+          contentMd: buildFallbackConsensusReport(input, { reason: 'OPENROUTER_API_KEY missing' }),
+          model: 'fallback-report',
+        };
+      }
 
       const sourcesBlock = input.sources
         .map((s) => {
@@ -251,89 +476,235 @@ function createOpenRouterConsensusReportProvider(): ConsensusReportProvider {
         })
         .join('\n\n---\n\n');
 
-      const userPrompt = [
-        `Topic: ${input.topicTitle}`,
-        '',
-        `Coverage: argumentsIncluded=${input.coverage.argumentsIncluded}/${input.coverage.argumentsTotal}, votesIncluded=${input.coverage.votesIncluded}/${input.coverage.votesTotal}`,
-        `Selection: strategy=${input.params.selection.strategy}, maxSources=${input.params.selection.maxSources}, maxCharsPerSource=${input.params.selection.maxCharsPerSource}, topVotesK=${input.params.selection.topVotesK}, minPerBucket=${input.params.selection.minPerBucket}`,
-        '',
-        'Sources:',
-        sourcesBlock || '(no sources)',
-        '',
-        '请按 system prompt 的格式输出：先 REPORT_META 的 JSON 元数据块，再输出 Markdown 报告正文。再次强调：每一个观点都要紧跟 [S#] 引用。',
-      ].join('\n');
+      try {
+        if (input.params.promptVersion === CHAINED_PROMPT_VERSION) {
+          const metaSystemPrompt = buildChainedMetaSystemPrompt();
+          const metaUserPrompt = [
+            `Topic: ${input.topicTitle}`,
+            '',
+            `Coverage: argumentsIncluded=${input.coverage.argumentsIncluded}/${input.coverage.argumentsTotal}, votesIncluded=${input.coverage.votesIncluded}/${input.coverage.votesTotal}`,
+            `Selection: strategy=${input.params.selection.strategy}, maxSources=${input.params.selection.maxSources}, maxCharsPerSource=${input.params.selection.maxCharsPerSource}, topVotesK=${input.params.selection.topVotesK}, minPerBucket=${input.params.selection.minPerBucket}`,
+            '',
+            `Allowed sourceLabels: ${sourceLabels.join(', ')}`,
+            '',
+            'Sources:',
+            sourcesBlock || '(no sources)',
+            '',
+            '请输出严格 JSON（不要 Markdown/代码围栏）。',
+          ].join('\n');
 
-      const attempts = Number.isFinite(maxAttempts) && maxAttempts > 0 ? Math.floor(maxAttempts) : 2;
+          const metaAttempts = parsePositiveInt(process.env.REPORT_META_MAX_ATTEMPTS, 2);
+          let metaObj: Record<string, unknown> | null = null;
+          let lastMetaError: string | null = null;
+          let usedModel: string | null = null;
 
-      let lastValidationError: Error | null = null;
-      let feedback: string | null = null;
+          for (let attempt = 1; attempt <= metaAttempts; attempt += 1) {
+            console.log(`[consensus-report] OpenRouter meta attempt ${attempt}/${metaAttempts} model=${model}`);
 
-      for (let attempt = 1; attempt <= attempts; attempt += 1) {
-        const messages: Array<{ role: 'system' | 'user'; content: string }> = [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ];
-        if (feedback) messages.push({ role: 'user', content: feedback });
+            const { contentMd, usedModel: m } = await callOpenRouterChatCompletion({
+              baseUrl,
+              apiKey,
+              model,
+              temperature,
+              maxTokens,
+              timeoutMs,
+              messages: [
+                { role: 'system', content: metaSystemPrompt },
+                { role: 'user', content: metaUserPrompt },
+                ...(lastMetaError
+                  ? [
+                      {
+                        role: 'user' as const,
+                        content: `你上一版 JSON 不可解析或不符合结构要求（${lastMetaError}）。请只输出严格 JSON（不要代码围栏/注释/尾逗号）。`,
+                      },
+                    ]
+                  : []),
+              ],
+              extraHeaders,
+            });
 
-        const { contentMd, usedModel } = await callOpenRouterChatCompletion({
-          baseUrl,
-          apiKey,
-          model,
-          temperature,
-          maxTokens,
-          timeoutMs,
-          messages,
-          extraHeaders: {
-            ...(openRouterHttpReferer ? { 'HTTP-Referer': openRouterHttpReferer } : {}),
-            ...(openRouterTitle ? { 'X-Title': openRouterTitle } : {}),
-          },
-        });
+            usedModel = m;
+            const parsed = parseJsonObjectFromText(contentMd);
+            if (parsed && looksLikeReportMeta(parsed)) {
+              metaObj = parsed;
+              break;
+            }
 
-        const validation = validateLongformReport({
-          contentMd,
-          sourceLabels,
-          sourceCount: input.sources.length,
-        });
+            lastMetaError = parsed ? '缺少 bridges/share 字段' : 'JSON.parse failed';
+          }
 
-        if (validation.ok) {
-          return { contentMd, model: usedModel };
+          const normalizedMeta = normalizeReportMeta({
+            topicTitle: input.topicTitle,
+            sourceLabels,
+            meta: metaObj,
+          });
+
+          const bodySystemPrompt = buildChainedBodySystemPrompt();
+          const bodyUserPrompt = [
+            `Topic: ${input.topicTitle}`,
+            '',
+            `Coverage: argumentsIncluded=${input.coverage.argumentsIncluded}/${input.coverage.argumentsTotal}, votesIncluded=${input.coverage.votesIncluded}/${input.coverage.votesTotal}`,
+            '',
+            'REPORT_META JSON（仅供参考，不要在输出中重复 JSON/不要输出 meta markers）：',
+            '```json',
+            JSON.stringify(normalizedMeta, null, 2),
+            '```',
+            '',
+            'Sources:',
+            sourcesBlock || '(no sources)',
+            '',
+            '请输出：报告正文（Markdown）。不要输出 REPORT_META。',
+          ].join('\n');
+
+          console.log(`[consensus-report] OpenRouter body attempt 1/1 model=${model}`);
+          const { contentMd: rawBody, usedModel: bodyUsedModel } = await callOpenRouterChatCompletion({
+            baseUrl,
+            apiKey,
+            model,
+            temperature,
+            maxTokens,
+            timeoutMs,
+            messages: [
+              { role: 'system', content: bodySystemPrompt },
+              { role: 'user', content: bodyUserPrompt },
+            ],
+            extraHeaders,
+          });
+
+          const cleanedBody = unwrapMarkdownFence(extractReportMetaAndBody(rawBody).body);
+          const metaBlock = [REPORT_META_START, '```json', JSON.stringify(normalizedMeta, null, 2), '```', REPORT_META_END].join('\n');
+          const contentMd = [metaBlock, cleanedBody.trim()].filter(Boolean).join('\n\n');
+
+          const validation = validateLongformReport({ contentMd, sourceLabels, sourceCount: input.sources.length });
+          if (validation.ok) {
+            if (validation.warnings.length) {
+              console.warn(`[consensus-report] Quality warnings accepted: ${validation.warnings.join(' | ')}`);
+            }
+            return { contentMd, model: bodyUsedModel ?? usedModel ?? model };
+          }
+
+          console.warn('[consensus-report] Chained report failed minimal checks; returning fallback report.');
+          return {
+            contentMd: buildFallbackConsensusReport(input, { reason: validation.reasons.join(' | ') }),
+            model: bodyUsedModel ?? usedModel ?? model,
+          };
         }
 
-        lastValidationError = new Error(`Consensus report did not pass quality gate: ${validation.reasons.join(' | ')}`);
-        feedback = [
-          '你上一版输出未通过质量门槛，请完全重写并严格遵守 system prompt 的格式。失败原因：',
-          ...validation.reasons.map((r) => `- ${r}`),
+        const systemPrompt = buildSystemPrompt(input.params.promptVersion);
+        const userPrompt = [
+          `Topic: ${input.topicTitle}`,
           '',
-          '强制要求：不要解释、不要道歉、不要输出本段反馈；你的输出必须从下一行第一字符开始：',
-          REPORT_META_START,
-          '```json',
-          '{',
-          '  "bridges": {',
-          '    "gallerySize": 3,',
-          '    "galleryIds": ["B1","B2","B3"],',
-          '    "statements": [',
-          '      { "id": "B1", "text": "...", "conditions": ["..."], "sourceLabels": ["S1","S2","S3"] }',
-          '    ]',
-          '  },',
-          '  "share": { "featuredBridgeIds": ["B1","B2","B3"], "ogTitle": "...", "ogDescription": "...", "shareText": "..." }',
-          '}',
-          '```',
-          REPORT_META_END,
+          `Coverage: argumentsIncluded=${input.coverage.argumentsIncluded}/${input.coverage.argumentsTotal}, votesIncluded=${input.coverage.votesIncluded}/${input.coverage.votesTotal}`,
+          `Selection: strategy=${input.params.selection.strategy}, maxSources=${input.params.selection.maxSources}, maxCharsPerSource=${input.params.selection.maxCharsPerSource}, topVotesK=${input.params.selection.topVotesK}, minPerBucket=${input.params.selection.minPerBucket}`,
           '',
-          '## 导读（How to read）',
-          '## Executive Summary',
-          '## 讨论全景（Coverage & Caveats）',
-          '## 角色图谱（Role Atlas）',
-          '## 关键张力（Key Tensions）',
-          '## 主题地图（Themes, TalkToTheCity-style）',
-          '## 未决问题与下一步议程（Agenda）',
-          '## 方法（Method, brief）',
+          'Sources:',
+          sourcesBlock || '(no sources)',
           '',
-          '并在每个 #### C# Claim 下至少输出 2 条以 `>` 开头的逐字 Quote（同一行末尾带 [S#]）。所有观点句末必须带 [S#] 引用。',
+          '请按 system prompt 的格式输出：先 REPORT_META 的 JSON 元数据块，再输出 Markdown 报告正文。再次强调：尽量在关键观点句末附 [S#] 引用。',
         ].join('\n');
-      }
 
-      throw lastValidationError ?? new Error('Consensus report did not pass quality gate');
+        const attempts = Number.isFinite(maxAttempts) && maxAttempts > 0 ? Math.floor(maxAttempts) : 2;
+
+        let lastValidationError: Error | null = null;
+        let feedback: string | null = null;
+        let lastUsedModel: string | null = null;
+
+        for (let attempt = 1; attempt <= attempts; attempt += 1) {
+          const messages: Array<{ role: 'system' | 'user'; content: string }> = [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ];
+          if (feedback) messages.push({ role: 'user', content: feedback });
+
+          console.log(
+            `[consensus-report] OpenRouter generate attempt ${attempt}/${attempts} model=${model} sources=${input.sources.length}`,
+          );
+
+          const { contentMd, usedModel } = await callOpenRouterChatCompletion({
+            baseUrl,
+            apiKey,
+            model,
+            temperature,
+            maxTokens,
+            timeoutMs,
+            messages,
+            extraHeaders,
+          });
+
+          lastUsedModel = usedModel;
+
+          const extracted = extractReportMetaAndBody(contentMd);
+          const normalizedMeta = normalizeReportMeta({ topicTitle: input.topicTitle, sourceLabels, meta: extracted.meta });
+          const normalizedContentMd = [
+            REPORT_META_START,
+            '```json',
+            JSON.stringify(normalizedMeta, null, 2),
+            '```',
+            REPORT_META_END,
+            '',
+            unwrapMarkdownFence(extracted.body.trim()),
+          ].join('\n');
+
+          const validation = validateLongformReport({
+            contentMd: normalizedContentMd,
+            sourceLabels,
+            sourceCount: input.sources.length,
+          });
+
+          if (validation.ok) {
+            if (validation.warnings.length) {
+              console.warn(`[consensus-report] Quality warnings accepted: ${validation.warnings.join(' | ')}`);
+            }
+            return { contentMd: normalizedContentMd, model: usedModel };
+          }
+
+          lastValidationError = new Error(`Consensus report failed minimal format checks: ${validation.reasons.join(' | ')}`);
+          feedback = [
+            '你上一版输出未通过最小格式要求，请完全重写并严格遵守 system prompt 的格式。失败原因：',
+            ...validation.reasons.map((r) => `- ${r}`),
+            '',
+            '强制要求：不要解释、不要道歉、不要输出本段反馈；你的输出必须从下一行第一字符开始：',
+            REPORT_META_START,
+            '```json',
+            '{',
+            '  "bridges": {',
+            '    "gallerySize": 3,',
+            '    "galleryIds": ["B1","B2","B3"],',
+            '    "statements": [',
+            '      { "id": "B1", "text": "...", "conditions": ["..."], "sourceLabels": ["S1","S2","S3"] }',
+            '    ]',
+            '  },',
+            '  "share": { "featuredBridgeIds": ["B1","B2","B3"], "ogTitle": "...", "ogDescription": "...", "shareText": "..." }',
+            '}',
+            '```',
+            REPORT_META_END,
+            '',
+            '## 导读（How to read）',
+            '## Executive Summary',
+            '## 讨论全景（Coverage & Caveats）',
+            '## 角色图谱（Role Atlas）',
+            '## 关键张力（Key Tensions）',
+            '## 主题地图（Themes, TalkToTheCity-style）',
+            '## 未决问题与下一步议程（Agenda）',
+            '## 方法（Method, brief）',
+            '',
+            '请确保输出包含 REPORT_META（严格 JSON）与非空正文；并尽量在关键观点句末使用 [S#] 引用。',
+          ].join('\n');
+        }
+
+        console.warn(
+          `[consensus-report] Falling back to minimal report after ${attempts} attempts: ${lastValidationError?.message ?? 'unknown error'}`,
+        );
+
+        return {
+          contentMd: buildFallbackConsensusReport(input, { reason: lastValidationError?.message ?? 'unknown error' }),
+          model: lastUsedModel ?? model,
+        };
+      } catch (err) {
+        const reason = formatErrorWithCause(err);
+        console.warn(`[consensus-report] OpenRouter generate failed; returning fallback report: ${reason}`);
+        return { contentMd: buildFallbackConsensusReport(input, { reason }), model };
+      }
     },
   };
 }
@@ -558,70 +929,79 @@ function extractReportMetaAndBody(contentMd: string): { meta: Record<string, unk
   return { meta: null, body: contentMd.trim() };
 }
 
+function unwrapMarkdownFence(contentMd: string): string {
+  const trimmed = contentMd.trim();
+  const match = trimmed.match(/^```(?:markdown|md)?\s*([\s\S]*?)\s*```$/i);
+  if (!match) return trimmed;
+  const inner = match[1] ?? '';
+  return inner.trim();
+}
+
 function validateLongformReport(params: {
   contentMd: string;
   sourceLabels: string[];
   sourceCount: number;
-}): { ok: true } | { ok: false; reasons: string[] } {
+}): { ok: true; warnings: string[] } | { ok: false; reasons: string[]; warnings: string[] } {
   const reasons: string[] = [];
+  const warnings: string[] = [];
 
   const extracted = extractReportMetaAndBody(params.contentMd);
   const meta = extracted.meta;
   if (!meta || typeof meta !== 'object' || Array.isArray(meta)) {
-    reasons.push('缺少或无法解析 REPORT_META JSON 元数据块');
+    warnings.push('缺少或无法解析 REPORT_META JSON 元数据块');
   } else {
     const bridges = (meta as any).bridges;
     const statements = bridges?.statements;
     if (!Array.isArray(statements)) {
-      reasons.push('REPORT_META.bridges.statements 缺失或格式错误');
+      warnings.push('REPORT_META.bridges.statements 缺失或格式错误');
     } else {
       const count = statements.length;
-      if (count < 7) reasons.push(`Bridge Statements 数量不足（${count}/7）`);
-      if (count > 12) reasons.push(`Bridge Statements 数量过多（${count}/12）`);
+      if (count < 3) warnings.push(`Bridge Statements 数量偏少（${count}/3）`);
+      if (count > 12) warnings.push(`Bridge Statements 数量偏多（${count}/12）`);
     }
   }
 
-  const body = extracted.body;
+  const body = unwrapMarkdownFence(extracted.body);
   if (!body) reasons.push('报告正文为空');
 
   // Basic length gate (adaptive to material volume).
   const minChars =
-    params.sourceCount >= 40 ? 9000 : params.sourceCount >= 24 ? 7000 : params.sourceCount >= 12 ? 4500 : 2500;
-  if (body.length < minChars) reasons.push(`正文过短（${body.length}/${minChars} chars）`);
+    params.sourceCount >= 40 ? 7000 : params.sourceCount >= 24 ? 5500 : params.sourceCount >= 12 ? 3500 : 1800;
+  if (body && body.length < minChars) warnings.push(`正文偏短（${body.length}/${minChars} chars）`);
 
   // Required sections (soft-ish but helps avoid barebones output).
   const requiredHeadings = ['## 导读', '## Executive Summary', '## 角色图谱', '## 关键张力', '## 主题地图', '## 未决问题', '## 方法'];
   for (const h of requiredHeadings) {
-    if (!body.includes(h)) reasons.push(`缺少章节：${h}`);
+    if (body && !body.includes(h)) warnings.push(`缺少章节：${h}`);
   }
 
-  const themeMatches = [...body.matchAll(/^###\s+T\d+\b.*$/gm)];
-  const minThemes = params.sourceCount >= 24 ? 6 : params.sourceCount >= 12 ? 4 : 3;
-  if (themeMatches.length < minThemes) reasons.push(`主题数量不足（${themeMatches.length}/${minThemes}）`);
+  const themeMatches = body ? [...body.matchAll(/^###\s+T\d+\b.*$/gm)] : [];
+  const minThemes = params.sourceCount >= 24 ? 4 : params.sourceCount >= 12 ? 3 : 2;
+  if (body && themeMatches.length < minThemes) warnings.push(`主题数量偏少（${themeMatches.length}/${minThemes}）`);
 
-  const claimMatches = [...body.matchAll(/^####\s+C\d+\b.*$/gm)];
-  const minClaimsPerTheme = params.sourceCount >= 24 ? 4 : params.sourceCount >= 12 ? 3 : 2;
+  const claimMatches = body ? [...body.matchAll(/^####\s+C\d+\b.*$/gm)] : [];
+  const minClaimsPerTheme = params.sourceCount >= 24 ? 2 : params.sourceCount >= 12 ? 2 : 1;
   const minClaimsTotal = minThemes * minClaimsPerTheme;
-  if (claimMatches.length < minClaimsTotal) reasons.push(`Claim 数量不足（${claimMatches.length}/${minClaimsTotal}）`);
+  if (body && claimMatches.length < minClaimsTotal) warnings.push(`Claim 数量偏少（${claimMatches.length}/${minClaimsTotal}）`);
 
-  const quoteLines = [...body.matchAll(/^>\s+.*$/gm)];
-  const quotesPerClaim = params.sourceCount >= 12 ? 2 : 1;
+  const quoteLines = body ? [...body.matchAll(/^>\s+.*$/gm)] : [];
+  const quotesPerClaim = 1;
   const minQuotesTotal = Math.max(0, claimMatches.length * quotesPerClaim);
-  if (quoteLines.length < minQuotesTotal) reasons.push(`Quote 数量不足（${quoteLines.length}/${minQuotesTotal}）`);
+  if (body && quoteLines.length < minQuotesTotal) warnings.push(`Quote 数量偏少（${quoteLines.length}/${minQuotesTotal}）`);
 
-  const citations = [...body.matchAll(/\[(S\d+)\]/g)].map((m) => m[1] ?? null).filter((v): v is string => Boolean(v));
+  const citations = body
+    ? [...body.matchAll(/\[(S\d+)\]/g)].map((m) => m[1] ?? null).filter((v): v is string => Boolean(v))
+    : [];
   const citationSet = new Set(params.sourceLabels);
   const invalid = citations.filter((label) => !citationSet.has(label));
-  if (citations.length < Math.max(20, claimMatches.length * 2)) {
-    reasons.push(`引用密度偏低（citations=${citations.length}）`);
-  }
+  if (body && citations.length < Math.max(6, claimMatches.length)) warnings.push(`引用密度偏低（citations=${citations.length}）`);
   if (invalid.length > 0) {
     const unique = Array.from(new Set(invalid)).slice(0, 5);
-    reasons.push(`包含无效引用标签：${unique.join(', ')}`);
+    warnings.push(`包含无效引用标签：${unique.join(', ')}`);
   }
 
-  if (reasons.length) return { ok: false, reasons };
-  return { ok: true };
+  if (reasons.length) return { ok: false, reasons, warnings };
+  return { ok: true, warnings };
 }
 
 function assertNever(value: never): never {

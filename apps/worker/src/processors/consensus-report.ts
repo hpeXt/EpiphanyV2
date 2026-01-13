@@ -21,6 +21,8 @@ import { createHash } from 'node:crypto';
 const TOPIC_EVENTS_MAXLEN = 1000;
 const REPORT_META_START = '<!-- REPORT_META_START -->';
 const REPORT_META_END = '<!-- REPORT_META_END -->';
+const REPORT_META_START_RE = /<!--\s*REPORT_META_START\s*-->/i;
+const REPORT_META_END_RE = /<!--\s*REPORT_META_END\s*-->/i;
 
 export type ConsensusReportTrigger = 'auto' | 'host';
 
@@ -346,33 +348,79 @@ function toExcerpt(text: string, maxChars: number): string {
 }
 
 function extractReportMetaBlock(contentMd: string): { contentMd: string; meta: Record<string, unknown> | null } {
-  const startIndex = contentMd.indexOf(REPORT_META_START);
-  if (startIndex < 0) return { contentMd, meta: null };
-  const endIndex = contentMd.indexOf(REPORT_META_END, startIndex + REPORT_META_START.length);
-  if (endIndex < 0) return { contentMd, meta: null };
+  const startMatch = REPORT_META_START_RE.exec(contentMd);
+  if (startMatch && typeof startMatch.index === 'number') {
+    const startIndex = startMatch.index;
+    const startEndIndex = startIndex + startMatch[0].length;
+    const endMatch = REPORT_META_END_RE.exec(contentMd.slice(startEndIndex));
+    if (endMatch && typeof endMatch.index === 'number') {
+      const endIndex = startEndIndex + endMatch.index;
+      const endEndIndex = endIndex + endMatch[0].length;
 
-  const before = contentMd.slice(0, startIndex).trimEnd();
-  const after = contentMd.slice(endIndex + REPORT_META_END.length).trimStart();
-  const between = contentMd.slice(startIndex + REPORT_META_START.length, endIndex);
+      const before = contentMd.slice(0, startIndex).trimEnd();
+      const between = contentMd.slice(startEndIndex, endIndex);
+      const after = contentMd.slice(endEndIndex).trimStart();
 
-  const jsonMatch = between.match(/```json\s*([\s\S]*?)\s*```/i);
-  if (!jsonMatch) {
-    const joined = [before, after].filter(Boolean).join('\n\n');
-    return { contentMd: joined, meta: null };
+      const parsed = parseJsonObjectFromText(between);
+      const meta = parsed && looksLikeReportMeta(parsed) ? parsed : null;
+      const joined = [before, after].filter(Boolean).join('\n\n');
+      return { contentMd: joined, meta };
+    }
+  }
+
+  const leadingJsonFence = contentMd.match(/^\s*```(?:json|jsonc)?\s*([\s\S]*?)\s*```\s*/i);
+  if (leadingJsonFence) {
+    const parsed = parseJsonObjectFromText(leadingJsonFence[0]);
+    const meta = parsed && looksLikeReportMeta(parsed) ? parsed : null;
+    if (meta) {
+      const body = contentMd.slice(leadingJsonFence[0].length).trimStart();
+      return { contentMd: body.trim(), meta };
+    }
+  }
+
+  return { contentMd, meta: null };
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function looksLikeReportMeta(value: unknown): value is Record<string, unknown> {
+  if (!isPlainObject(value)) return false;
+  return 'bridges' in value || 'share' in value;
+}
+
+function parseJsonObjectFromText(content: string): Record<string, unknown> | null {
+  const fenced = content.match(/```(?:json|jsonc)?\s*([\s\S]*?)\s*```/i);
+  if (fenced) {
+    try {
+      const parsed = JSON.parse(fenced[1]);
+      return isPlainObject(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
   }
 
   try {
-    const parsed = JSON.parse(jsonMatch[1]) as unknown;
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      const joined = [before, after].filter(Boolean).join('\n\n');
-      return { contentMd: joined, meta: null };
-    }
-    const joined = [before, after].filter(Boolean).join('\n\n');
-    return { contentMd: joined, meta: parsed as Record<string, unknown> };
+    const parsed = JSON.parse(content);
+    return isPlainObject(parsed) ? parsed : null;
   } catch {
-    const joined = [before, after].filter(Boolean).join('\n\n');
-    return { contentMd: joined, meta: null };
+    // fallthrough
   }
+
+  const first = content.indexOf('{');
+  const last = content.lastIndexOf('}');
+  if (first >= 0 && last > first) {
+    const sliced = content.slice(first, last + 1);
+    try {
+      const parsed = JSON.parse(sliced);
+      return isPlainObject(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
 }
 
 function stanceBucket(args: { analysisStatus: string; stanceScore: number | null }, thresholds: {
