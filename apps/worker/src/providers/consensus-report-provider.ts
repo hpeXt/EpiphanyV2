@@ -26,6 +26,19 @@ function stanceLabel(stance: -1 | 0 | 1): 'oppose' | 'neutral' | 'support' {
 
 function buildFallbackConsensusReport(input: GenerateConsensusReportInput, opts?: { reason?: string }): string {
   const fallbackLabels = input.sources.slice(0, 3).map((s) => s.label);
+  const sortedSources = [...input.sources].sort((a, b) => {
+    if (b.totalVotes !== a.totalVotes) return b.totalVotes - a.totalVotes;
+    return a.label.localeCompare(b.label);
+  });
+
+  const sourcesForSummary = sortedSources.slice(0, 10);
+
+  const themeCount = sortedSources.length >= 6 ? 3 : sortedSources.length >= 3 ? 2 : 1;
+  const sourcesForThemes = sortedSources.slice(0, Math.min(sortedSources.length, Math.max(themeCount * 4, 8)));
+  const themeBuckets: Array<typeof sourcesForThemes> = Array.from({ length: themeCount }, () => []);
+  for (const [index, source] of sourcesForThemes.entries()) {
+    themeBuckets[index % themeCount]!.push(source);
+  }
 
   const bridges = [
     {
@@ -48,6 +61,12 @@ function buildFallbackConsensusReport(input: GenerateConsensusReportInput, opts?
     },
   ].filter((b) => b.sourceLabels.length);
 
+  const reasonLine = opts?.reason ? `降级原因：${opts.reason}` : null;
+  const coverageLine =
+    input.coverage.argumentsTotal > 0
+      ? `覆盖：argumentsIncluded=${input.coverage.argumentsIncluded}/${input.coverage.argumentsTotal}，votesIncluded=${input.coverage.votesIncluded}/${input.coverage.votesTotal}`
+      : null;
+
   const reportMeta = {
     bridges: {
       gallerySize: 3,
@@ -66,33 +85,139 @@ function buildFallbackConsensusReport(input: GenerateConsensusReportInput, opts?
     },
   };
 
-  const bulletLines = input.sources
-    .slice(0, 10)
+  const bulletLines = sourcesForSummary
     .map((source) => {
       const title = source.title?.trim() ? ` — ${source.title.trim()}` : '';
-      const excerpt = source.body.trim().slice(0, 180).replaceAll('\n', ' ');
+      const excerpt = toInlineExcerpt(source.body, 180);
       return `- (${source.totalVotes} votes)${title}: ${excerpt}${source.body.length > 180 ? '…' : ''} [${source.label}]`;
     })
     .join('\n');
 
   const metaBlock = [REPORT_META_START, '```json', JSON.stringify(reportMeta, null, 2), '```', REPORT_META_END].join('\n');
 
-  const reasonLine = opts?.reason ? `降级原因：${opts.reason}` : null;
+  const executiveSummaryLines = sourcesForSummary
+    .slice(0, 6)
+    .map((source) => {
+      const title = source.title?.trim() ? source.title.trim() : '（未命名观点）';
+      const excerpt = toInlineExcerpt(source.body, 120);
+      return `- ${title}：${excerpt} [${source.label}]`;
+    })
+    .join('\n');
+
+  let claimIndex = 1;
+  const themeMd = themeBuckets
+    .map((bucket, bucketIndex) => {
+      const anchor = bucket[0];
+      const themeName = anchor ? pickFallbackThemeName(anchor, bucketIndex) : `讨论焦点 ${bucketIndex + 1}`;
+      const describedLabels = bucket.map((s) => s.label).join(', ');
+
+      const claims = bucket.slice(0, Math.max(2, bucket.length)).map((source) => {
+        const claimTitle = pickFallbackClaimTitle(source);
+        const excerpt = toInlineExcerpt(source.body, 260);
+        const quote = extractShortQuote(source.body, 160);
+        const quoteLine = quote ? `> ${quote} [${source.label}]` : null;
+
+        const lines = [
+          `#### C${claimIndex} ${claimTitle}`,
+          `${excerpt} [${source.label}]`,
+          quoteLine,
+          `边界/下一步：需要把该主张的适用条件、关键指标与可反驳证据补齐，才能支持更强结论。 [${source.label}]`,
+        ].filter((v): v is string => Boolean(v));
+
+        claimIndex += 1;
+        return lines.join('\n');
+      });
+
+      return [
+        `### T${bucketIndex + 1} ${themeName}`,
+        `本主题主要由 ${describedLabels || '（无）'} 等材料构成，以下为从中抽取的原子主张（fallback 版本按来源近似拆解）。`,
+        '',
+        claims.join('\n\n'),
+      ].join('\n');
+    })
+    .join('\n\n');
+
+  const agendaLines = themeBuckets
+    .map((bucket, index) => {
+      const anchor = bucket[0];
+      const themeName = anchor ? pickFallbackThemeName(anchor, index) : `讨论焦点 ${index + 1}`;
+      const cite = anchor?.label ?? fallbackLabels[0] ?? null;
+      return cite ? `- 关于“${themeName}”：需要明确争议点到底是事实、价值还是约束差异？ [${cite}]` : `- 关于“${themeName}”：需要明确争议点到底是事实、价值还是约束差异？`;
+    })
+    .join('\n');
+
   const body = [
     '## 导读（How to read）',
     reasonLine
       ? `本报告当前为降级输出（${reasonLine}）：提供输入摘要与最小结构提示，便于继续迭代生成更完整的长文版本。`
       : '本报告当前为降级输出：提供输入摘要与最小结构提示，便于继续迭代生成更完整的长文版本。',
+    coverageLine ? `\n\n${coverageLine}` : null,
+    '',
+    '## Executive Summary',
+    '',
+    executiveSummaryLines || '- （无）',
     '',
     '## 输入摘要（Top sources）',
     '',
     bulletLines || '- (no sources)',
     '',
+    '## 主题地图（Themes, TalkToTheCity-style）',
+    '',
+    themeMd || '（材料不足，无法生成主题地图）',
+    '',
+    '## 未决问题与下一步议程（Agenda）',
+    '',
+    agendaLines || '- （无）',
+    '',
     '## 方法（Method, brief）',
-    '基于选中的 Sources 做最小可读汇总；未进行 TalkToTheCity 风格的主题/主张/逐字引文展开。',
-  ].join('\n');
+    [
+      '本报告为降级生成：未调用外部模型。',
+      '生成逻辑：按 votes 简单排序后做轮转分桶，形成 1–3 个主题；每个主题内按来源拆分成若干原子 Claim，并从原文中截取首段作为短摘录（Quote）。',
+      '局限：主题与 Claim 的命名/归类仅为启发式近似，不能替代真正的语义聚类与跨来源综合。',
+    ].join('\n'),
+  ]
+    .filter((v): v is string => Boolean(v))
+    .join('\n');
 
   return [metaBlock, body].join('\n\n');
+}
+
+function toInlineExcerpt(text: string, maxChars: number): string {
+  const normalized = text.trim().replaceAll('\n', ' ').replace(/\s+/g, ' ').trim();
+  if (!normalized) return '';
+  if (normalized.length <= maxChars) return normalized;
+  return normalized.slice(0, Math.max(0, maxChars - 1)).trimEnd();
+}
+
+function extractShortQuote(text: string, maxChars: number): string | null {
+  const normalized = toInlineExcerpt(text, Math.max(0, maxChars + 40));
+  if (!normalized) return null;
+
+  const hardCut = normalized.slice(0, Math.min(normalized.length, maxChars));
+  const punct = ['。', '！', '？', '.', '!', '?', '；', ';', '…'];
+  const lastPunctIndex = punct.map((p) => hardCut.lastIndexOf(p)).reduce((acc, v) => Math.max(acc, v), -1);
+
+  const sliced = lastPunctIndex >= 24 ? hardCut.slice(0, lastPunctIndex + 1) : hardCut;
+  const trimmed = sliced.trim();
+  if (!trimmed) return null;
+  return normalized.length > trimmed.length ? `${trimmed}…` : trimmed;
+}
+
+function pickFallbackThemeName(source: GenerateConsensusReportInput['sources'][number], index: number): string {
+  const title = source.title?.trim();
+  if (title) return title.length > 32 ? `${title.slice(0, 31).trimEnd()}…` : title;
+
+  const excerpt = toInlineExcerpt(source.body, 18);
+  if (excerpt) return `${excerpt.trim()}…`;
+
+  return `讨论焦点 ${index + 1}`;
+}
+
+function pickFallbackClaimTitle(source: GenerateConsensusReportInput['sources'][number]): string {
+  const title = source.title?.trim();
+  if (title) return title.length > 40 ? `${title.slice(0, 39).trimEnd()}…` : title;
+  const excerpt = toInlineExcerpt(source.body, 32);
+  return excerpt ? excerpt : `来自 ${source.label} 的主张`;
 }
 
 function buildChainedMetaSystemPrompt(): string {
@@ -688,7 +813,7 @@ function createOpenRouterConsensusReportProvider(): ConsensusReportProvider {
             `[consensus-report] OpenRouter generate attempt ${attempt}/${attempts} model=${model} sources=${input.sources.length}`,
           );
 
-          const { contentMd, usedModel } = await callOpenRouterChatCompletion({
+          const { contentMd, usedModel, usage, requestId } = await callOpenRouterChatCompletion({
             baseUrl,
             apiKey,
             model,
@@ -703,10 +828,27 @@ function createOpenRouterConsensusReportProvider(): ConsensusReportProvider {
 
           const extracted = extractReportMetaAndBody(contentMd);
           const normalizedMeta = normalizeReportMeta({ topicTitle: input.topicTitle, sourceLabels, meta: extracted.meta });
+          const metaWithDiagnostics = {
+            ...normalizedMeta,
+            analysis: {
+              ...(isPlainObject((normalizedMeta as any).analysis) ? ((normalizedMeta as any).analysis as Record<string, unknown>) : {}),
+              generation: {
+                provider: 'openrouter',
+                promptVersion: input.params.promptVersion,
+                baseUrl,
+                modelRequested: model,
+                modelUsed: usedModel,
+                requestId,
+                usage,
+                attempt,
+                maxAttempts: attempts,
+              },
+            },
+          };
           const normalizedContentMd = [
             REPORT_META_START,
             '```json',
-            JSON.stringify(normalizedMeta, null, 2),
+            JSON.stringify(metaWithDiagnostics, null, 2),
             '```',
             REPORT_META_END,
             '',
@@ -786,7 +928,7 @@ async function callOpenRouterChatCompletion(params: {
   timeoutMs: number;
   messages: Array<{ role: 'system' | 'user'; content: string }>;
   extraHeaders?: Record<string, string>;
-}): Promise<{ contentMd: string; usedModel: string }> {
+}): Promise<{ contentMd: string; usedModel: string; usage?: OpenRouterUsage; requestId?: string }> {
   const url = `${params.baseUrl}/chat/completions`;
   const maxFetchAttempts = parsePositiveInt(process.env.OPENROUTER_FETCH_MAX_ATTEMPTS, 2);
   const baseRetryDelayMs = 750;
@@ -847,11 +989,21 @@ async function callOpenRouterChatCompletion(params: {
       }
 
       const usedModel = typeof json?.model === 'string' ? json.model : params.model;
-      const usage = json?.usage && typeof json.usage === 'object' ? json.usage : undefined;
+      const requestId = typeof json?.id === 'string' ? json.id : undefined;
+      const usageRaw = json?.usage && typeof json.usage === 'object' ? json.usage : undefined;
+      const usage: OpenRouterUsage | undefined =
+        usageRaw && (typeof usageRaw.prompt_tokens === 'number' || typeof usageRaw.completion_tokens === 'number')
+          ? {
+              promptTokens: typeof usageRaw.prompt_tokens === 'number' ? usageRaw.prompt_tokens : undefined,
+              completionTokens: typeof usageRaw.completion_tokens === 'number' ? usageRaw.completion_tokens : undefined,
+              totalTokens: typeof usageRaw.total_tokens === 'number' ? usageRaw.total_tokens : undefined,
+            }
+          : undefined;
+
       if (usage) {
-        const promptTokens = typeof usage.prompt_tokens === 'number' ? usage.prompt_tokens : null;
-        const completionTokens = typeof usage.completion_tokens === 'number' ? usage.completion_tokens : null;
-        const totalTokens = typeof usage.total_tokens === 'number' ? usage.total_tokens : null;
+        const promptTokens = typeof usage.promptTokens === 'number' ? usage.promptTokens : null;
+        const completionTokens = typeof usage.completionTokens === 'number' ? usage.completionTokens : null;
+        const totalTokens = typeof usage.totalTokens === 'number' ? usage.totalTokens : null;
         const parts = [
           promptTokens !== null ? `prompt=${promptTokens}` : null,
           completionTokens !== null ? `completion=${completionTokens}` : null,
@@ -860,7 +1012,7 @@ async function callOpenRouterChatCompletion(params: {
         if (parts.length) console.log(`[consensus-report] OpenRouter usage model=${usedModel}: ${parts.join(' ')}`);
       }
 
-      return { contentMd: content, usedModel };
+      return { contentMd: content, usedModel, usage, requestId };
     } finally {
       clearTimeout(timer);
     }

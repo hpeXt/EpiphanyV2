@@ -113,10 +113,14 @@ export class ArgumentService {
     });
     const override = argumentOverrides.get(argument.id);
 
+    const localizedTitle = override?.title ?? argument.title;
+    const localizedBody = override?.body ?? argument.body;
+    const localizedBodyRich = localizedBody !== argument.body ? null : argument.bodyRich;
+
     const authorDisplayName = await this.getAuthorDisplayName(argument.topicId, argument.authorPubkey, locale);
     return {
       argument: this.toArgumentDto(
-        { ...argument, title: override?.title ?? argument.title, body: override?.body ?? argument.body },
+        { ...argument, title: localizedTitle, body: localizedBody, bodyRich: localizedBodyRich },
         authorDisplayName,
       ),
     };

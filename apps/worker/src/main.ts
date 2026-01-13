@@ -17,7 +17,7 @@ import { getPrisma } from '@epiphany/database';
 
 import { loadEnv } from './env.js';
 import { getRedisConnection } from './lib/redis-connection.js';
-import { createAIProvider } from './providers/provider-factory.js';
+import { createAIProvider, getAIProviderType } from './providers/provider-factory.js';
 import { processArgumentAnalysis } from './processors/argument-analysis.js';
 import { processTopicCluster, enqueueTopicClusterDebounced, type TopicClusterEngine } from './processors/topic-cluster.js';
 import { createNodeTopicClusterEngine } from './clustering/node-topic-cluster-engine.js';
@@ -25,7 +25,7 @@ import { createPythonTopicClusterEngine } from './clustering/python-topic-cluste
 import {
   processConsensusReport,
 } from './processors/consensus-report.js';
-import { createConsensusReportProvider } from './providers/consensus-report-provider.js';
+import { createConsensusReportProvider, getConsensusReportProviderDiagnostics } from './providers/consensus-report-provider.js';
 import { processTranslation } from './processors/translation.js';
 import { createTranslationProvider } from './providers/translation-provider.js';
 import { startTranslationAutomation } from './translation/translation-automation.js';
@@ -530,6 +530,8 @@ const server = http.createServer(async (req, res) => {
           },
           workerHeartbeats,
           providers: {
+            ai: getAIProviderType(),
+            consensusReport: getConsensusReportProviderDiagnostics(),
             translation: translationProvider.provider,
           },
           translation: {

@@ -3,7 +3,12 @@
  * @description Focus View read-path service (tree + children)
  */
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
-import type { ArgumentChildrenResponse, TopicArgumentsResponse, TopicTreeResponse } from '@epiphany/shared-contracts';
+import type {
+  ArgumentChildrenResponse,
+  ArgumentRelatedResponse,
+  TopicArgumentsResponse,
+  TopicTreeResponse,
+} from '@epiphany/shared-contracts';
 import { FocusViewRepo, type ChildrenOrderBy } from './focus-view.repo.js';
 import type { Locale } from '../common/locale.js';
 
@@ -24,6 +29,9 @@ export class FocusViewService {
 
   private readonly DEFAULT_CHILDREN_LIMIT = 30;
   private readonly MAX_CHILDREN_LIMIT = 100;
+
+  private readonly DEFAULT_RELATED_LIMIT = 10;
+  private readonly MAX_RELATED_LIMIT = 50;
 
   constructor(private readonly repo: FocusViewRepo) {}
 
@@ -98,6 +106,24 @@ export class FocusViewService {
       locale: params.locale,
     });
 
+    if (!result) {
+      throw new NotFoundException({
+        error: { code: 'ARGUMENT_NOT_FOUND', message: 'Argument not found' },
+      });
+    }
+
+    return result;
+  }
+
+  async getRelated(params: { argumentId: string; limitRaw?: string }): Promise<ArgumentRelatedResponse> {
+    const limitParsed = params.limitRaw ? parseInt(params.limitRaw, 10) : this.DEFAULT_RELATED_LIMIT;
+    const limit = clampInt(
+      Number.isFinite(limitParsed) ? limitParsed : this.DEFAULT_RELATED_LIMIT,
+      1,
+      this.MAX_RELATED_LIMIT,
+    );
+
+    const result = await this.repo.getRelated({ argumentId: params.argumentId, limit });
     if (!result) {
       throw new NotFoundException({
         error: { code: 'ARGUMENT_NOT_FOUND', message: 'Argument not found' },

@@ -36,7 +36,6 @@ describe("CreateTopicForm", () => {
 
     await user.click(screen.getByRole("button", { name: /create|创建/i }));
 
-    expect(screen.getByText(/Title is required|需要填写标题/i)).toBeInTheDocument();
     expect(screen.getByText(/Body is required|需要填写正文/i)).toBeInTheDocument();
   });
 

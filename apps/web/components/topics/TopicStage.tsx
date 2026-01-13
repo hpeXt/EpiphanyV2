@@ -43,6 +43,9 @@ const LEFT_PANE_WIDTH_STORAGE_KEY = "topicStage:leftPaneWidth:v1";
 const DEFAULT_LEFT_PANE_WIDTH = 380;
 const MIN_LEFT_PANE_WIDTH = 280;
 const MAX_LEFT_PANE_WIDTH = 560;
+const LEFT_PANE_HOVER_EXPANDED_WIDTH = 480;
+const PANE_RESIZER_WIDTH = 12; // Tailwind w-3
+const MIN_CENTER_PANE_WIDTH = 360;
 
 const RELATED_PANE_WIDTH_STORAGE_KEY = "topicStage:relatedPaneWidth:v1";
 const DEFAULT_RELATED_PANE_WIDTH = 320;
@@ -570,6 +573,7 @@ export function TopicStage({ topicId }: Props) {
       return DEFAULT_RELATED_PANE_WIDTH;
     }
   });
+  const [isLeftPaneHoverExpanded, setIsLeftPaneHoverExpanded] = useState(false);
 
   const clampLeftPaneWidth = useCallback(
     (nextWidth: number) => {
@@ -585,8 +589,8 @@ export function TopicStage({ topicId }: Props) {
         containerRect && containerRect.width > 0 ? containerRect.width : window.innerWidth;
 
       const isLg = window.innerWidth >= 1024;
-      const resizerWidth = 8; // Tailwind w-2
-      const minCenterWidth = 420;
+      const resizerWidth = PANE_RESIZER_WIDTH;
+      const minCenterWidth = MIN_CENTER_PANE_WIDTH;
       const minRightWidth = isLg ? relatedPaneWidth + minCenterWidth + resizerWidth : minCenterWidth;
       const maxByContainer = containerWidth - resizerWidth - minRightWidth;
       const maxAllowed = Math.min(MAX_LEFT_PANE_WIDTH, Math.max(MIN_LEFT_PANE_WIDTH, maxByContainer));
@@ -596,6 +600,10 @@ export function TopicStage({ topicId }: Props) {
     },
     [relatedPaneWidth],
   );
+
+  const leftPaneDisplayWidth = isLeftPaneHoverExpanded
+    ? clampLeftPaneWidth(Math.max(leftPaneWidth, LEFT_PANE_HOVER_EXPANDED_WIDTH))
+    : leftPaneWidth;
 
   const clampRelatedPaneWidth = useCallback(
     (nextWidth: number) => {
@@ -615,8 +623,8 @@ export function TopicStage({ topicId }: Props) {
       const containerWidth =
         containerRect && containerRect.width > 0 ? containerRect.width : window.innerWidth;
 
-      const resizerWidth = 8; // Tailwind w-2
-      const minCenterWidth = 420;
+      const resizerWidth = PANE_RESIZER_WIDTH;
+      const minCenterWidth = MIN_CENTER_PANE_WIDTH;
       const availableForRelated = containerWidth - leftPaneWidth - resizerWidth * 2 - minCenterWidth;
       const maxAllowed = Math.min(
         MAX_RELATED_PANE_WIDTH,
@@ -724,7 +732,11 @@ export function TopicStage({ topicId }: Props) {
       event.preventDefault();
       event.stopPropagation();
 
-      resizeSessionRef.current = { kind: "left", startX: event.clientX, startWidth: leftPaneWidth };
+      resizeSessionRef.current = { kind: "left", startX: event.clientX, startWidth: leftPaneDisplayWidth };
+      if (leftPaneDisplayWidth !== leftPaneWidth) {
+        setLeftPaneWidth(leftPaneDisplayWidth);
+      }
+      setIsLeftPaneHoverExpanded(false);
 
       try {
         document.body.style.cursor = "col-resize";
@@ -733,7 +745,7 @@ export function TopicStage({ topicId }: Props) {
         // ignore
       }
     },
-    [leftPaneWidth],
+    [leftPaneDisplayWidth, leftPaneWidth],
   );
 
   const startResizingRelated = useCallback(
@@ -1724,10 +1736,10 @@ export function TopicStage({ topicId }: Props) {
   }, [isEditingSelectedArgument, selectedArgumentId]);
 
   const sunburstSize = useMemo(() => {
-    const width = leftColumnWidth ?? leftPaneWidth;
+    const width = leftColumnWidth ?? leftPaneDisplayWidth;
     const available = width - 32;
     return Math.max(240, Math.min(360, Math.floor(available)));
-  }, [leftColumnWidth, leftPaneWidth]);
+  }, [leftColumnWidth, leftPaneDisplayWidth]);
 
   const cardPosition = (x: number, y: number) => {
     const padding = 16;
@@ -2312,22 +2324,30 @@ export function TopicStage({ topicId }: Props) {
           </Alert>
         ) : null}
 
-        <div
-          ref={stageRef}
-          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-background shadow-sm md:flex-row"
-          style={{
-            ["--topic-left-width" as any]: `${leftPaneWidth}px`,
-            ["--topic-related-width" as any]: `${relatedPaneWidth}px`,
-          }}
-        >
-          {/* Left: Explorer */}
-		          <div
-		            ref={leftColumnRef}
-		            className={[
-		              "relative flex w-full flex-col overflow-hidden border-b border-border/60 bg-background md:border-b-0",
-		              "md:w-[var(--topic-left-width)] md:min-w-[var(--topic-left-width)] md:border-r",
-		            ].join(" ")}
-		          >
+	        <div
+	          ref={stageRef}
+	          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-background shadow-sm md:flex-row"
+	          data-testid="topic-stage"
+	          onMouseLeave={() => setIsLeftPaneHoverExpanded(false)}
+	          style={{
+	            ["--topic-left-width" as any]: `${leftPaneDisplayWidth}px`,
+	            ["--topic-related-width" as any]: `${relatedPaneWidth}px`,
+	          }}
+	        >
+	          {/* Left: Explorer */}
+			          <div
+			            ref={leftColumnRef}
+			            className={[
+			              "relative flex w-full flex-col overflow-hidden border-b border-border/60 bg-background md:border-b-0",
+			              "md:transition-[width] md:duration-200 md:ease-out",
+			              "md:w-[var(--topic-left-width)] md:min-w-[var(--topic-left-width)] md:border-r",
+			            ].join(" ")}
+			            data-testid="topic-stage-left"
+			            onMouseEnter={() => {
+			              if (resizeSessionRef.current) return;
+			              setIsLeftPaneHoverExpanded(true);
+			            }}
+			          >
             <div className="flex items-start justify-between gap-3 border-b border-border/60 px-5 py-4">
               <div className="min-w-0">
                 <h2 className="truncate font-serif text-xl text-foreground" title={topicTitle}>
@@ -2470,25 +2490,33 @@ export function TopicStage({ topicId }: Props) {
 	            </div>
 	          </div>
 
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize panels"
-            className={[
-              "relative hidden w-2 shrink-0 cursor-col-resize touch-none md:block",
-              "hover:bg-[color:var(--muted)]",
-            ].join(" ")}
-            onPointerDown={startResizingLeft}
-            onDoubleClick={() => setLeftPaneWidth(clampLeftPaneWidth(DEFAULT_LEFT_PANE_WIDTH))}
-          >
-            <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-border/60" />
-          </div>
+	          <div
+	            role="separator"
+	            aria-orientation="vertical"
+	            aria-label="Resize panels"
+	            className={[
+	              "relative hidden w-3 shrink-0 cursor-col-resize touch-none md:block",
+	              "hover:bg-[color:var(--muted)]",
+	            ].join(" ")}
+	            onPointerDown={startResizingLeft}
+	            onDoubleClick={() => {
+	              setIsLeftPaneHoverExpanded(false);
+	              setLeftPaneWidth(clampLeftPaneWidth(DEFAULT_LEFT_PANE_WIDTH));
+	            }}
+	          >
+	            <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-border/60" />
+	          </div>
 
           {/* Right: Reader */}
-	          <div
-	            ref={rightColumnRef}
-	            className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background"
-	          >
+		          <div
+		            ref={rightColumnRef}
+		            className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background"
+		            data-testid="topic-stage-right"
+		            onMouseEnter={() => {
+		              if (resizeSessionRef.current) return;
+		              setIsLeftPaneHoverExpanded(false);
+		            }}
+		          >
 	            <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
 	              {readArgument ? (
 	                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -3067,14 +3095,14 @@ export function TopicStage({ topicId }: Props) {
 	                <div
 	                  role="separator"
 	                  aria-orientation="vertical"
-                  aria-label="Resize panels"
-                  className={[
-                    "relative hidden w-2 shrink-0 cursor-col-resize touch-none lg:block",
-                    "hover:bg-[color:var(--muted)]",
-                  ].join(" ")}
-                  onPointerDown={startResizingRelated}
-                  onDoubleClick={() => setRelatedPaneWidth(clampRelatedPaneWidth(DEFAULT_RELATED_PANE_WIDTH))}
-                >
+	                  aria-label="Resize panels"
+	                  className={[
+	                    "relative hidden w-3 shrink-0 cursor-col-resize touch-none lg:block",
+	                    "hover:bg-[color:var(--muted)]",
+	                  ].join(" ")}
+	                  onPointerDown={startResizingRelated}
+	                  onDoubleClick={() => setRelatedPaneWidth(clampRelatedPaneWidth(DEFAULT_RELATED_PANE_WIDTH))}
+	                >
                   <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-border/60" />
                 </div>
 

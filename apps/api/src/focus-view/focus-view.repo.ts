@@ -3,8 +3,9 @@
  * @description Focus View read-path queries (tree + children)
  */
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { createHash } from 'node:crypto';
-import type { Argument, TopicSummary } from '@epiphany/shared-contracts';
+import type { Argument, ArgumentRelatedResponse, TopicSummary } from '@epiphany/shared-contracts';
 import { PrismaService } from '../infrastructure/prisma.module.js';
 import { TranslationService } from '../translation/translation.service.js';
 import type { Locale } from '../common/locale.js';
@@ -460,6 +461,43 @@ export class FocusViewRepo {
         mapArgument(row, displayNameByPubkeyHex.get(toPubkeyHex(row.authorPubkey)) ?? null),
       ),
       nextBeforeId,
+    };
+  }
+
+  async getRelated(params: { argumentId: string; limit: number }): Promise<ArgumentRelatedResponse | null> {
+    const query = await this.prisma.argument.findFirst({
+      where: { id: params.argumentId, prunedAt: null },
+      select: { id: true, analysisStatus: true },
+    });
+
+    if (!query) return null;
+
+    if (query.analysisStatus !== 'ready') {
+      return { argumentId: query.id, items: [] };
+    }
+
+    const rows = await this.prisma.$queryRaw<Array<{ argumentId: string; similarity: number }>>(Prisma.sql`
+      SELECT
+        a.id AS "argumentId",
+        LEAST(1, GREATEST(-1, 1 - (a.embedding <=> q.embedding)))::float8 AS "similarity"
+      FROM arguments a
+      JOIN arguments q ON q.id = ${query.id}
+      WHERE
+        a.topic_id = q.topic_id
+        AND a.id <> q.id
+        AND a.pruned_at IS NULL
+        AND a.analysis_status = 'ready'
+        AND a.embedding IS NOT NULL
+        AND q.pruned_at IS NULL
+        AND q.analysis_status = 'ready'
+        AND q.embedding IS NOT NULL
+      ORDER BY a.embedding <=> q.embedding ASC, a.id ASC
+      LIMIT ${params.limit};
+    `);
+
+    return {
+      argumentId: query.id,
+      items: rows.map((row) => ({ argumentId: row.argumentId, similarity: Number(row.similarity) })),
     };
   }
 }

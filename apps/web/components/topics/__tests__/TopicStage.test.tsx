@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { createTranslator, defaultLocale } from "@/lib/i18n";
@@ -161,6 +161,11 @@ describe("TopicStage interactions", () => {
     global.fetch = jest.fn(async (input: RequestInfo | URL) => {
       const url = new URL(typeof input === "string" ? input : input.toString());
 
+      if (url.pathname.startsWith("/v1/arguments/") && url.pathname.endsWith("/related")) {
+        const argumentId = url.pathname.split("/")[3] ?? "";
+        return jsonResponse({ ok: true, status: 200, json: { argumentId, items: [] } });
+      }
+
       if (url.pathname === `/v1/topics/${TOPIC_ID}/ledger/me`) {
         return jsonResponse({
           ok: true,
@@ -252,14 +257,14 @@ describe("TopicStage interactions", () => {
     await user.unhover(hoverButton);
 
     await user.click(screen.getByRole("button", { name: "Select arg-1" }));
-    expect(await screen.findByRole("heading", { name: "My Argument" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "My Argument", level: 1 })).toBeInTheDocument();
 
     await user.hover(hoverButton);
     expect(await screen.findByTestId("sunburst-hover-card")).toBeInTheDocument();
     await user.unhover(hoverButton);
 
     await user.click(screen.getByRole("button", { name: "Blank" }));
-    expect(await screen.findByRole("heading", { name: "Root" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Root", level: 1 })).toBeInTheDocument();
   });
 
   it("can quote selected text into the reply editor", async () => {
@@ -267,6 +272,11 @@ describe("TopicStage interactions", () => {
 
     global.fetch = jest.fn(async (input: RequestInfo | URL) => {
       const url = new URL(typeof input === "string" ? input : input.toString());
+
+      if (url.pathname.startsWith("/v1/arguments/") && url.pathname.endsWith("/related")) {
+        const argumentId = url.pathname.split("/")[3] ?? "";
+        return jsonResponse({ ok: true, status: 200, json: { argumentId, items: [] } });
+      }
 
       if (url.pathname === `/v1/topics/${TOPIC_ID}/ledger/me`) {
         return jsonResponse({
@@ -353,9 +363,12 @@ describe("TopicStage interactions", () => {
 
     await screen.findByRole("heading", { name: "Topic 1", level: 2 });
     await user.click(screen.getByRole("button", { name: "Select arg-1" }));
-    await screen.findByRole("heading", { name: "My Argument" });
+    await screen.findByRole("heading", { name: "My Argument", level: 1 });
 
-    const readerParagraph = await screen.findByText("My body");
+    const rightPane = screen.getByTestId("topic-stage-right");
+    const prose = rightPane.querySelector<HTMLElement>(".prose");
+    if (!prose) throw new Error("Expected .prose reader container to exist");
+    const readerParagraph = await within(prose).findByText("My body");
 
     const selection = window.getSelection();
     const range = document.createRange();
@@ -383,18 +396,22 @@ describe("TopicStage interactions", () => {
     expect(reply).toHaveTextContent("My body");
   });
 
-  it("does not auto-expand the layout when crossing the divider", async () => {
+  it("auto-expands the sunburst column on hover and collapses on right hover", async () => {
     const { TopicStage } = require("@/components/topics/TopicStage");
 
-    // JSDOM doesn't implement PointerEvent; React only wires `onPointerMove*` when it's available.
-    if (!(window as any).PointerEvent) {
-      (window as any).PointerEvent = MouseEvent as any;
-    }
-
-    jest.useFakeTimers();
+    const originalInnerWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1600 });
+    act(() => {
+      window.dispatchEvent(new Event("resize"));
+    });
 
     global.fetch = jest.fn(async (input: RequestInfo | URL) => {
       const url = new URL(typeof input === "string" ? input : input.toString());
+
+      if (url.pathname.startsWith("/v1/arguments/") && url.pathname.endsWith("/related")) {
+        const argumentId = url.pathname.split("/")[3] ?? "";
+        return jsonResponse({ ok: true, status: 200, json: { argumentId, items: [] } });
+      }
 
       if (url.pathname === `/v1/topics/${TOPIC_ID}/ledger/me`) {
         return jsonResponse({
@@ -451,53 +468,45 @@ describe("TopicStage interactions", () => {
       throw new Error(`Unhandled request: ${url.toString()}`);
     }) as unknown as typeof fetch;
 
+    const user = userEvent.setup();
     render(<TopicStage topicId={TOPIC_ID} />);
 
-    const topicHeading = screen.getByRole("heading", { name: "Topic 1" });
+    await screen.findByRole("heading", { name: "Topic 1", level: 2 });
 
-    const findAncestor = (node: HTMLElement, includes: string) => {
-      let current: HTMLElement | null = node;
-      while (current) {
-        if (typeof current.className === "string" && current.className.includes(includes)) return current;
-        current = current.parentElement;
-      }
-      return null;
-    };
+    const stage = screen.getByTestId("topic-stage");
+    const left = screen.getByTestId("topic-stage-left");
+    const right = screen.getByTestId("topic-stage-right");
 
-    const leftColumn = findAncestor(topicHeading, "md:border-r");
-    if (!leftColumn) {
-      throw new Error("Failed to locate left column container.");
-    }
+    expect(stage.style.getPropertyValue("--topic-left-width")).toBe("380px");
 
-    // Simulate the divider at clientX=200.
-    (leftColumn as any).getBoundingClientRect = () => ({ right: 200 });
+    await user.hover(left);
+    expect(stage.style.getPropertyValue("--topic-left-width")).toBe("480px");
 
-    expect(leftColumn.className).toContain("md:w-[420px]");
+    await user.hover(right);
+    expect(stage.style.getPropertyValue("--topic-left-width")).toBe("380px");
 
-    fireEvent.pointerMove(leftColumn, { clientX: 100 });
-    await act(async () => {
-      jest.advanceTimersByTime(1000);
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: originalInnerWidth });
+    act(() => {
+      window.dispatchEvent(new Event("resize"));
     });
-    expect(leftColumn.className).toContain("md:w-[420px]");
-
-    fireEvent.pointerMove(leftColumn, { clientX: 300 });
-
-    await act(async () => {
-      jest.advanceTimersByTime(1000);
-    });
-    expect(leftColumn.className).toContain("md:w-[420px]");
   });
 
-  it("does not auto-expand the layout in read mode", async () => {
+  it("auto-expands the sunburst column in read mode and collapses on right hover", async () => {
     const { TopicStage } = require("@/components/topics/TopicStage");
 
-    // JSDOM doesn't implement PointerEvent; React only wires `onPointerMove*` when it's available.
-    if (!(window as any).PointerEvent) {
-      (window as any).PointerEvent = MouseEvent as any;
-    }
+    const originalInnerWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1600 });
+    act(() => {
+      window.dispatchEvent(new Event("resize"));
+    });
 
     global.fetch = jest.fn(async (input: RequestInfo | URL) => {
       const url = new URL(typeof input === "string" ? input : input.toString());
+
+      if (url.pathname.startsWith("/v1/arguments/") && url.pathname.endsWith("/related")) {
+        const argumentId = url.pathname.split("/")[3] ?? "";
+        return jsonResponse({ ok: true, status: 200, json: { argumentId, items: [] } });
+      }
 
       if (url.pathname === `/v1/topics/${TOPIC_ID}/ledger/me`) {
         return jsonResponse({
@@ -579,44 +588,30 @@ describe("TopicStage interactions", () => {
       throw new Error(`Unhandled request: ${url.toString()}`);
     }) as unknown as typeof fetch;
 
+    const user = userEvent.setup();
     render(<TopicStage topicId={TOPIC_ID} />);
 
-    const topicHeading = await screen.findByRole("heading", { name: "Topic 1" });
+    await screen.findByRole("heading", { name: "Topic 1", level: 2 });
 
-    const findAncestor = (node: HTMLElement, includes: string) => {
-      let current: HTMLElement | null = node;
-      while (current) {
-        if (typeof current.className === "string" && current.className.includes(includes)) return current;
-        current = current.parentElement;
-      }
-      return null;
-    };
+    await user.click(screen.getByRole("button", { name: "Select arg-1" }));
+    await screen.findByRole("heading", { name: "My Argument", level: 1 });
 
-    const leftColumn = findAncestor(topicHeading, "md:border-r");
-    if (!leftColumn) {
-      throw new Error("Failed to locate left column container.");
-    }
+    const stage = screen.getByTestId("topic-stage");
+    const left = screen.getByTestId("topic-stage-left");
+    const right = screen.getByTestId("topic-stage-right");
 
-    // Simulate the divider at clientX=200.
-    (leftColumn as any).getBoundingClientRect = () => ({ right: 200 });
+    expect(stage.style.getPropertyValue("--topic-left-width")).toBe("480px");
 
-    fireEvent.click(screen.getByRole("button", { name: "Select arg-1" }));
-    await screen.findByRole("heading", { name: "My Argument" });
+    await user.hover(left);
+    expect(stage.style.getPropertyValue("--topic-left-width")).toBe("480px");
 
-    expect(leftColumn.className).toContain("md:w-[360px]");
+    await user.hover(right);
+    expect(stage.style.getPropertyValue("--topic-left-width")).toBe("380px");
 
-    jest.useFakeTimers();
-    fireEvent.pointerMove(leftColumn, { clientX: 100 });
-    await act(async () => {
-      jest.advanceTimersByTime(1000);
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: originalInnerWidth });
+    act(() => {
+      window.dispatchEvent(new Event("resize"));
     });
-    expect(leftColumn.className).toContain("md:w-[360px]");
-
-    fireEvent.pointerMove(leftColumn, { clientX: 300 });
-    await act(async () => {
-      jest.advanceTimersByTime(1000);
-    });
-    expect(leftColumn.className).toContain("md:w-[360px]");
   });
 
   it("can create argument, vote, open report, and edit own comment", async () => {
@@ -628,6 +623,11 @@ describe("TopicStage interactions", () => {
 
     global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(typeof input === "string" ? input : input.toString());
+
+      if (url.pathname.startsWith("/v1/arguments/") && url.pathname.endsWith("/related")) {
+        const argumentId = url.pathname.split("/")[3] ?? "";
+        return jsonResponse({ ok: true, status: 200, json: { argumentId, items: [] } });
+      }
 
       if (url.pathname === `/v1/topics/${TOPIC_ID}/ledger/me`) {
         return jsonResponse({
@@ -828,7 +828,7 @@ describe("TopicStage interactions", () => {
     });
 
     await user.click(screen.getByRole("button", { name: "Select arg-1" }));
-    await screen.findByRole("heading", { name: "My Argument" });
+    await screen.findByRole("heading", { name: "My Argument", level: 1 });
 
     await user.click(screen.getByLabelText(t("stage.increaseVotes")));
     await user.click(screen.getByRole("button", { name: t("stage.confirmVotes") }));
@@ -869,6 +869,11 @@ describe("TopicStage interactions", () => {
 
     global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(typeof input === "string" ? input : input.toString());
+
+      if (url.pathname.startsWith("/v1/arguments/") && url.pathname.endsWith("/related")) {
+        const argumentId = url.pathname.split("/")[3] ?? "";
+        return jsonResponse({ ok: true, status: 200, json: { argumentId, items: [] } });
+      }
 
       if (url.pathname === `/v1/topics/${TOPIC_ID}/ledger/me`) {
         return jsonResponse({
