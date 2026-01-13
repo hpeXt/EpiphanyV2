@@ -481,7 +481,7 @@ export class FocusViewRepo {
         a.id AS "argumentId",
         LEAST(1, GREATEST(-1, 1 - (a.embedding <=> q.embedding)))::float8 AS "similarity"
       FROM arguments a
-      JOIN arguments q ON q.id = ${query.id}
+      JOIN arguments q ON q.id = ${query.id}::uuid
       WHERE
         a.topic_id = q.topic_id
         AND a.id <> q.id
