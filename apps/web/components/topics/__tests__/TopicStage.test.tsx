@@ -244,7 +244,7 @@ describe("TopicStage interactions", () => {
     const user = userEvent.setup();
     render(<TopicStage topicId={TOPIC_ID} />);
 
-    await screen.findByRole("heading", { name: "Topic 1" });
+    await screen.findByRole("heading", { name: "Topic 1", level: 2 });
 
     const hoverButton = screen.getByRole("button", { name: "Hover arg-1" });
     await user.hover(hoverButton);
@@ -351,7 +351,7 @@ describe("TopicStage interactions", () => {
     const user = userEvent.setup();
     render(<TopicStage topicId={TOPIC_ID} />);
 
-    await screen.findByRole("heading", { name: "Topic 1" });
+    await screen.findByRole("heading", { name: "Topic 1", level: 2 });
     await user.click(screen.getByRole("button", { name: "Select arg-1" }));
     await screen.findByRole("heading", { name: "My Argument" });
 
@@ -797,7 +797,7 @@ describe("TopicStage interactions", () => {
     const user = userEvent.setup();
     render(<TopicStage topicId={TOPIC_ID} />);
 
-    await screen.findByRole("heading", { name: "Topic 1" });
+    await screen.findByRole("heading", { name: "Topic 1", level: 2 });
     await screen.findByLabelText(t("dialogue.replyLabel"));
 
     const replyTitle = screen.getByPlaceholderText(t("stage.titleOptionalPlaceholder"));
