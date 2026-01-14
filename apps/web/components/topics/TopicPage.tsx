@@ -42,6 +42,7 @@ export function TopicPage({ topicId }: Props) {
   const [identityPubkeyHex, setIdentityPubkeyHex] = useState<string | null>(null);
   const [isManageOpen, setIsManageOpen] = useState(false);
   const [isReportOpen, setIsReportOpen] = useState(false);
+  const [isRegeneratingReport, setIsRegeneratingReport] = useState(false);
   const [claimError, setClaimError] = useState("");
   const [isClaiming, setIsClaiming] = useState(false);
   const { toast } = useP5Toast();
@@ -173,6 +174,35 @@ export function TopicPage({ topicId }: Props) {
     tree.topic.ownerPubkey !== null &&
     identityPubkeyHex === tree.topic.ownerPubkey;
 
+  async function regenerateConsensusReport() {
+    if (!isOwner) return;
+    if (tree.status !== "success") return;
+    if (tree.topic.status !== "active") return;
+
+    setIsRegeneratingReport(true);
+    const result = await apiClient.executeTopicCommand(topicId, {
+      type: "GENERATE_CONSENSUS_REPORT",
+      payload: {},
+    });
+    setIsRegeneratingReport(false);
+
+    if (!result.ok) {
+      toast({
+        variant: "error",
+        title: t("report.consensusReport"),
+        message: result.error.message,
+      });
+      return;
+    }
+
+    toast({
+      variant: "success",
+      title: t("report.consensusReport"),
+      message: t("report.generatingReport"),
+    });
+    invalidate();
+  }
+
   const claimInfo =
     hasIdentity === true && tree.topic.ownerPubkey === null
       ? (() => {
@@ -243,13 +273,23 @@ export function TopicPage({ topicId }: Props) {
         identityFingerprint={identityFingerprint}
         showBackButton={true}
         reportButton={
-          <P5Button
-            onClick={() => setIsReportOpen(true)}
-            size="sm"
-            variant="ghost"
-          >
-            {t("topic.report")}
-          </P5Button>
+          <>
+            {isOwner && tree.topic.status === "active" ? (
+              <P5Button
+                onClick={regenerateConsensusReport}
+                size="sm"
+                variant="ghost"
+                disabled={isRegeneratingReport}
+              >
+                {isRegeneratingReport
+                  ? t("report.generatingAction")
+                  : t("report.regenerateReport")}
+              </P5Button>
+            ) : null}
+            <P5Button onClick={() => setIsReportOpen(true)} size="sm" variant="ghost">
+              {t("topic.report")}
+            </P5Button>
+          </>
         }
         claimButton={
           claimInfo ? (

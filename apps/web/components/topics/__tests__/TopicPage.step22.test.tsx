@@ -208,7 +208,7 @@ describe("TopicPage (Step 22 - Consensus Report)", () => {
     render(<TopicPage topicId="topic-1" />);
 
     await screen.findByText("Topic 1");
-    await user.click(screen.getByRole("button", { name: /Report|报告/i }));
+    await user.click(screen.getByRole("button", { name: /^(Report|报告)$/i }));
 
     expect(
       await screen.findByRole("heading", {
@@ -249,7 +249,7 @@ describe("TopicPage (Step 22 - Consensus Report)", () => {
     render(<TopicPage topicId="topic-1" />);
 
     await screen.findByText("Topic 1");
-    await user.click(screen.getByRole("button", { name: /Report|报告/i }));
+    await user.click(screen.getByRole("button", { name: /^(Report|报告)$/i }));
 
     expect(await screen.findByRole("heading", { name: /Footnotes|脚注/i })).toBeInTheDocument();
     expect(screen.getByText("S1")).toBeInTheDocument();
@@ -281,7 +281,7 @@ describe("TopicPage (Step 22 - Consensus Report)", () => {
     render(<TopicPage topicId="topic-1" />);
 
     await screen.findByText("Topic 1");
-    await user.click(screen.getByRole("button", { name: /Report|报告/i }));
+    await user.click(screen.getByRole("button", { name: /^(Report|报告)$/i }));
 
     expect(await screen.findByText(/Generating report…|正在生成报告…/i)).toBeInTheDocument();
   });
@@ -310,7 +310,7 @@ describe("TopicPage (Step 22 - Consensus Report)", () => {
     render(<TopicPage topicId="topic-1" />);
 
     await screen.findByText("Topic 1");
-    await user.click(screen.getByRole("button", { name: /Report|报告/i }));
+    await user.click(screen.getByRole("button", { name: /^(Report|报告)$/i }));
 
     expect(await screen.findByText(/Report failed|报告生成失败/i)).toBeInTheDocument();
     expect(screen.getByText("Provider failed")).toBeInTheDocument();
@@ -357,11 +357,34 @@ describe("TopicPage (Step 22 - Consensus Report)", () => {
     render(<TopicPage topicId="topic-1" />);
 
     await screen.findByText("Topic 1");
-    await user.click(screen.getByRole("button", { name: /Report|报告/i }));
+    await user.click(screen.getByRole("button", { name: /^(Report|报告)$/i }));
 
-    const button = await screen.findByRole("button", { name: /Generate report|生成报告/i });
+    const button = await screen.findByRole("button", { name: /^(Generate report|生成报告)$/i });
     await user.click(button);
 
     expect(await screen.findByText(/Generating report…|正在生成报告…/i)).toBeInTheDocument();
+  });
+
+  it("allows owner to regenerate report from the top bar", async () => {
+    const masterSeedHex = "00".repeat(64);
+    const { pubkeyHex } = deriveTopicKeypairFromMasterSeedHex(masterSeedHex, "topic-1");
+
+    let lastCommand: any = null;
+    global.fetch = createFetchMock({
+      topicStatus: "active",
+      ownerPubkey: pubkeyHex,
+      latestReport: { report: null },
+      onCommand: (body) => {
+        lastCommand = body;
+      },
+    }) as unknown as typeof fetch;
+
+    const user = userEvent.setup();
+    render(<TopicPage topicId="topic-1" />);
+
+    await screen.findByText("Topic 1");
+    await user.click(screen.getByRole("button", { name: /Regenerate report|重新生成报告/i }));
+
+    expect(lastCommand).toEqual({ type: "GENERATE_CONSENSUS_REPORT", payload: {} });
   });
 });

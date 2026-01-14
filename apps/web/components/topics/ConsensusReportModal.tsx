@@ -103,14 +103,31 @@ export function ConsensusReportModal({
       >
         <div className="flex items-center justify-between gap-3 bg-[color:var(--ink)] px-4 py-3 text-[color:var(--paper)]">
           <h2 className="font-mono text-sm font-semibold uppercase tracking-wide">{title}</h2>
-          <P5Button
-            type="button"
-            onClick={onClose}
-            size="sm"
-            className="border-[color:var(--paper)] text-[color:var(--paper)] shadow-none hover:bg-white/10"
-          >
-            {t("common.close")}
-          </P5Button>
+          <div className="flex items-center gap-2">
+            {isOwner ? (
+              <P5Button
+                type="button"
+                onClick={triggerGeneration}
+                size="sm"
+                disabled={isTriggering || report?.status === "generating"}
+                className="border-[color:var(--paper)] text-[color:var(--paper)] shadow-none hover:bg-white/10"
+              >
+                {isTriggering
+                  ? t("report.generatingAction")
+                  : report
+                    ? t("report.regenerateReport")
+                    : t("report.generateReport")}
+              </P5Button>
+            ) : null}
+            <P5Button
+              type="button"
+              onClick={onClose}
+              size="sm"
+              className="border-[color:var(--paper)] text-[color:var(--paper)] shadow-none hover:bg-white/10"
+            >
+              {t("common.close")}
+            </P5Button>
+          </div>
         </div>
 
         <div className="max-h-[80vh] overflow-y-auto px-5 py-4">
@@ -152,19 +169,6 @@ export function ConsensusReportModal({
                 <P5Alert role="alert" variant="error" title={t("common.error")}>
                   {triggerError}
                 </P5Alert>
-              ) : null}
-
-              {isOwner ? (
-                <div className="flex flex-wrap gap-2">
-                  <P5Button
-                    type="button"
-                    onClick={triggerGeneration}
-                    disabled={isTriggering || report?.status === "generating"}
-                    variant="primary"
-                  >
-                    {isTriggering ? t("report.generatingAction") : t("report.generateReport")}
-                  </P5Button>
-                </div>
               ) : null}
             </div>
           ) : null}

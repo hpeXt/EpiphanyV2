@@ -89,6 +89,7 @@ export function ConsensusReportPage({ topicId }: Props) {
 
   const ownerPubkey = topic?.ownerPubkey ?? null;
   const isOwner = identityPubkeyHex !== null && ownerPubkey !== null && identityPubkeyHex === ownerPubkey;
+  const canRegenerate = isOwner && topic?.status === "active";
 
   const [isTriggering, setIsTriggering] = useState(false);
   const [triggerError, setTriggerError] = useState("");
@@ -109,13 +110,21 @@ export function ConsensusReportPage({ topicId }: Props) {
     }
 
     toast({ variant: "success", title: t("report.consensusReport"), message: t("report.generatingReport") });
+
+    if (rid) {
+      const nextParams = new URLSearchParams(searchParams.toString());
+      nextParams.delete("rid");
+      const qs = nextParams.toString();
+      router.replace(`/topics/${encodeURIComponent(topicId)}/report${qs ? `?${qs}` : ""}`);
+      return;
+    }
     void load();
   }
 
   return (
     <div className="min-h-[100svh] bg-background text-foreground">
       <header className="sticky top-0 z-10 border-b border-border/60 bg-background/90 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-[980px] items-center justify-between gap-3 px-4 py-3">
+        <div className="mx-auto flex w-full max-w-[980px] flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <Button
@@ -137,7 +146,7 @@ export function ConsensusReportPage({ topicId }: Props) {
             ) : null}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
             <Button
               variant="ghost"
               size="sm"
@@ -146,6 +155,17 @@ export function ConsensusReportPage({ topicId }: Props) {
             >
               {t("common.refresh")}
             </Button>
+            {canRegenerate ? (
+              <Button
+                variant="primary"
+                size="sm"
+                className="border border-border"
+                onClick={triggerGeneration}
+                disabled={isTriggering || report?.status === "generating"}
+              >
+                {isTriggering ? t("report.generatingAction") : t("report.regenerateReport")}
+              </Button>
+            ) : null}
           </div>
         </div>
       </header>
