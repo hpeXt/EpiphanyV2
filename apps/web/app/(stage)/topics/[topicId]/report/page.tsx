@@ -60,12 +60,15 @@ export async function generateMetadata({
   params,
   searchParams,
 }: {
-  params: Params;
-  searchParams: Record<string, string | string[] | undefined>;
+  params: Params | Promise<Params>;
+  searchParams:
+    | Record<string, string | string[] | undefined>
+    | Promise<Record<string, string | string[] | undefined>>;
 }): Promise<Metadata> {
-  const { topicId } = params;
-  const rid = typeof searchParams.rid === "string" ? searchParams.rid : null;
-  const bridge = typeof searchParams.bridge === "string" ? searchParams.bridge : null;
+  const { topicId } = await params;
+  const sp = await searchParams;
+  const rid = typeof sp.rid === "string" ? sp.rid : null;
+  const bridge = typeof sp.bridge === "string" ? sp.bridge : null;
 
   const apiBase = getApiBaseUrl();
   if (!apiBase) {
