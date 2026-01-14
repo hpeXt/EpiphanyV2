@@ -16,6 +16,8 @@ type Props = {
   defaultSelectedId?: string | null;
   interactive?: boolean;
   showTooltip?: boolean;
+  showBreadcrumb?: boolean;
+  breadcrumbRootLabel?: string;
   onSelectedIdChange?: (id: string | null) => void;
   onNodeClick?: (node: { id: string; label: string; depth: number; parentId: string | null; value: number; childCount: number }) => void;
   onHoverChange?: (value: { id: string; pointer: PointerPosition } | null) => void;
@@ -111,6 +113,8 @@ export function Sunburst({
   defaultSelectedId = null,
   interactive = false,
   showTooltip = false,
+  showBreadcrumb = false,
+  breadcrumbRootLabel,
   onSelectedIdChange,
   onNodeClick,
   onHoverChange,
@@ -204,6 +208,59 @@ export function Sunburst({
   }, [clearHover, interactive, onSelectedIdChange, selectedId]);
 
   const tooltipArc = hoveredId ? arcById.get(hoveredId) ?? null : null;
+  const activeId = hoveredId ?? resolvedSelectedId ?? null;
+  const selectedOverlay = useMemo(() => {
+    if (!resolvedSelectedId) return null;
+    const arc = arcById.get(resolvedSelectedId);
+    if (!arc) return null;
+
+    const d = arcPath({
+      innerRadius: arc.innerRadius,
+      outerRadius: arc.outerRadius,
+      startAngle: arc.startAngle,
+      endAngle: arc.endAngle,
+      padAngle,
+    });
+    if (!d) return null;
+
+    const midAngle = (arc.startAngle + arc.endAngle) / 2;
+    const nudge = interactive ? 6 : 0;
+    const nudgeX = nudge ? round(nudge * Math.cos(midAngle - Math.PI / 2), 3) : 0;
+    const nudgeY = nudge ? round(nudge * Math.sin(midAngle - Math.PI / 2), 3) : 0;
+
+    return { d, nudgeX, nudgeY };
+  }, [arcById, interactive, padAngle, resolvedSelectedId]);
+
+  const hoverTrailIds = useMemo(() => {
+    if (!hoveredId) return null;
+    const trail = new Set<string>();
+    let cursor: string | null = hoveredId;
+    while (cursor) {
+      trail.add(cursor);
+      const next = arcById.get(cursor)?.parentId ?? null;
+      cursor = next && arcById.has(next) ? next : null;
+    }
+    return trail;
+  }, [arcById, hoveredId]);
+
+  const breadcrumbText = useMemo(() => {
+    if (!showBreadcrumb) return null;
+    const rootLabel = breadcrumbRootLabel ?? tree.label;
+    if (!activeId) return rootLabel;
+
+    const labels: string[] = [];
+    let cursor: string | null = activeId;
+    while (cursor) {
+      const arc = arcById.get(cursor);
+      if (!arc) break;
+      labels.push(arc.label);
+      const next = arc.parentId;
+      cursor = next && arcById.has(next) ? next : null;
+    }
+
+    labels.reverse();
+    return [rootLabel, ...labels].join(" › ");
+  }, [activeId, arcById, breadcrumbRootLabel, showBreadcrumb, tree.label]);
 
   return (
     <div
@@ -242,32 +299,108 @@ export function Sunburst({
             });
             if (!d) return null;
             const isSelected = resolvedSelectedId === arc.id;
+            const isHovered = hoveredId === arc.id;
+            const isDimmed = hoverTrailIds ? !hoverTrailIds.has(arc.id) : false;
+
+            const midAngle = (arc.startAngle + arc.endAngle) / 2;
+            const nudge = isSelected ? 6 : isHovered ? 4 : 0;
+            const nudgeX = nudge ? round(nudge * Math.cos(midAngle - Math.PI / 2), 3) : 0;
+            const nudgeY = nudge ? round(nudge * Math.sin(midAngle - Math.PI / 2), 3) : 0;
+
+            const segmentFilter = (() => {
+              if (isSelected) return "drop-shadow(2px 2px 0 var(--ink))";
+              if (isHovered) return "brightness(0.96) drop-shadow(1px 1px 0 var(--ink))";
+              return undefined;
+            })();
 
             return (
-              <path
+              <g
                 key={arc.id}
-                data-testid="sunburst-segment"
-                data-nodeid={arc.id}
-                data-selected={isSelected ? "true" : undefined}
-                d={d}
-                fill={segmentFill(arc.depth)}
-                stroke="var(--ink)"
-                strokeWidth={3}
-                onPointerMove={interactive ? (event) => handlePointerMove(arc.id, event) : undefined}
-                onClick={
+                style={
                   interactive
-                    ? (event) => {
-                        event.stopPropagation();
-                        handleClick(arc.id);
+                    ? {
+                        transform: nudge ? `translate(${nudgeX}px, ${nudgeY}px)` : undefined,
+                        transition: "transform var(--p5-motion-normal) var(--p5-ease-out)",
                       }
                     : undefined
                 }
+              >
+                <path
+                  data-testid="sunburst-segment"
+                  data-nodeid={arc.id}
+                  data-selected={isSelected ? "true" : undefined}
+                  d={d}
+                  fill={segmentFill(arc.depth)}
+                  stroke={isSelected ? "transparent" : "var(--ink)"}
+                  strokeWidth={isSelected ? 0 : 2}
+                  onPointerMove={interactive ? (event) => handlePointerMove(arc.id, event) : undefined}
+                  onClick={
+                    interactive
+                      ? (event) => {
+                          event.stopPropagation();
+                          handleClick(arc.id);
+                        }
+                      : undefined
+                  }
                 className={interactive ? "cursor-pointer" : undefined}
+                style={
+                  interactive
+                    ? {
+                        opacity: isDimmed ? 0.35 : 1,
+                        filter: segmentFilter,
+                        transition: "opacity var(--p5-motion-normal) var(--p5-ease-out), filter var(--p5-motion-normal) var(--p5-ease-out)",
+                      }
+                    : undefined
+                }
               />
+              </g>
             );
           })}
+
+          {selectedOverlay ? (
+            <g
+              style={
+                interactive
+                  ? {
+                      transform: `translate(${selectedOverlay.nudgeX}px, ${selectedOverlay.nudgeY}px)`,
+                      transition: "transform var(--p5-motion-normal) var(--p5-ease-out)",
+                    }
+                  : undefined
+              }
+              pointerEvents="none"
+            >
+              <path
+                d={selectedOverlay.d}
+                fill="none"
+                stroke="var(--ink)"
+                strokeWidth={8}
+                strokeLinejoin="round"
+              />
+              <path
+                d={selectedOverlay.d}
+                fill="none"
+                stroke="var(--rebel-red)"
+                strokeWidth={4}
+                strokeLinejoin="round"
+              />
+            </g>
+          ) : null}
         </g>
       </svg>
+
+      {showBreadcrumb && breadcrumbText ? (
+        <div className="pointer-events-none absolute bottom-2 left-2 z-10 max-w-[calc(100%-16px)]">
+          <div
+            key={activeId ?? "root"}
+            className="animate-slide-in-up flex items-center gap-2 rounded-md border border-border/60 bg-background/95 px-2 py-1 text-[10px] shadow-sm backdrop-blur-sm"
+          >
+            <span className="font-mono uppercase tracking-wide text-muted-foreground">
+              {t("sunburst.locationLabel")}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-foreground">{breadcrumbText}</span>
+          </div>
+        </div>
+      ) : null}
 
       {interactive && showTooltip && tooltipArc && hoverPointer ? (
         <div

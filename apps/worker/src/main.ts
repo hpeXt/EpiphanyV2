@@ -29,6 +29,7 @@ import { createConsensusReportProvider, getConsensusReportProviderDiagnostics } 
 import { processTranslation } from './processors/translation.js';
 import { createTranslationProvider } from './providers/translation-provider.js';
 import { startTranslationAutomation } from './translation/translation-automation.js';
+import { startArgumentAnalysisAutomation } from './analysis/argument-analysis-automation.js';
 
 // Queue names per docs/stage01/ai-worker.md (using underscore instead of colon for BullMQ compatibility)
 const QUEUE_ARGUMENT_ANALYSIS = 'ai_argument-analysis';
@@ -109,6 +110,13 @@ const topicClusterEngine = getTopicClusterEngine();
 const consensusReportProvider = createConsensusReportProvider();
 const translationProvider = createTranslationProvider();
 startTranslationAutomation({ prisma, redis, queue: translationQueue, provider: translationProvider });
+startArgumentAnalysisAutomation({
+  prisma,
+  redis,
+  queue: argumentAnalysisQueue,
+  providerType: getAIProviderType(),
+  embeddingModel: aiProvider.getEmbeddingModel(),
+});
 
 /**
  * Argument Analysis Job Payload

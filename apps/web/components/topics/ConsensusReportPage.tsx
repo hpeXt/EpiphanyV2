@@ -265,6 +265,16 @@ type BridgesMeta = {
   statements: BridgeStatement[];
 };
 
+type RoleAtlasRole = {
+  id: string;
+  name: string;
+  oneLiner: string | null;
+  topClaims: string[];
+  topObjections: string[];
+  acceptabilityConditions: string[];
+  sourceLabels: string[];
+};
+
 function getBridgesMeta(report: ConsensusReport): BridgesMeta | null {
   const metadata = report.metadata;
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
@@ -331,6 +341,125 @@ function getSourceMap(report: ConsensusReport): Record<string, { argumentId: str
   return Object.keys(map).length ? map : null;
 }
 
+function stripInlineCitations(text: string): string {
+  return text.replaceAll(/\s*\[(S\d+)\]/g, "").trim();
+}
+
+function uniqueLabelsInOrder(labels: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const label of labels) {
+    if (seen.has(label)) continue;
+    seen.add(label);
+    out.push(label);
+  }
+  return out;
+}
+
+function extractRoleAtlasFromMarkdown(content: string): RoleAtlasRole[] {
+  const lines = content.replaceAll("\r\n", "\n").split("\n");
+  const isRoleAtlasHeading = (line: string) => {
+    const trimmed = line.trimStart();
+    if (trimmed.startsWith("## 角色图谱")) return true;
+    return /^##\s+Role Atlas\b/i.test(trimmed);
+  };
+
+  const startIndex = lines.findIndex((line) => isRoleAtlasHeading(line));
+  if (startIndex === -1) return [];
+
+  let endIndex = lines.length;
+  for (let idx = startIndex + 1; idx < lines.length; idx += 1) {
+    const line = lines[idx] ?? "";
+    if (line.startsWith("## ") && !isRoleAtlasHeading(line)) {
+      endIndex = idx;
+      break;
+    }
+  }
+
+  const sectionLines = lines.slice(startIndex + 1, endIndex);
+  const roles: RoleAtlasRole[] = [];
+
+  let current: RoleAtlasRole | null = null;
+  let currentList: "claims" | "objections" | "conditions" | null = null;
+  let roleCount = 0;
+
+  const flush = () => {
+    if (!current) return;
+    current.sourceLabels = uniqueLabelsInOrder(current.sourceLabels);
+    roles.push(current);
+    current = null;
+    currentList = null;
+  };
+
+  for (const rawLine of sectionLines) {
+    const trimmed = rawLine.trimEnd();
+    if (!trimmed.trim()) continue;
+
+    if (trimmed.startsWith("### ")) {
+      flush();
+      const headingText = trimmed.slice(4).trim();
+      const match = headingText.match(/^(R\d+)\s+(.*)$/);
+      const id = match?.[1] ?? `R${roleCount + 1}`;
+      const name = (match?.[2] ?? headingText).trim();
+      roleCount += 1;
+      current = {
+        id,
+        name,
+        oneLiner: null,
+        topClaims: [],
+        topObjections: [],
+        acceptabilityConditions: [],
+        sourceLabels: [],
+      };
+      continue;
+    }
+
+    if (!current) continue;
+
+    const line = trimmed.trim();
+    if (line.startsWith("- 一句话立场：")) {
+      const raw = line.replace(/^-\s*一句话立场：/, "").trim();
+      const labels = extractCitationLabels(raw);
+      current.sourceLabels.push(...labels);
+      const cleaned = stripInlineCitations(raw);
+      current.oneLiner = cleaned ? cleaned : null;
+      currentList = null;
+      continue;
+    }
+
+    if (line.startsWith("- 核心主张")) {
+      currentList = "claims";
+      continue;
+    }
+
+    if (line.startsWith("- 核心反对")) {
+      currentList = "objections";
+      continue;
+    }
+
+    if (line.startsWith("- 可接受条件")) {
+      currentList = "conditions";
+      continue;
+    }
+
+    if (line.startsWith("- ")) {
+      const raw = line.slice(2).trim();
+      const labels = extractCitationLabels(raw);
+      current.sourceLabels.push(...labels);
+      const cleaned = stripInlineCitations(raw);
+      if (!cleaned) continue;
+
+      if (currentList === "claims") current.topClaims.push(cleaned);
+      else if (currentList === "objections") current.topObjections.push(cleaned);
+      else if (currentList === "conditions") current.acceptabilityConditions.push(cleaned);
+    }
+  }
+
+  flush();
+
+  return roles.filter((role) => role.name).slice(0, 8);
+}
+
 function ReportReadyView(props: {
   topicId: string;
   report: Extract<ConsensusReport, { status: "ready" }>;
@@ -341,6 +470,7 @@ function ReportReadyView(props: {
 
   const bridges = useMemo(() => getBridgesMeta(props.report), [props.report]);
   const sourceMap = useMemo(() => getSourceMap(props.report), [props.report]);
+  const roleAtlas = useMemo(() => extractRoleAtlasFromMarkdown(props.report.contentMd), [props.report.contentMd]);
 
   const [showAllBridges, setShowAllBridges] = useState(false);
 
@@ -475,6 +605,19 @@ function ReportReadyView(props: {
       </section>
 
       <section className="space-y-3">
+        <h2 className="font-serif text-lg font-semibold">{t("report.roleAtlas")}</h2>
+        {roleAtlas.length ? (
+          <div className="grid gap-3 md:grid-cols-2">
+            {roleAtlas.map((role) => (
+              <RoleAtlasCard key={role.id} role={role} topicId={props.topicId} sourceMap={sourceMap} />
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">{t("report.roleAtlasUnavailable")}</p>
+        )}
+      </section>
+
+      <section className="space-y-3">
         <h2 className="font-serif text-lg font-semibold">{t("report.reportBody")}</h2>
         <ReportMarkdown content={props.report.contentMd} topicId={props.topicId} sourceMap={sourceMap} />
       </section>
@@ -554,6 +697,99 @@ function BridgeCard(props: {
           </a>
         ) : null}
       </div>
+    </article>
+  );
+}
+
+function RoleAtlasCard(props: {
+  role: RoleAtlasRole;
+  topicId: string;
+  sourceMap: ReportSourceMap | null;
+}) {
+  const { t } = useI18n();
+
+  const sources = props.role.sourceLabels.slice(0, 8).map((label) => {
+    const source = props.sourceMap?.[label] ?? null;
+    const href = source ? `/topics/${props.topicId}?arg=${encodeURIComponent(source.argumentId)}` : null;
+    return { label, href };
+  });
+
+  return (
+    <article className="rounded-xl border border-border/70 bg-background p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[10px] font-mono uppercase tracking-wide text-muted-foreground">
+            {t("report.roleAtlas")} · {props.role.id}
+          </div>
+          <h3 className="mt-1 truncate font-serif text-base font-semibold text-foreground">{props.role.name}</h3>
+        </div>
+      </div>
+
+      {props.role.oneLiner ? (
+        <p className="mt-2 whitespace-pre-wrap font-serif text-sm leading-relaxed text-foreground">{props.role.oneLiner}</p>
+      ) : null}
+
+      {props.role.topClaims.length ? (
+        <div className="mt-3">
+          <div className="text-[10px] font-mono uppercase tracking-wide text-muted-foreground">Top claims</div>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-foreground">
+            {props.role.topClaims.slice(0, 3).map((claim, idx) => (
+              <li key={`${props.role.id}-claim-${idx}`}>{claim}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {(props.role.topObjections.length || props.role.acceptabilityConditions.length) ? (
+        <details className="mt-3 rounded-lg border border-border/60 bg-muted/10 p-3">
+          <summary className="cursor-pointer text-xs text-muted-foreground">{t("common.open")}</summary>
+          {props.role.topObjections.length ? (
+            <div className="mt-3">
+              <div className="text-[10px] font-mono uppercase tracking-wide text-muted-foreground">Top objections</div>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-foreground">
+                {props.role.topObjections.slice(0, 3).map((item, idx) => (
+                  <li key={`${props.role.id}-obj-${idx}`}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {props.role.acceptabilityConditions.length ? (
+            <div className="mt-3">
+              <div className="text-[10px] font-mono uppercase tracking-wide text-muted-foreground">
+                Acceptability conditions
+              </div>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-foreground">
+                {props.role.acceptabilityConditions.slice(0, 3).map((item, idx) => (
+                  <li key={`${props.role.id}-cond-${idx}`}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </details>
+      ) : null}
+
+      {sources.length ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
+          {sources.map((source) =>
+            source.href ? (
+              <a
+                key={source.label}
+                className="rounded border border-border bg-background px-2 py-1 font-mono text-xs text-muted-foreground hover:bg-muted/20"
+                href={source.href}
+                target="_blank"
+                rel="noreferrer"
+              >
+                [{source.label}]
+              </a>
+            ) : (
+              <span key={source.label} className="rounded border border-border bg-background px-2 py-1 font-mono text-xs text-muted-foreground">
+                [{source.label}]
+              </span>
+            ),
+          )}
+        </div>
+      ) : null}
     </article>
   );
 }

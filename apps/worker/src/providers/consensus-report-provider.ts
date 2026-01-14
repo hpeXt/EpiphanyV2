@@ -167,7 +167,7 @@ const ROLE_TEMPLATES: Array<{ id: string; name: string; hint: string; keywords: 
 ];
 
 function sortSourceLabels(labels: string[]): string[] {
-  const unique = Array.from(new Set(labels.filter((v) => typeof v === 'string' && /^S\\d+$/.test(v))));
+  const unique = Array.from(new Set(labels.filter((v) => typeof v === 'string' && /^S\d+$/.test(v))));
   return unique.sort((a, b) => Number.parseInt(a.slice(1), 10) - Number.parseInt(b.slice(1), 10));
 }
 
@@ -486,7 +486,7 @@ function ensureRoleAtlasSection(params: {
 }): string {
   const body = params.bodyMd.trim();
   if (!body) return body;
-  if (body.includes('## 角色图谱')) return body;
+  if (body.includes('## 角色图谱') || /(^|\n)##\s+Role Atlas\b/i.test(body)) return body;
 
   const roleCards = buildRoleCards({ sources: params.sources, meta: params.meta, maxRoles: 6 });
   const roleAtlas = renderRoleAtlasSection(roleCards).trim();
@@ -740,7 +740,7 @@ function normalizeReportMeta(params: {
   for (const item of statementsRaw) {
     const id = typeof (item as any)?.id === 'string' ? String((item as any).id).trim() : '';
     const text = typeof (item as any)?.text === 'string' ? String((item as any).text).trim() : '';
-    if (!/^B\\d+$/.test(id) || !text) continue;
+    if (!/^B\d+$/.test(id) || !text) continue;
 
     const conditionsRaw = (item as any)?.conditions;
     const conditions = Array.isArray(conditionsRaw)
@@ -750,7 +750,7 @@ function normalizeReportMeta(params: {
     const sourceLabelsRaw = (item as any)?.sourceLabels;
     const sourceLabels = Array.isArray(sourceLabelsRaw)
       ? sourceLabelsRaw
-          .filter((s: unknown) => typeof s === 'string' && /^S\\d+$/.test(s) && sourceLabelSet.has(s))
+          .filter((s: unknown) => typeof s === 'string' && /^S\d+$/.test(s) && sourceLabelSet.has(s))
           .map((s: string) => s)
       : [];
 
@@ -760,14 +760,14 @@ function normalizeReportMeta(params: {
   const effectiveStatements = statements.length ? statements : fallbackStatements;
 
   const galleryIdsRaw = Array.isArray((bridgesObj as any).galleryIds) ? ((bridgesObj as any).galleryIds as unknown[]) : [];
-  const galleryIds = galleryIdsRaw.filter((id: unknown) => typeof id === 'string' && /^B\\d+$/.test(id as string)) as string[];
+  const galleryIds = galleryIdsRaw.filter((id: unknown) => typeof id === 'string' && /^B\d+$/.test(id as string)) as string[];
   const effectiveGalleryIds = galleryIds.filter((id) => effectiveStatements.some((s) => s.id === id));
   const fallbackGalleryIds = effectiveStatements.slice(0, gallerySize).map((s) => s.id);
 
   const featuredBridgeIdsRaw = Array.isArray((shareObj as any).featuredBridgeIds)
     ? ((shareObj as any).featuredBridgeIds as unknown[])
     : [];
-  const featuredBridgeIds = featuredBridgeIdsRaw.filter((id: unknown) => typeof id === 'string' && /^B\\d+$/.test(id as string)) as string[];
+  const featuredBridgeIds = featuredBridgeIdsRaw.filter((id: unknown) => typeof id === 'string' && /^B\d+$/.test(id as string)) as string[];
   const effectiveFeaturedIds = featuredBridgeIds.filter((id) => effectiveStatements.some((s) => s.id === id));
 
   const defaultOgTitle = `${params.topicTitle} · 共识报告`;

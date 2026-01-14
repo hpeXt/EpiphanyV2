@@ -864,7 +864,7 @@ export function TopicStage({ topicId }: Props) {
   const [relatedSimilarItems, setRelatedSimilarItems] = useState<RelatedSimilarItem[]>([]);
   const [relatedSimilarStatus, setRelatedSimilarStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [relatedSimilarError, setRelatedSimilarError] = useState("");
-  const [isMobileRelatedOpen, setIsMobileRelatedOpen] = useState(false);
+  const [isMobileRelatedOpen, setIsMobileRelatedOpen] = useState(true);
   const [quoteHint, setQuoteHint] = useState<{ text: string; x: number; y: number } | null>(null);
   const selectedArgumentIdRef = useRef<string | null>(null);
   selectedArgumentIdRef.current = selectedArgumentId;
@@ -2380,6 +2380,8 @@ export function TopicStage({ topicId }: Props) {
                     padAngle={0.006}
                     interactive
                     showTooltip={false}
+                    showBreadcrumb
+                    breadcrumbRootLabel={topicTitle}
                     selectedId={selectedArgumentId}
                     onSelectedIdChange={(id) => {
                       hideHoverCard({ immediate: true });
@@ -2780,6 +2782,199 @@ export function TopicStage({ topicId }: Props) {
                           ) : null}
                         </div>
                     </div>
+
+                    <div className="mt-6 rounded-lg border border-border/60 bg-background lg:hidden">
+                      <div className="border-b border-border/60 px-4 py-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h2 className="truncate font-serif text-sm font-semibold text-foreground">
+                              {t("stage.relatedTitle")}
+                            </h2>
+                            <p className="mt-1 text-xs text-muted-foreground">{t("stage.relatedHint")}</p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 px-3 border border-border bg-background"
+                            onClick={() => setIsMobileRelatedOpen((prev) => !prev)}
+                          >
+                            {isMobileRelatedOpen ? t("common.hide") : t("common.show")}
+                          </Button>
+                        </div>
+                      </div>
+
+                      {isMobileRelatedOpen ? (
+                        <div className="max-h-[40vh] overflow-y-auto px-4 py-4">
+                          {related ? (
+                            <div className="space-y-6">
+                              <div>
+                                <h3 className="text-xs font-medium text-muted-foreground">{t("stage.relatedSimilar")}</h3>
+                                <div className="mt-2 space-y-2">
+                                  {readArgument.analysisStatus !== "ready" ? (
+                                    <p className="text-xs text-muted-foreground">{t("stage.relatedSimilarPending")}</p>
+                                  ) : relatedSimilarStatus === "loading" ? (
+                                    <p className="text-xs text-muted-foreground">{t("common.loading")}</p>
+                                  ) : relatedSimilarStatus === "error" ? (
+                                    <p role="alert" className="text-xs text-destructive">
+                                      {relatedSimilarError}
+                                    </p>
+                                  ) : relatedSimilar.length === 0 ? (
+                                    <p className="text-xs text-muted-foreground">{t("stage.relatedSimilarEmpty")}</p>
+                                  ) : (
+                                    relatedSimilar.map(({ arg, similarity }) => {
+                                      const isRoot = rootArgumentId !== null && arg.id === rootArgumentId;
+                                      const title = isRoot ? topicTitle : toTitle(arg);
+                                      const excerpt = toExcerpt(arg.body);
+                                      const weight = similarity.toFixed(2);
+
+                                      return (
+                                        <button
+                                          key={arg.id}
+                                          type="button"
+                                          className={[
+                                            "w-full rounded-md border border-border/60 bg-background px-3 py-2 text-left",
+                                            "hover:bg-[color:var(--muted)] transition-colors",
+                                          ].join(" ")}
+                                          onClick={() => requestSelectArgumentId(isRoot ? null : arg.id)}
+                                        >
+                                          <div className="flex items-start gap-2">
+                                            <span className="text-xs text-muted-foreground">›</span>
+                                            <span className="shrink-0 font-mono text-[10px] text-muted-foreground tabular-nums">
+                                              {weight}
+                                            </span>
+                                            <span className="text-[10px] text-muted-foreground">|</span>
+                                            <span className="min-w-0 flex-1 font-serif text-sm leading-snug text-foreground line-clamp-2">
+                                              {title}
+                                            </span>
+                                            <span className="shrink-0 text-xs text-muted-foreground">›</span>
+                                          </div>
+                                          {excerpt ? (
+                                            <p className="mt-1 line-clamp-4 text-xs text-muted-foreground leading-relaxed">
+                                              {excerpt}
+                                            </p>
+                                          ) : null}
+                                        </button>
+                                      );
+                                    })
+                                  )}
+                                </div>
+                              </div>
+
+                              {related.ancestors.length > 0 ? (
+                                <div>
+                                  <h3 className="text-xs font-medium text-muted-foreground">{t("stage.relatedPath")}</h3>
+                                  <div className="mt-2 space-y-2">
+                                    {related.ancestors.map((arg) => {
+                                      const isRoot = rootArgumentId !== null && arg.id === rootArgumentId;
+                                      const title = isRoot ? topicTitle : toTitle(arg);
+                                      const excerpt = toExcerpt(arg.body);
+
+                                      return (
+                                        <button
+                                          key={arg.id}
+                                          type="button"
+                                          className={[
+                                            "w-full rounded-md border border-border/60 bg-background px-3 py-2 text-left",
+                                            "hover:bg-[color:var(--muted)] transition-colors",
+                                          ].join(" ")}
+                                          onClick={() => requestSelectArgumentId(isRoot ? null : arg.id)}
+                                        >
+                                          <div className="flex items-start justify-between gap-2">
+                                            <span className="font-serif text-sm leading-snug text-foreground">{title}</span>
+                                            <span className="shrink-0 text-[10px] text-muted-foreground">
+                                              {t("stage.votesCount", { count: arg.totalVotes })}
+                                            </span>
+                                          </div>
+                                          {excerpt ? (
+                                            <p className="mt-1 line-clamp-4 text-xs text-muted-foreground leading-relaxed">
+                                              {excerpt}
+                                            </p>
+                                          ) : null}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ) : null}
+
+                              {related.children.length > 0 ? (
+                                <div>
+                                  <h3 className="text-xs font-medium text-muted-foreground">{t("stage.relatedChildren")}</h3>
+                                  <div className="mt-2 space-y-2">
+                                    {related.children.map((arg) => {
+                                      const title = toTitle(arg);
+                                      const excerpt = toExcerpt(arg.body);
+
+                                      return (
+                                        <button
+                                          key={arg.id}
+                                          type="button"
+                                          className={[
+                                            "w-full rounded-md border border-border/60 bg-background px-3 py-2 text-left",
+                                            "hover:bg-[color:var(--muted)] transition-colors",
+                                          ].join(" ")}
+                                          onClick={() => requestSelectArgumentId(arg.id)}
+                                        >
+                                          <div className="flex items-start justify-between gap-2">
+                                            <span className="font-serif text-sm leading-snug text-foreground">{title}</span>
+                                            <span className="shrink-0 text-[10px] text-muted-foreground">
+                                              {t("stage.votesCount", { count: arg.totalVotes })}
+                                            </span>
+                                          </div>
+                                          {excerpt ? (
+                                            <p className="mt-1 line-clamp-4 text-xs text-muted-foreground leading-relaxed">
+                                              {excerpt}
+                                            </p>
+                                          ) : null}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ) : null}
+
+                              {related.siblings.length > 0 ? (
+                                <div>
+                                  <h3 className="text-xs font-medium text-muted-foreground">{t("stage.relatedSiblings")}</h3>
+                                  <div className="mt-2 space-y-2">
+                                    {related.siblings.map((arg) => {
+                                      const title = toTitle(arg);
+                                      const excerpt = toExcerpt(arg.body);
+
+                                      return (
+                                        <button
+                                          key={arg.id}
+                                          type="button"
+                                          className={[
+                                            "w-full rounded-md border border-border/60 bg-background px-3 py-2 text-left",
+                                            "hover:bg-[color:var(--muted)] transition-colors",
+                                          ].join(" ")}
+                                          onClick={() => requestSelectArgumentId(arg.id)}
+                                        >
+                                          <div className="flex items-start justify-between gap-2">
+                                            <span className="font-serif text-sm leading-snug text-foreground">{title}</span>
+                                            <span className="shrink-0 text-[10px] text-muted-foreground">
+                                              {t("stage.votesCount", { count: arg.totalVotes })}
+                                            </span>
+                                          </div>
+                                          {excerpt ? (
+                                            <p className="mt-1 line-clamp-4 text-xs text-muted-foreground leading-relaxed">
+                                              {excerpt}
+                                            </p>
+                                          ) : null}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2927,7 +3122,7 @@ export function TopicStage({ topicId }: Props) {
                             <div>
                               <h3 className="text-xs font-medium text-muted-foreground">{t("stage.relatedSimilar")}</h3>
                               <div className="mt-2 space-y-2">
-                                {readArgument?.analysisStatus !== "ready" ? (
+                                {relatedSimilarStatus === "idle" ? (
                                   <p className="text-xs text-muted-foreground">{t("stage.relatedSimilarPending")}</p>
                                 ) : relatedSimilarStatus === "loading" ? (
                                   <p className="text-xs text-muted-foreground">{t("common.loading")}</p>

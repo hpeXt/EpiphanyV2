@@ -5,6 +5,7 @@
 
 import type { AIProvider } from './ai-provider.js';
 import { createMockAIProvider } from './mock-ai-provider.js';
+import { createOpenRouterAIProvider } from './openrouter-ai-provider.js';
 
 export type AIProviderType = 'mock' | 'openrouter';
 
@@ -13,12 +14,14 @@ export type AIProviderType = 'mock' | 'openrouter';
  */
 export function getAIProviderType(): AIProviderType {
   const explicit = process.env.AI_PROVIDER?.toLowerCase();
-  if (explicit === 'openrouter' || explicit === 'real') return 'openrouter';
   if (explicit === 'mock') return 'mock';
+
+  const hasOpenRouterKey = Boolean(process.env.OPENROUTER_API_KEY?.trim());
+  if (explicit === 'openrouter' || explicit === 'real') return hasOpenRouterKey ? 'openrouter' : 'mock';
 
   // Auto-enable real embeddings when OpenRouter is configured, even if
   // AI_PROVIDER isn't explicitly set in `.env`.
-  if (process.env.OPENROUTER_API_KEY?.trim()) return 'openrouter';
+  if (hasOpenRouterKey) return 'openrouter';
 
   return 'mock';
 }
@@ -40,11 +43,11 @@ export function createAIProvider(): AIProvider {
       });
 
     case 'openrouter':
-      // TODO: Implement OpenRouter provider (Step 19+)
-      console.warn('[worker] OpenRouter provider not yet implemented, falling back to mock');
-      return createMockAIProvider({
-        shouldSucceed: true,
-        delayMs: 100,
+      return createOpenRouterAIProvider({
+        apiKey: process.env.OPENROUTER_API_KEY!.trim(),
+        baseUrl: (process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1').trim().replace(/\/+$/, ''),
+        embeddingModel: process.env.EMBEDDING_MODEL?.trim() || undefined,
+        stanceModel: process.env.STANCE_MODEL?.trim() || undefined,
       });
 
     default:

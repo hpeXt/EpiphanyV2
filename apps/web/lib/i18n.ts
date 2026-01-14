@@ -286,6 +286,7 @@ const MESSAGES: Record<Locale, Messages> = {
     },
     sunburst: {
       ariaLabel: "旭日图",
+      locationLabel: "当前位置",
       tooltip: {
         depth: "层级",
         children: "子节点",
@@ -376,6 +377,8 @@ const MESSAGES: Record<Locale, Messages> = {
       bridgeGallery: "共识桥梁（可分享）",
       copyReportLink: "复制报告链接",
       bridgeGalleryUnavailable: "暂无可分享的桥梁卡片",
+      roleAtlas: "角色图谱（Role Atlas）",
+      roleAtlasUnavailable: "暂无角色图谱",
       viewAllBridges: "查看全部桥梁句（{{count}}）",
       hideAllBridges: "收起桥梁句",
       reportBody: "报告正文",
@@ -774,6 +777,7 @@ const MESSAGES: Record<Locale, Messages> = {
     },
     sunburst: {
       ariaLabel: "Sunburst",
+      locationLabel: "Position",
       tooltip: {
         depth: "depth",
         children: "children",
@@ -865,6 +869,8 @@ const MESSAGES: Record<Locale, Messages> = {
       bridgeGallery: "Bridge statements (shareable)",
       copyReportLink: "Copy report link",
       bridgeGalleryUnavailable: "No shareable bridge cards available",
+      roleAtlas: "Role atlas",
+      roleAtlasUnavailable: "No role atlas available",
       viewAllBridges: "View all bridges ({{count}})",
       hideAllBridges: "Hide bridges",
       reportBody: "Report body",
