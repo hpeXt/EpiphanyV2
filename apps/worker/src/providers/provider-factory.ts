@@ -12,10 +12,14 @@ export type AIProviderType = 'mock' | 'openrouter';
  * Get the configured AI provider type from environment
  */
 export function getAIProviderType(): AIProviderType {
-  const provider = process.env.AI_PROVIDER?.toLowerCase();
-  if (provider === 'openrouter' || provider === 'real') {
-    return 'openrouter';
-  }
+  const explicit = process.env.AI_PROVIDER?.toLowerCase();
+  if (explicit === 'openrouter' || explicit === 'real') return 'openrouter';
+  if (explicit === 'mock') return 'mock';
+
+  // Auto-enable real embeddings when OpenRouter is configured, even if
+  // AI_PROVIDER isn't explicitly set in `.env`.
+  if (process.env.OPENROUTER_API_KEY?.trim()) return 'openrouter';
+
   return 'mock';
 }
 

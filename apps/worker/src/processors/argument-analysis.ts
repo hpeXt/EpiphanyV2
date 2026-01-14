@@ -63,13 +63,19 @@ export async function processArgumentAnalysis(
     return { success: false, error: 'Argument not found' };
   }
 
-  // Step 2: Idempotency check - short circuit if already ready
-  if (argument.analysisStatus === 'ready') {
-    console.log(`[argument-analysis] Short circuit: ${argumentId} already ready`);
-    return { success: true, shortCircuited: true, topicId: argument.topicId };
-  }
-
   const topicId = argument.topicId;
+  const desiredEmbeddingModel = aiProvider.getEmbeddingModel();
+
+  // Step 2: Idempotency check - short circuit only if we already have the desired embedding.
+  // This avoids "ready but missing embedding" (or a model switch) from becoming stuck forever.
+  const hasEmbedding = argument.embedding != null;
+  const hasDesiredEmbedding = hasEmbedding && argument.embeddingModel === desiredEmbeddingModel;
+  if (argument.analysisStatus === 'ready' && hasDesiredEmbedding) {
+    console.log(
+      `[argument-analysis] Short circuit: ${argumentId} already ready embedding_model=${argument.embeddingModel}`,
+    );
+    return { success: true, shortCircuited: true, topicId };
+  }
 
   try {
     // Step 3: Call AI Provider

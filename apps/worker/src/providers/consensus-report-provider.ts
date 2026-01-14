@@ -220,6 +220,546 @@ function pickFallbackClaimTitle(source: GenerateConsensusReportInput['sources'][
   return excerpt ? excerpt : `来自 ${source.label} 的主张`;
 }
 
+type ConsensusSource = GenerateConsensusReportInput['sources'][number];
+type RoleBullet = { text: string; sourceLabels: string[] };
+type RoleCard = {
+  name: string;
+  oneLiner: string | null;
+  topClaims: RoleBullet[];
+  topObjections: RoleBullet[];
+  acceptabilityConditions: RoleBullet[];
+  sourceLabels: string[];
+};
+
+const ROLE_TEMPLATES: Array<{ id: string; name: string; hint: string; keywords: string[] }> = [
+  {
+    id: 'evidence',
+    name: '证据/澄清派',
+    hint: '最关注：术语定义、证据链、反例与可验证指标',
+    keywords: ['定义', '术语', '指标', '证据', '反例', '可验证', '验证', '如何', '为什么', '是否', '?', '？'],
+  },
+  {
+    id: 'institutions',
+    name: '制度/国家平台派',
+    hint: '最关注：国家/制度作为平台与约束条件',
+    keywords: ['政治', '国家', '政府', '制度', '政体', '平台', '特区', '护照', '签证', '寡头', '暴民', '僭主', '合作'],
+  },
+  {
+    id: 'builders',
+    name: '技术/产品实践派',
+    hint: '最关注：技术路线、协议/产品落地与副作用',
+    keywords: ['技术', 'DAO', '以太坊', '比特币', '加密', '协议', '应用', '社交媒体', 'IM', '数据', '开源', '闭源'],
+  },
+  {
+    id: 'community',
+    name: '社区运营/空间派',
+    hint: '最关注：社区组织、线下空间与长期运营机制',
+    keywords: ['社区', '活动', 'Pop-up', 'hackerhouse', '火人', 'Zuzalu', '4Seas', 'Edge City', '节点', '永久', '来访', '数字游民', '轮辐', '轮蝠'],
+  },
+  {
+    id: 'skeptics',
+    name: '批评/风险约束派',
+    hint: '最关注：风险、外部性与不可逆后果',
+    keywords: ['风险', '外部性', '问题', '担心', '低效', '混乱', '情绪化', '极端化', '破坏', '排除', '不能', '无法', '代价'],
+  },
+  {
+    id: 'values',
+    name: '愿景/价值派',
+    hint: '最关注：愿景叙事、价值选择与人文边界',
+    keywords: ['愿', '繁荣', '社会形态', '千种', '意义', '目标', '欲望', '人文', '文化', '自由'],
+  },
+];
+
+function sortSourceLabels(labels: string[]): string[] {
+  const unique = Array.from(new Set(labels.filter((v) => typeof v === 'string' && /^S\\d+$/.test(v))));
+  return unique.sort((a, b) => Number.parseInt(a.slice(1), 10) - Number.parseInt(b.slice(1), 10));
+}
+
+function formatInlineCitations(labels: string[]): string {
+  const sorted = sortSourceLabels(labels);
+  if (!sorted.length) return '';
+  return ` ${sorted.map((l) => `[${l}]`).join('')}`;
+}
+
+function shortenInline(text: string, maxChars: number): string {
+  const trimmed = text.trim();
+  const excerpt = toInlineExcerpt(trimmed, maxChars);
+  if (!excerpt) return '';
+  return trimmed.length > excerpt.length ? `${excerpt}…` : excerpt;
+}
+
+function splitSentences(text: string): string[] {
+  const normalized = text.replace(/\\r/g, '\n');
+  const raw = normalized.split(/[。！？!?；;\\n]+/g);
+  return raw.map((s) => s.trim()).filter(Boolean);
+}
+
+function findSentenceWithKeywords(text: string, keywords: string[], maxChars: number): string | null {
+  const sentences = splitSentences(text);
+  for (const sentence of sentences) {
+    if (!sentence) continue;
+    for (const kw of keywords) {
+      if (kw && sentence.includes(kw)) return shortenInline(sentence, maxChars);
+    }
+  }
+  return null;
+}
+
+function keywordScore(haystack: string, keywords: string[]): number {
+  const normalized = haystack.toLowerCase();
+  let score = 0;
+  for (const kw of keywords) {
+    if (!kw) continue;
+    if (normalized.includes(kw.toLowerCase())) score += 1;
+  }
+  return score;
+}
+
+function normalizeRoleBullets(params: {
+  raw: unknown;
+  allowedSourceLabels: Set<string>;
+  fallbackSourceLabels: string[];
+  maxItems: number;
+}): RoleBullet[] {
+  const out: RoleBullet[] = [];
+  if (!params.raw) return out;
+
+  const fallback = params.fallbackSourceLabels.filter((s) => params.allowedSourceLabels.has(s));
+
+  const push = (text: string, labels: string[]) => {
+    const cleaned = text.trim().replaceAll('\n', ' ');
+    if (!cleaned) return;
+    const sanitized = sortSourceLabels(labels.filter((l) => params.allowedSourceLabels.has(l)));
+    out.push({ text: cleaned, sourceLabels: sanitized.length ? sanitized : fallback });
+  };
+
+  if (Array.isArray(params.raw)) {
+    for (const item of params.raw) {
+      if (out.length >= params.maxItems) break;
+      if (typeof item === 'string') {
+        push(item, fallback);
+        continue;
+      }
+      if (!isPlainObject(item)) continue;
+
+      const text =
+        typeof (item as any).text === 'string'
+          ? String((item as any).text)
+          : typeof (item as any).summary === 'string'
+            ? String((item as any).summary)
+            : '';
+      const labelsRaw = (item as any).sourceLabels;
+      const labels = Array.isArray(labelsRaw) ? labelsRaw.filter((l: unknown) => typeof l === 'string') : fallback;
+      if (text) push(text, labels as string[]);
+    }
+
+    return out;
+  }
+
+  if (typeof params.raw === 'string') {
+    push(params.raw, fallback);
+  }
+
+  return out;
+}
+
+function buildRoleCardsFromMeta(params: {
+  meta: Record<string, unknown> | null;
+  allowedSourceLabels: Set<string>;
+  maxRoles: number;
+}): RoleCard[] {
+  const metaObj = params.meta;
+  if (!metaObj || !isPlainObject(metaObj)) return [];
+
+  const analysis = (metaObj as any).analysis;
+  if (!isPlainObject(analysis)) return [];
+
+  const rolesRaw = (analysis as any).roles;
+  if (!Array.isArray(rolesRaw)) return [];
+
+  const roleCards: RoleCard[] = [];
+
+  for (const role of rolesRaw) {
+    if (roleCards.length >= params.maxRoles) break;
+    if (!isPlainObject(role)) continue;
+
+    const nameRaw = (role as any).name;
+    const name = typeof nameRaw === 'string' ? nameRaw.trim() : '';
+    if (!name) continue;
+
+    const sourceLabelsRaw = (role as any).sourceLabels;
+    const roleSourceLabels = Array.isArray(sourceLabelsRaw)
+      ? sortSourceLabels(sourceLabelsRaw.filter((l: unknown) => typeof l === 'string' && params.allowedSourceLabels.has(l as string)) as string[])
+      : [];
+
+    const oneLinerRaw = (role as any).brief ?? (role as any).oneLiner ?? (role as any).stance;
+    const oneLiner = typeof oneLinerRaw === 'string' && oneLinerRaw.trim() ? oneLinerRaw.trim() : null;
+
+    const topClaims = normalizeRoleBullets({
+      raw: (role as any).topClaims ?? (role as any).claims,
+      allowedSourceLabels: params.allowedSourceLabels,
+      fallbackSourceLabels: roleSourceLabels,
+      maxItems: 6,
+    });
+
+    const topObjections = normalizeRoleBullets({
+      raw: (role as any).topObjections ?? (role as any).objections,
+      allowedSourceLabels: params.allowedSourceLabels,
+      fallbackSourceLabels: roleSourceLabels,
+      maxItems: 4,
+    });
+
+    const acceptabilityConditions = normalizeRoleBullets({
+      raw: (role as any).acceptabilityConditions ?? (role as any).conditions,
+      allowedSourceLabels: params.allowedSourceLabels,
+      fallbackSourceLabels: roleSourceLabels,
+      maxItems: 4,
+    });
+
+    roleCards.push({
+      name,
+      oneLiner,
+      topClaims,
+      topObjections,
+      acceptabilityConditions,
+      sourceLabels: roleSourceLabels,
+    });
+  }
+
+  return roleCards;
+}
+
+function buildRoleCardsHeuristic(params: { sources: ConsensusSource[]; maxRoles: number }): RoleCard[] {
+  const allowed = new Set(params.sources.map((s) => s.label));
+  const groups = new Map<string, { template: (typeof ROLE_TEMPLATES)[number] | null; sources: ConsensusSource[] }>();
+
+  for (const source of params.sources) {
+    const haystack = `${source.title ?? ''}\n${source.body ?? ''}`.trim();
+    let best: (typeof ROLE_TEMPLATES)[number] | null = null;
+    let bestScore = 0;
+
+    for (const template of ROLE_TEMPLATES) {
+      const score = keywordScore(haystack, template.keywords);
+      if (score > bestScore) {
+        bestScore = score;
+        best = template;
+      }
+    }
+
+    const bucketId = best && bestScore > 0 ? best.id : 'general';
+    const current = groups.get(bucketId) ?? { template: bestScore > 0 ? best : null, sources: [] };
+    current.sources.push(source);
+    groups.set(bucketId, current);
+  }
+
+  const orderedGroups = Array.from(groups.values())
+    .map((g) => {
+      const sorted = [...g.sources].sort((a, b) => {
+        if (b.totalVotes !== a.totalVotes) return b.totalVotes - a.totalVotes;
+        return a.label.localeCompare(b.label);
+      });
+      return { template: g.template, sources: sorted };
+    })
+    .sort((a, b) => b.sources.length - a.sources.length);
+
+  const selectedGroups = orderedGroups.slice(0, Math.max(1, params.maxRoles));
+  const negativeKeywords = ROLE_TEMPLATES.find((t) => t.id === 'skeptics')?.keywords ?? ['问题', '担心', '风险', '反对', '低效', '混乱'];
+  const conditionKeywords = ['需要', '应', '应该', '必须', '如果', '可以'];
+
+  const roleCards: RoleCard[] = [];
+
+  for (const [index, group] of selectedGroups.entries()) {
+    const roleSources = group.sources;
+    if (!roleSources.length) continue;
+
+    const name = group.template?.name ?? `角色 ${index + 1}`;
+    const roleSourceLabels = sortSourceLabels(roleSources.map((s) => s.label).filter((s) => allowed.has(s)));
+    const anchor = roleSources[0];
+
+    const anchorTitle = anchor.title?.trim();
+    const oneLinerBase = group.template?.hint ?? '最关注：从材料中提炼的稳定关切';
+    const oneLiner = anchorTitle ? `${oneLinerBase}（如：${shortenInline(anchorTitle, 36)}）` : oneLinerBase;
+
+    const topClaims: RoleBullet[] = roleSources.slice(0, 6).map((s) => {
+      const title = s.title?.trim();
+      const excerpt = toInlineExcerpt(s.body, 120);
+      const text = title ? `${shortenInline(title, 48)}：${excerpt}` : excerpt || `来自 ${s.label} 的观点`;
+      return { text, sourceLabels: [s.label] };
+    });
+
+    const topObjections: RoleBullet[] = [];
+    for (const s of roleSources) {
+      if (topObjections.length >= 3) break;
+      const sentence = findSentenceWithKeywords(s.body, negativeKeywords, 120);
+      if (!sentence) continue;
+      topObjections.push({ text: sentence, sourceLabels: [s.label] });
+    }
+
+    const acceptabilityConditions: RoleBullet[] = [];
+    for (const s of roleSources) {
+      if (acceptabilityConditions.length >= 3) break;
+      const sentence = findSentenceWithKeywords(s.body, conditionKeywords, 120);
+      if (!sentence) continue;
+      acceptabilityConditions.push({ text: sentence, sourceLabels: [s.label] });
+    }
+
+    roleCards.push({
+      name,
+      oneLiner,
+      topClaims,
+      topObjections,
+      acceptabilityConditions,
+      sourceLabels: roleSourceLabels,
+    });
+  }
+
+  return roleCards;
+}
+
+function buildRoleCards(params: { sources: ConsensusSource[]; meta: Record<string, unknown> | null; maxRoles: number }): RoleCard[] {
+  const allowed = new Set(params.sources.map((s) => s.label));
+  const fromMeta = buildRoleCardsFromMeta({ meta: params.meta, allowedSourceLabels: allowed, maxRoles: params.maxRoles });
+  if (fromMeta.length) return fromMeta;
+  return buildRoleCardsHeuristic({ sources: params.sources, maxRoles: params.maxRoles });
+}
+
+function renderRoleAtlasSection(roles: RoleCard[]): string {
+  if (!roles.length) return ['## 角色图谱（Role Atlas）', '', '（材料不足，无法提炼角色图谱。）'].join('\n');
+
+  const lines: string[] = ['## 角色图谱（Role Atlas）', ''];
+  for (const [index, role] of roles.entries()) {
+    lines.push(`### R${index + 1} ${role.name}`);
+    if (role.oneLiner) lines.push(`- 一句话立场：${role.oneLiner}${formatInlineCitations(role.sourceLabels)}`);
+
+    const claims = role.topClaims.slice(0, 5);
+    if (claims.length) {
+      lines.push('- 核心主张（Top claims）：');
+      for (const claim of claims) lines.push(`  - ${claim.text}${formatInlineCitations(claim.sourceLabels)}`);
+    }
+
+    const objections = role.topObjections.slice(0, 3);
+    if (objections.length) {
+      lines.push('- 核心反对（Top objections）：');
+      for (const objection of objections) lines.push(`  - ${objection.text}${formatInlineCitations(objection.sourceLabels)}`);
+    }
+
+    const conditions = role.acceptabilityConditions.slice(0, 3);
+    if (conditions.length) {
+      lines.push('- 可接受条件（Acceptability conditions）：');
+      for (const condition of conditions) lines.push(`  - ${condition.text}${formatInlineCitations(condition.sourceLabels)}`);
+    }
+
+    lines.push('');
+  }
+
+  return lines.join('\n').trimEnd();
+}
+
+function renderKeyTensionsSection(roles: RoleCard[], fallbackLabels: string[]): string {
+  const cite = formatInlineCitations(fallbackLabels);
+
+  if (roles.length < 2) {
+    return [
+      '## 关键张力（Key Tensions）',
+      '',
+      `- 事实不确定 vs 价值选择 vs 约束差异：需要先把分歧类型拆清，才能推进到可行动方案。${cite}`,
+    ].join('\n');
+  }
+
+  const pairs: Array<[RoleCard, RoleCard]> = [];
+  for (let i = 0; i < roles.length - 1 && pairs.length < 3; i += 1) {
+    pairs.push([roles[i]!, roles[i + 1]!]);
+  }
+
+  const lines: string[] = ['## 关键张力（Key Tensions）', ''];
+  for (const [a, b] of pairs) {
+    const aClaim = a.topClaims[0];
+    const bClaim = b.topClaims[0];
+    const aText = aClaim ? `${aClaim.text}${formatInlineCitations(aClaim.sourceLabels)}` : `${a.name}${formatInlineCitations(a.sourceLabels)}`;
+    const bText = bClaim ? `${bClaim.text}${formatInlineCitations(bClaim.sourceLabels)}` : `${b.name}${formatInlineCitations(b.sourceLabels)}`;
+    lines.push(`- **${a.name} ↔ ${b.name}**：${aText} ⇄ ${bText}`);
+  }
+
+  return lines.join('\n');
+}
+
+function ensureRoleAtlasSection(params: {
+  bodyMd: string;
+  sources: ConsensusSource[];
+  meta: Record<string, unknown> | null;
+}): string {
+  const body = params.bodyMd.trim();
+  if (!body) return body;
+  if (body.includes('## 角色图谱')) return body;
+
+  const roleCards = buildRoleCards({ sources: params.sources, meta: params.meta, maxRoles: 6 });
+  const roleAtlas = renderRoleAtlasSection(roleCards).trim();
+  if (!roleAtlas) return body;
+
+  const insertBeforePatterns = [/^##\\s+关键张力\\b/m, /^##\\s+主题地图\\b/m, /^##\\s+未决问题\\b/m, /^##\\s+方法\\b/m];
+  for (const re of insertBeforePatterns) {
+    const idx = body.search(re);
+    if (idx >= 0) {
+      const before = body.slice(0, idx).trimEnd();
+      const after = body.slice(idx).trimStart();
+      return [before, roleAtlas, after].filter(Boolean).join('\n\n');
+    }
+  }
+
+  return [body, roleAtlas].filter(Boolean).join('\n\n');
+}
+
+function buildHeuristicConsensusReportBody(
+  input: GenerateConsensusReportInput,
+  opts: { mode: 'fallback' | 'mock'; reason?: string | null },
+): string {
+  const sortedSources = [...input.sources].sort((a, b) => {
+    if (b.totalVotes !== a.totalVotes) return b.totalVotes - a.totalVotes;
+    return a.label.localeCompare(b.label);
+  });
+
+  const sourcesForSummary = sortedSources.slice(0, 10);
+  const fallbackLabels = sourcesForSummary.slice(0, 3).map((s) => s.label);
+
+  const coverageLine =
+    input.coverage.argumentsTotal > 0
+      ? `argumentsIncluded=${input.coverage.argumentsIncluded}/${input.coverage.argumentsTotal}，votesIncluded=${input.coverage.votesIncluded}/${input.coverage.votesTotal}`
+      : null;
+
+  const bulletLines = sourcesForSummary
+    .map((source) => {
+      const title = source.title?.trim() ? ` — ${shortenInline(source.title.trim(), 40)}` : '';
+      const excerpt = toInlineExcerpt(source.body, 180);
+      return `- (${source.totalVotes} votes)${title}: ${excerpt}${source.body.length > 180 ? '…' : ''} [${source.label}]`;
+    })
+    .join('\n');
+
+  const executiveSummaryLines = sourcesForSummary
+    .slice(0, 6)
+    .map((source) => {
+      const title = source.title?.trim() ? source.title.trim() : '（未命名观点）';
+      const excerpt = toInlineExcerpt(source.body, 120);
+      return `- ${shortenInline(title, 48)}：${excerpt} [${source.label}]`;
+    })
+    .join('\n');
+
+  const roleCards = buildRoleCards({ sources: sortedSources, meta: null, maxRoles: 6 });
+  const roleAtlasSection = renderRoleAtlasSection(roleCards);
+  const keyTensionsSection = renderKeyTensionsSection(roleCards, fallbackLabels);
+
+  const themeCount = sortedSources.length >= 6 ? 3 : sortedSources.length >= 3 ? 2 : 1;
+  const sourcesForThemes = sortedSources.slice(0, Math.min(sortedSources.length, Math.max(themeCount * 4, 8)));
+  const themeBuckets: Array<typeof sourcesForThemes> = Array.from({ length: themeCount }, () => []);
+  for (const [index, source] of sourcesForThemes.entries()) {
+    themeBuckets[index % themeCount]!.push(source);
+  }
+
+  let claimIndex = 1;
+  const themeMd = themeBuckets
+    .map((bucket, bucketIndex) => {
+      const anchor = bucket[0];
+      const themeName = anchor ? pickFallbackThemeName(anchor, bucketIndex) : `讨论焦点 ${bucketIndex + 1}`;
+      const describedLabels = bucket.map((s) => s.label).join(', ');
+
+      const claims = bucket.slice(0, Math.max(2, bucket.length)).map((source) => {
+        const claimTitle = pickFallbackClaimTitle(source);
+        const excerpt = toInlineExcerpt(source.body, 260);
+        const quote = extractShortQuote(source.body, 160);
+        const quoteLine = quote ? `> ${quote} [${source.label}]` : null;
+
+        const lines = [
+          `#### C${claimIndex} ${claimTitle}`,
+          `${excerpt} [${source.label}]`,
+          quoteLine,
+          `边界/下一步：需要把该主张的适用条件、关键指标与可反驳证据补齐，才能支持更强结论。 [${source.label}]`,
+        ].filter((v): v is string => Boolean(v));
+
+        claimIndex += 1;
+        return lines.join('\n');
+      });
+
+      return [
+        `### T${bucketIndex + 1} ${themeName}`,
+        `本主题主要由 ${describedLabels || '（无）'} 等材料构成，以下为从中抽取的原子主张（启发式按来源近似拆解）。`,
+        '',
+        claims.join('\n\n'),
+      ].join('\n');
+    })
+    .join('\n\n');
+
+  const agendaLines = themeBuckets
+    .map((bucket, index) => {
+      const anchor = bucket[0];
+      const themeName = anchor ? pickFallbackThemeName(anchor, index) : `讨论焦点 ${index + 1}`;
+      const cite = anchor?.label ?? fallbackLabels[0] ?? null;
+      return cite ? `- 关于“${themeName}”：需要明确争议点到底是事实不确定、价值冲突还是约束差异？ [${cite}]` : `- 关于“${themeName}”：需要明确争议点到底是事实不确定、价值冲突还是约束差异？`;
+    })
+    .join('\n');
+
+  const intro =
+    opts.mode === 'fallback'
+      ? opts.reason
+        ? `本报告为降级输出（原因：${opts.reason}）。仍提供完整阅读骨架，便于继续讨论与迭代。`
+        : '本报告为降级输出：外部模型不可用时的最小可读版本（仍含主题/角色/张力骨架）。'
+      : '本报告基于讨论材料给出结构化总结：用“角色—张力—主题—原子主张”的方式帮助读者快速进入讨论。';
+
+  const methodLines =
+    opts.mode === 'fallback'
+      ? [
+          '本报告为降级生成：未调用外部模型。',
+          '生成逻辑：按 votes 简单排序后做轮转分桶形成 1–3 个主题；按关键词启发式归纳若干角色；再抽取每条来源的短摘录作为可追溯的 Claim 线索。',
+          '局限：主题/角色划分是启发式近似，不能替代语义聚类与跨来源综合；建议在外部模型恢复后重生成完整版本。',
+        ].join('\n')
+      : [
+          '本报告当前由启发式模块生成（未调用外部模型）。',
+          '生成逻辑：按 votes 简单排序后做轮转分桶形成 1–3 个主题；按关键词启发式归纳若干角色；每条 Claim 直接链接回来源 [S#] 便于审计。',
+        ].join('\n');
+
+  const discussionLines = [
+    '## 讨论全景（Coverage & Caveats）',
+    '',
+    coverageLine ? `- 覆盖：${coverageLine}` : `- 覆盖：sources=${input.sources.length}（未提供 arguments/votes 聚合信息）`,
+    input.coverage.votesTotal === 0 ? '- 提示：votesTotal=0，无法用票数判断代表性强弱。' : null,
+    '- 说明：本版本不输出 Sources 附录；页面脚注会把 [S#] 映射回原文节点。',
+  ]
+    .filter((v): v is string => Boolean(v))
+    .join('\n');
+
+  const sections = [
+    `# ${input.topicTitle} · 共识报告`,
+    '',
+    '## 导读（How to read）',
+    intro,
+    '',
+    '## Executive Summary',
+    '',
+    executiveSummaryLines || '- （无）',
+    '',
+    discussionLines,
+    '',
+    roleAtlasSection,
+    '',
+    keyTensionsSection,
+    '',
+    '## 输入摘要（Top sources）',
+    '',
+    bulletLines || '- (no sources)',
+    '',
+    '## 主题地图（Themes, TalkToTheCity-style）',
+    '',
+    themeMd || '（材料不足，无法生成主题地图）',
+    '',
+    '## 未决问题与下一步议程（Agenda）',
+    '',
+    agendaLines || '- （无）',
+    '',
+    '## 方法（Method, brief）',
+    methodLines,
+  ];
+
+  return sections.filter((v) => typeof v === 'string').join('\n');
+}
+
 function buildChainedMetaSystemPrompt(): string {
   return [
     '你是一名“讨论材料结构化抽取器”，目标是生成可交互的 REPORT_META JSON。',
