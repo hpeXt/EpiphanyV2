@@ -237,7 +237,7 @@ export function Sunburst({
     let cursor: string | null = hoveredId;
     while (cursor) {
       trail.add(cursor);
-      const parentId = arcById.get(cursor)?.parentId ?? null;
+      const parentId: string | null = arcById.get(cursor)?.parentId ?? null;
       cursor = parentId && arcById.has(parentId) ? parentId : null;
     }
     return trail;
@@ -254,7 +254,7 @@ export function Sunburst({
       const arc = arcById.get(cursor);
       if (!arc) break;
       labels.push(arc.label);
-      const parentId = arc.parentId;
+      const parentId: string | null = arc.parentId;
       cursor = parentId && arcById.has(parentId) ? parentId : null;
     }
 
