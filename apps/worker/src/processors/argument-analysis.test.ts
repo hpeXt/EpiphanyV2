@@ -189,7 +189,7 @@ describe('Argument Analysis Processor', () => {
   });
 
   describe('Idempotency / Short Circuit', () => {
-    it('should short circuit when argument is already ready (no AI calls)', async () => {
+    it('should short circuit when argument is already ready and embedding_model matches (no AI calls)', async () => {
       const argumentId = uuidv7();
 
       // Create argument already in ready state
@@ -200,6 +200,41 @@ describe('Argument Analysis Processor', () => {
           parentId: rootArgumentId,
           title: 'Already Ready',
           body: 'This argument is already analyzed.',
+          authorPubkey: testPubkey,
+          analysisStatus: 'ready',
+          stanceScore: 0.5,
+          totalVotes: 0,
+          totalCost: 0,
+          embeddingModel: 'mock-embedding-model',
+        },
+      });
+
+      const mockProvider = createMockAIProvider({ shouldSucceed: true });
+      const getStanceSpy = vi.spyOn(mockProvider, 'getStance');
+      const getEmbeddingSpy = vi.spyOn(mockProvider, 'getEmbedding');
+
+      await processArgumentAnalysis({
+        argumentId,
+        prisma,
+        redis,
+        aiProvider: mockProvider,
+      });
+
+      // AI provider should NOT be called
+      expect(getStanceSpy).not.toHaveBeenCalled();
+      expect(getEmbeddingSpy).not.toHaveBeenCalled();
+    });
+
+    it('should reprocess when argument is already ready but embedding_model differs', async () => {
+      const argumentId = uuidv7();
+
+      await prisma.argument.create({
+        data: {
+          id: argumentId,
+          topicId,
+          parentId: rootArgumentId,
+          title: 'Already Ready (Old Model)',
+          body: 'This argument is already analyzed but uses an older embedding model.',
           authorPubkey: testPubkey,
           analysisStatus: 'ready',
           stanceScore: 0.5,
@@ -220,9 +255,16 @@ describe('Argument Analysis Processor', () => {
         aiProvider: mockProvider,
       });
 
-      // AI provider should NOT be called
-      expect(getStanceSpy).not.toHaveBeenCalled();
-      expect(getEmbeddingSpy).not.toHaveBeenCalled();
+      expect(getStanceSpy).toHaveBeenCalledTimes(1);
+      expect(getEmbeddingSpy).toHaveBeenCalledTimes(1);
+
+      const updated = await prisma.argument.findUnique({
+        where: { topicId_id: { topicId, id: argumentId } },
+      });
+
+      expect(updated).not.toBeNull();
+      expect(updated!.analysisStatus).toBe('ready');
+      expect(updated!.embeddingModel).toBe('mock-embedding-model');
     });
 
     it('should handle repeated job enqueue - only processes once', async () => {

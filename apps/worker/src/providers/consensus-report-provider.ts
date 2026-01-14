@@ -26,19 +26,6 @@ function stanceLabel(stance: -1 | 0 | 1): 'oppose' | 'neutral' | 'support' {
 
 function buildFallbackConsensusReport(input: GenerateConsensusReportInput, opts?: { reason?: string }): string {
   const fallbackLabels = input.sources.slice(0, 3).map((s) => s.label);
-  const sortedSources = [...input.sources].sort((a, b) => {
-    if (b.totalVotes !== a.totalVotes) return b.totalVotes - a.totalVotes;
-    return a.label.localeCompare(b.label);
-  });
-
-  const sourcesForSummary = sortedSources.slice(0, 10);
-
-  const themeCount = sortedSources.length >= 6 ? 3 : sortedSources.length >= 3 ? 2 : 1;
-  const sourcesForThemes = sortedSources.slice(0, Math.min(sortedSources.length, Math.max(themeCount * 4, 8)));
-  const themeBuckets: Array<typeof sourcesForThemes> = Array.from({ length: themeCount }, () => []);
-  for (const [index, source] of sourcesForThemes.entries()) {
-    themeBuckets[index % themeCount]!.push(source);
-  }
 
   const bridges = [
     {
@@ -85,101 +72,10 @@ function buildFallbackConsensusReport(input: GenerateConsensusReportInput, opts?
     },
   };
 
-  const bulletLines = sourcesForSummary
-    .map((source) => {
-      const title = source.title?.trim() ? ` — ${source.title.trim()}` : '';
-      const excerpt = toInlineExcerpt(source.body, 180);
-      return `- (${source.totalVotes} votes)${title}: ${excerpt}${source.body.length > 180 ? '…' : ''} [${source.label}]`;
-    })
-    .join('\n');
-
   const metaBlock = [REPORT_META_START, '```json', JSON.stringify(reportMeta, null, 2), '```', REPORT_META_END].join('\n');
+  const body = buildHeuristicConsensusReportBody(input, { mode: 'fallback', reason: opts?.reason ?? null });
 
-  const executiveSummaryLines = sourcesForSummary
-    .slice(0, 6)
-    .map((source) => {
-      const title = source.title?.trim() ? source.title.trim() : '（未命名观点）';
-      const excerpt = toInlineExcerpt(source.body, 120);
-      return `- ${title}：${excerpt} [${source.label}]`;
-    })
-    .join('\n');
-
-  let claimIndex = 1;
-  const themeMd = themeBuckets
-    .map((bucket, bucketIndex) => {
-      const anchor = bucket[0];
-      const themeName = anchor ? pickFallbackThemeName(anchor, bucketIndex) : `讨论焦点 ${bucketIndex + 1}`;
-      const describedLabels = bucket.map((s) => s.label).join(', ');
-
-      const claims = bucket.slice(0, Math.max(2, bucket.length)).map((source) => {
-        const claimTitle = pickFallbackClaimTitle(source);
-        const excerpt = toInlineExcerpt(source.body, 260);
-        const quote = extractShortQuote(source.body, 160);
-        const quoteLine = quote ? `> ${quote} [${source.label}]` : null;
-
-        const lines = [
-          `#### C${claimIndex} ${claimTitle}`,
-          `${excerpt} [${source.label}]`,
-          quoteLine,
-          `边界/下一步：需要把该主张的适用条件、关键指标与可反驳证据补齐，才能支持更强结论。 [${source.label}]`,
-        ].filter((v): v is string => Boolean(v));
-
-        claimIndex += 1;
-        return lines.join('\n');
-      });
-
-      return [
-        `### T${bucketIndex + 1} ${themeName}`,
-        `本主题主要由 ${describedLabels || '（无）'} 等材料构成，以下为从中抽取的原子主张（fallback 版本按来源近似拆解）。`,
-        '',
-        claims.join('\n\n'),
-      ].join('\n');
-    })
-    .join('\n\n');
-
-  const agendaLines = themeBuckets
-    .map((bucket, index) => {
-      const anchor = bucket[0];
-      const themeName = anchor ? pickFallbackThemeName(anchor, index) : `讨论焦点 ${index + 1}`;
-      const cite = anchor?.label ?? fallbackLabels[0] ?? null;
-      return cite ? `- 关于“${themeName}”：需要明确争议点到底是事实、价值还是约束差异？ [${cite}]` : `- 关于“${themeName}”：需要明确争议点到底是事实、价值还是约束差异？`;
-    })
-    .join('\n');
-
-  const body = [
-    '## 导读（How to read）',
-    reasonLine
-      ? `本报告当前为降级输出（${reasonLine}）：提供输入摘要与最小结构提示，便于继续迭代生成更完整的长文版本。`
-      : '本报告当前为降级输出：提供输入摘要与最小结构提示，便于继续迭代生成更完整的长文版本。',
-    coverageLine ? `\n\n${coverageLine}` : null,
-    '',
-    '## Executive Summary',
-    '',
-    executiveSummaryLines || '- （无）',
-    '',
-    '## 输入摘要（Top sources）',
-    '',
-    bulletLines || '- (no sources)',
-    '',
-    '## 主题地图（Themes, TalkToTheCity-style）',
-    '',
-    themeMd || '（材料不足，无法生成主题地图）',
-    '',
-    '## 未决问题与下一步议程（Agenda）',
-    '',
-    agendaLines || '- （无）',
-    '',
-    '## 方法（Method, brief）',
-    [
-      '本报告为降级生成：未调用外部模型。',
-      '生成逻辑：按 votes 简单排序后做轮转分桶，形成 1–3 个主题；每个主题内按来源拆分成若干原子 Claim，并从原文中截取首段作为短摘录（Quote）。',
-      '局限：主题与 Claim 的命名/归类仅为启发式近似，不能替代真正的语义聚类与跨来源综合。',
-    ].join('\n'),
-  ]
-    .filter((v): v is string => Boolean(v))
-    .join('\n');
-
-  return [metaBlock, body].join('\n\n');
+  return [metaBlock, body].filter(Boolean).join('\n\n');
 }
 
 function toInlineExcerpt(text: string, maxChars: number): string {
@@ -699,9 +595,9 @@ function buildHeuristicConsensusReportBody(
   const intro =
     opts.mode === 'fallback'
       ? opts.reason
-        ? `本报告为降级输出（原因：${opts.reason}）。仍提供完整阅读骨架，便于继续讨论与迭代。`
+        ? `本报告为降级输出（原因：${opts.reason}）。仍提供可读骨架，便于继续讨论与迭代。`
         : '本报告为降级输出：外部模型不可用时的最小可读版本（仍含主题/角色/张力骨架）。'
-      : '本报告基于讨论材料给出结构化总结：用“角色—张力—主题—原子主张”的方式帮助读者快速进入讨论。';
+      : '本报告为启发式生成：基于讨论材料给出结构化总结（角色—张力—主题—原子主张），用于快速进入讨论。';
 
   const methodLines =
     opts.mode === 'fallback'
@@ -726,7 +622,7 @@ function buildHeuristicConsensusReportBody(
     .join('\n');
 
   const sections = [
-    `# ${input.topicTitle} · 共识报告`,
+    `# ${input.topicTitle} · 共识报告${opts.mode === 'fallback' ? '（降级）' : '（启发式）'}`,
     '',
     '## 导读（How to read）',
     intro,
@@ -1083,6 +979,16 @@ function createMockConsensusReportProvider(): ConsensusReportProvider {
         },
       ].filter((b) => b.sourceLabels.length);
 
+      const roleCards = buildRoleCards({ sources: input.sources, meta: null, maxRoles: 6 });
+      const rolesMeta = roleCards.map((role) => ({
+        name: role.name,
+        brief: role.oneLiner,
+        sourceLabels: role.sourceLabels,
+        topClaims: role.topClaims.map((c) => ({ text: c.text, sourceLabels: c.sourceLabels })),
+        topObjections: role.topObjections.map((c) => ({ text: c.text, sourceLabels: c.sourceLabels })),
+        acceptabilityConditions: role.acceptabilityConditions.map((c) => ({ text: c.text, sourceLabels: c.sourceLabels })),
+      }));
+
       const reportMeta = {
         bridges: {
           gallerySize: 3,
@@ -1092,20 +998,16 @@ function createMockConsensusReportProvider(): ConsensusReportProvider {
         share: {
           featuredBridgeIds: bridgeStatements.slice(0, 3).map((b) => b.id),
           ogTitle: `${input.topicTitle} · 共识报告`,
-          ogDescription: '（mock）基于讨论内容生成的共识桥梁与分歧结构摘要。',
+          ogDescription: '（启发式）基于讨论内容生成的共识桥梁与分歧结构摘要。',
           shareText: `【共识报告】${input.topicTitle}\n\n${bridgeStatements[0]?.text ?? ''}`.trim(),
+        },
+        analysis: {
+          kind: 'mock',
+          roles: rolesMeta,
         },
       };
 
-      const bulletLines = input.sources
-        .slice(0, 10)
-        .map((source) => {
-          const title = source.title?.trim() ? ` — ${source.title.trim()}` : '';
-          const excerpt = source.body.trim().slice(0, 160).replaceAll('\n', ' ');
-          return `- (${source.totalVotes} votes)${title}: ${excerpt}${source.body.length > 160 ? '…' : ''} [${source.label}]`;
-        })
-        .join('\n');
-
+      const body = buildHeuristicConsensusReportBody(input, { mode: 'mock' });
       const contentMd = [
         '<!-- REPORT_META_START -->',
         '```json',
@@ -1113,17 +1015,7 @@ function createMockConsensusReportProvider(): ConsensusReportProvider {
         '```',
         '<!-- REPORT_META_END -->',
         '',
-        '# 共识报告（mock）',
-        '',
-        `Topic: ${input.topicTitle}`,
-        '',
-        '## 输入摘要（Top sources）',
-        '',
-        bulletLines || '- (no sources)',
-        '',
-        '## 结论（mock）',
-        '',
-        '- 这是 mock 报告内容；线上会用外部模型生成更详细版本。 [S1]',
+        body.trim(),
       ].join('\n');
 
       return { contentMd, model: 'mock-report-model' };
@@ -1299,6 +1191,12 @@ function createOpenRouterConsensusReportProvider(): ConsensusReportProvider {
             },
           };
 
+          const bodyWithRoleAtlas = ensureRoleAtlasSection({
+            bodyMd: cleanedBody.trim(),
+            sources: input.sources,
+            meta: metaWithDiagnostics,
+          });
+
           const metaBlock = [
             REPORT_META_START,
             '```json',
@@ -1306,7 +1204,7 @@ function createOpenRouterConsensusReportProvider(): ConsensusReportProvider {
             '```',
             REPORT_META_END,
           ].join('\n');
-          const contentMd = [metaBlock, cleanedBody.trim()].filter(Boolean).join('\n\n');
+          const contentMd = [metaBlock, bodyWithRoleAtlas.trim()].filter(Boolean).join('\n\n');
 
           const validation = validateLongformReport({ contentMd, sourceLabels, sourceCount: input.sources.length });
           if (validation.ok) {
@@ -1385,6 +1283,12 @@ function createOpenRouterConsensusReportProvider(): ConsensusReportProvider {
               },
             },
           };
+          const cleanedBody = unwrapMarkdownFence(extracted.body.trim());
+          const bodyWithRoleAtlas = ensureRoleAtlasSection({
+            bodyMd: cleanedBody,
+            sources: input.sources,
+            meta: metaWithDiagnostics,
+          });
           const normalizedContentMd = [
             REPORT_META_START,
             '```json',
@@ -1392,7 +1296,7 @@ function createOpenRouterConsensusReportProvider(): ConsensusReportProvider {
             '```',
             REPORT_META_END,
             '',
-            unwrapMarkdownFence(extracted.body.trim()),
+            bodyWithRoleAtlas.trim(),
           ].join('\n');
 
           const validation = validateLongformReport({

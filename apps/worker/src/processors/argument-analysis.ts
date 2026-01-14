@@ -68,9 +68,7 @@ export async function processArgumentAnalysis(
 
   // Step 2: Idempotency check - short circuit only if we already have the desired embedding.
   // This avoids "ready but missing embedding" (or a model switch) from becoming stuck forever.
-  const hasEmbedding = argument.embedding != null;
-  const hasDesiredEmbedding = hasEmbedding && argument.embeddingModel === desiredEmbeddingModel;
-  if (argument.analysisStatus === 'ready' && hasDesiredEmbedding) {
+  if (argument.analysisStatus === 'ready' && argument.embeddingModel === desiredEmbeddingModel) {
     console.log(
       `[argument-analysis] Short circuit: ${argumentId} already ready embedding_model=${argument.embeddingModel}`,
     );
