@@ -295,6 +295,10 @@ const MESSAGES: Record<Locale, Messages> = {
     sunburstView: {
       instructions: "滚轮缩放 · 悬停查看 · 点击选中",
       unavailable: "暂无概览。",
+      zoomOut: "缩小",
+      zoomIn: "放大",
+      zoomReset: "重置缩放",
+      zoomLabel: "缩放比例",
     },
     stage: {
       hideToolbarAria: "隐藏工具栏",
@@ -786,6 +790,10 @@ const MESSAGES: Record<Locale, Messages> = {
     sunburstView: {
       instructions: "Wheel to zoom · Hover for details · Click to select",
       unavailable: "Overview unavailable.",
+      zoomOut: "Zoom out",
+      zoomIn: "Zoom in",
+      zoomReset: "Reset zoom",
+      zoomLabel: "Zoom level",
     },
     stage: {
       hideToolbarAria: "Hide toolbar",

@@ -39,11 +39,6 @@ type HoverCardState = {
   y: number;
 };
 
-const LEFT_PANE_WIDTH_STORAGE_KEY = "topicStage:leftPaneWidth:v1";
-const DEFAULT_LEFT_PANE_WIDTH = 380;
-const MIN_LEFT_PANE_WIDTH = 280;
-const MAX_LEFT_PANE_WIDTH = 560;
-const LEFT_PANE_HOVER_EXPANDED_WIDTH = 480;
 const PANE_RESIZER_WIDTH = 12; // Tailwind w-3
 const MIN_CENTER_PANE_WIDTH = 360;
 
@@ -51,6 +46,12 @@ const RELATED_PANE_WIDTH_STORAGE_KEY = "topicStage:relatedPaneWidth:v1";
 const DEFAULT_RELATED_PANE_WIDTH = 320;
 const MIN_RELATED_PANE_WIDTH = 260;
 const MAX_RELATED_PANE_WIDTH = 480;
+
+const SUNBURST_ZOOM_STORAGE_KEY = "topicStage:sunburstZoom:v1";
+const DEFAULT_SUNBURST_ZOOM = 1;
+const MIN_SUNBURST_ZOOM = 0.7;
+const MAX_SUNBURST_ZOOM = 2.4;
+const SUNBURST_ZOOM_STEP = 0.1;
 
 function stripLeadMarkdownPrefix(input: string): string {
   let out = input.trimStart();
@@ -544,22 +545,9 @@ export function TopicStage({ topicId }: Props) {
   const claimTokenStore = useMemo(() => createLocalStorageClaimTokenStore(), []);
   const draftStore = useMemo(() => createLocalStorageDraftStore(), []);
   const stageRef = useRef<HTMLDivElement | null>(null);
-  const leftColumnRef = useRef<HTMLDivElement | null>(null);
+  const sunburstViewportRef = useRef<HTMLDivElement | null>(null);
   const rightColumnRef = useRef<HTMLDivElement | null>(null);
   const readerContentRef = useRef<HTMLDivElement | null>(null);
-
-  const [leftPaneWidth, setLeftPaneWidth] = useState<number>(() => {
-    if (typeof window === "undefined") return DEFAULT_LEFT_PANE_WIDTH;
-    try {
-      const raw = window.localStorage.getItem(LEFT_PANE_WIDTH_STORAGE_KEY);
-      if (!raw) return DEFAULT_LEFT_PANE_WIDTH;
-      const parsed = Number(raw);
-      if (!Number.isFinite(parsed)) return DEFAULT_LEFT_PANE_WIDTH;
-      return Math.min(MAX_LEFT_PANE_WIDTH, Math.max(MIN_LEFT_PANE_WIDTH, parsed));
-    } catch {
-      return DEFAULT_LEFT_PANE_WIDTH;
-    }
-  });
 
   const [relatedPaneWidth, setRelatedPaneWidth] = useState<number>(() => {
     if (typeof window === "undefined") return DEFAULT_RELATED_PANE_WIDTH;
@@ -573,37 +561,25 @@ export function TopicStage({ topicId }: Props) {
       return DEFAULT_RELATED_PANE_WIDTH;
     }
   });
-  const [isLeftPaneHoverExpanded, setIsLeftPaneHoverExpanded] = useState(false);
 
-  const clampLeftPaneWidth = useCallback(
-    (nextWidth: number) => {
-      const fallback = DEFAULT_LEFT_PANE_WIDTH;
-      const desired = Number.isFinite(nextWidth) ? nextWidth : fallback;
+  const [sunburstZoom, setSunburstZoom] = useState<number>(() => {
+    if (typeof window === "undefined") return DEFAULT_SUNBURST_ZOOM;
 
-      if (typeof window === "undefined") {
-        return Math.min(MAX_LEFT_PANE_WIDTH, Math.max(MIN_LEFT_PANE_WIDTH, desired));
-      }
+    try {
+      const raw = window.localStorage.getItem(SUNBURST_ZOOM_STORAGE_KEY);
+      if (!raw) return DEFAULT_SUNBURST_ZOOM;
+      const parsed = Number(raw);
+      if (!Number.isFinite(parsed)) return DEFAULT_SUNBURST_ZOOM;
+      return Math.min(MAX_SUNBURST_ZOOM, Math.max(MIN_SUNBURST_ZOOM, parsed));
+    } catch {
+      return DEFAULT_SUNBURST_ZOOM;
+    }
+  });
 
-      const containerRect = stageRef.current?.getBoundingClientRect();
-      const containerWidth =
-        containerRect && containerRect.width > 0 ? containerRect.width : window.innerWidth;
-
-      const isLg = window.innerWidth >= 1024;
-      const resizerWidth = PANE_RESIZER_WIDTH;
-      const minCenterWidth = MIN_CENTER_PANE_WIDTH;
-      const minRightWidth = isLg ? relatedPaneWidth + minCenterWidth + resizerWidth : minCenterWidth;
-      const maxByContainer = containerWidth - resizerWidth - minRightWidth;
-      const maxAllowed = Math.min(MAX_LEFT_PANE_WIDTH, Math.max(MIN_LEFT_PANE_WIDTH, maxByContainer));
-      const minAllowed = Math.min(MIN_LEFT_PANE_WIDTH, maxAllowed);
-
-      return Math.min(maxAllowed, Math.max(minAllowed, desired));
-    },
-    [relatedPaneWidth],
-  );
-
-  const leftPaneDisplayWidth = isLeftPaneHoverExpanded
-    ? clampLeftPaneWidth(Math.max(leftPaneWidth, LEFT_PANE_HOVER_EXPANDED_WIDTH))
-    : leftPaneWidth;
+  const clampSunburstZoom = useCallback((value: number) => {
+    if (!Number.isFinite(value)) return DEFAULT_SUNBURST_ZOOM;
+    return Math.min(MAX_SUNBURST_ZOOM, Math.max(MIN_SUNBURST_ZOOM, value));
+  }, []);
 
   const clampRelatedPaneWidth = useCallback(
     (nextWidth: number) => {
@@ -625,7 +601,7 @@ export function TopicStage({ topicId }: Props) {
 
       const resizerWidth = PANE_RESIZER_WIDTH;
       const minCenterWidth = MIN_CENTER_PANE_WIDTH;
-      const availableForRelated = containerWidth - leftPaneWidth - resizerWidth * 2 - minCenterWidth;
+      const availableForRelated = containerWidth - resizerWidth - minCenterWidth;
       const maxAllowed = Math.min(
         MAX_RELATED_PANE_WIDTH,
         Math.max(MIN_RELATED_PANE_WIDTH, availableForRelated),
@@ -634,25 +610,12 @@ export function TopicStage({ topicId }: Props) {
 
       return Math.min(maxAllowed, Math.max(minAllowed, desired));
     },
-    [leftPaneWidth],
+    [],
   );
-
-  useEffect(() => {
-    setLeftPaneWidth((prev) => clampLeftPaneWidth(prev));
-  }, [clampLeftPaneWidth]);
 
   useEffect(() => {
     setRelatedPaneWidth((prev) => clampRelatedPaneWidth(prev));
   }, [clampRelatedPaneWidth]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(LEFT_PANE_WIDTH_STORAGE_KEY, String(leftPaneWidth));
-    } catch {
-      // ignore
-    }
-  }, [leftPaneWidth]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -665,19 +628,25 @@ export function TopicStage({ topicId }: Props) {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(SUNBURST_ZOOM_STORAGE_KEY, String(sunburstZoom));
+    } catch {
+      // ignore
+    }
+  }, [sunburstZoom]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
 
     const handleResize = () => {
-      setLeftPaneWidth((prev) => clampLeftPaneWidth(prev));
       setRelatedPaneWidth((prev) => clampRelatedPaneWidth(prev));
     };
 
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [clampLeftPaneWidth, clampRelatedPaneWidth]);
+  }, [clampRelatedPaneWidth]);
 
-  type ResizeSession =
-    | { kind: "left"; startX: number; startWidth: number }
-    | { kind: "related"; startX: number; startWidth: number };
+  type ResizeSession = { kind: "related"; startX: number; startWidth: number };
 
   const resizeSessionRef = useRef<ResizeSession | null>(null);
 
@@ -698,12 +667,6 @@ export function TopicStage({ topicId }: Props) {
       const session = resizeSessionRef.current;
       if (!session) return;
 
-      if (session.kind === "left") {
-        const nextWidth = session.startWidth + (event.clientX - session.startX);
-        setLeftPaneWidth(clampLeftPaneWidth(nextWidth));
-        return;
-      }
-
       const nextWidth = session.startWidth - (event.clientX - session.startX);
       setRelatedPaneWidth(clampRelatedPaneWidth(nextWidth));
     };
@@ -723,30 +686,7 @@ export function TopicStage({ topicId }: Props) {
       window.removeEventListener("pointercancel", handlePointerUp);
       stopResizing();
     };
-  }, [clampLeftPaneWidth, clampRelatedPaneWidth, stopResizing]);
-
-  const startResizingLeft = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (event.button !== 0) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-
-      resizeSessionRef.current = { kind: "left", startX: event.clientX, startWidth: leftPaneDisplayWidth };
-      if (leftPaneDisplayWidth !== leftPaneWidth) {
-        setLeftPaneWidth(leftPaneDisplayWidth);
-      }
-      setIsLeftPaneHoverExpanded(false);
-
-      try {
-        document.body.style.cursor = "col-resize";
-        document.body.style.userSelect = "none";
-      } catch {
-        // ignore
-      }
-    },
-    [leftPaneDisplayWidth, leftPaneWidth],
-  );
+  }, [clampRelatedPaneWidth, stopResizing]);
 
   const startResizingRelated = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -767,14 +707,20 @@ export function TopicStage({ topicId }: Props) {
     [relatedPaneWidth],
   );
 
-  const [leftColumnWidth, setLeftColumnWidth] = useState<number | null>(null);
+  const [sunburstViewportSize, setSunburstViewportSize] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const el = leftColumnRef.current;
+    const el = sunburstViewportRef.current;
     if (!el) return;
 
-    const update = () => setLeftColumnWidth(el.getBoundingClientRect().width);
+    const update = () => {
+      const rect = el.getBoundingClientRect();
+      setSunburstViewportSize({ width: rect.width, height: rect.height });
+    };
     update();
 
     if (typeof ResizeObserver === "undefined") {
@@ -1736,27 +1682,34 @@ export function TopicStage({ topicId }: Props) {
   }, [isEditingSelectedArgument, selectedArgumentId]);
 
   const sunburstSize = useMemo(() => {
-    const width = leftColumnWidth ?? leftPaneDisplayWidth;
-    const available = width - 32;
-    return Math.max(240, Math.min(360, Math.floor(available)));
-  }, [leftColumnWidth, leftPaneDisplayWidth]);
+    const fallback = 260;
+    const viewport = sunburstViewportSize;
+    if (!viewport) return fallback;
+    const padding = 32; // matches p-4
+    const available = Math.min(viewport.width, viewport.height) - padding;
+    return Math.max(160, Math.min(360, Math.floor(available)));
+  }, [sunburstViewportSize]);
+
+  const sunburstPixelSize = useMemo(() => {
+    return Math.round(sunburstSize * sunburstZoom);
+  }, [sunburstSize, sunburstZoom]);
 
   const cardPosition = (x: number, y: number) => {
     const padding = 16;
-    const maxCardWidth = Math.max(180, sunburstSize - padding * 2);
+    const maxCardWidth = Math.max(180, sunburstPixelSize - padding * 2);
     const cardWidth = Math.min(280, maxCardWidth);
 
-    const maxCardHeight = Math.max(140, sunburstSize - padding * 2);
+    const maxCardHeight = Math.max(140, sunburstPixelSize - padding * 2);
     const cardHeight = Math.min(180, maxCardHeight);
 
     let left = x + padding;
     let top = y + padding;
 
-    if (left + cardWidth > sunburstSize) left = x - cardWidth - padding;
-    if (top + cardHeight > sunburstSize) top = y - cardHeight - padding;
+    if (left + cardWidth > sunburstPixelSize) left = x - cardWidth - padding;
+    if (top + cardHeight > sunburstPixelSize) top = y - cardHeight - padding;
 
-    left = Math.max(padding, Math.min(left, sunburstSize - cardWidth - padding));
-    top = Math.max(padding, Math.min(top, sunburstSize - cardHeight - padding));
+    left = Math.max(padding, Math.min(left, sunburstPixelSize - cardWidth - padding));
+    top = Math.max(padding, Math.min(top, sunburstPixelSize - cardHeight - padding));
 
     return { left, top, width: cardWidth, height: cardHeight };
   };
@@ -2326,198 +2279,206 @@ export function TopicStage({ topicId }: Props) {
 
 	        <div
 	          ref={stageRef}
-	          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-background shadow-sm md:flex-row"
+	          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-background shadow-sm"
 	          data-testid="topic-stage"
-	          onMouseLeave={() => setIsLeftPaneHoverExpanded(false)}
 	          style={{
-	            ["--topic-left-width" as any]: `${leftPaneDisplayWidth}px`,
 	            ["--topic-related-width" as any]: `${relatedPaneWidth}px`,
 	          }}
 	        >
-	          {/* Left: Explorer */}
-			          <div
-			            ref={leftColumnRef}
-			            className={[
-			              "relative flex w-full flex-col overflow-hidden border-b border-border/60 bg-background md:border-b-0",
-			              "md:transition-[width] md:duration-200 md:ease-out",
-			              "md:w-[var(--topic-left-width)] md:min-w-[var(--topic-left-width)] md:border-r",
-			            ].join(" ")}
-			            data-testid="topic-stage-left"
-			            onMouseEnter={() => {
-			              if (resizeSessionRef.current) return;
-			              setIsLeftPaneHoverExpanded(true);
-			            }}
-			          >
-            <div className="flex items-start justify-between gap-3 border-b border-border/60 px-5 py-4">
-              <div className="min-w-0">
-                <h2 className="truncate font-serif text-xl text-foreground" title={topicTitle}>
-                  {topicTitle}
-                </h2>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {t("stage.nodesCount", { count: argumentCount })}
-                </p>
-              </div>
-              <Badge
-                variant={topic.status === "active" ? "electric" : topic.status === "frozen" ? "acid" : "ink"}
-              >
-                {t(`status.${topic.status}`)}
-              </Badge>
-            </div>
-
-            <div
-              className="flex flex-1 items-center justify-center overflow-hidden p-4"
-              onClick={() => {
-                hideHoverCard({ immediate: true });
-                requestSelectArgumentId(null);
-              }}
-            >
-              {sunburstTree ? (
-                <div className="relative" style={{ width: sunburstSize, height: sunburstSize }}>
-                  <Sunburst
-                    tree={sunburstTree}
-                    width={sunburstSize}
-                    height={sunburstSize}
-                    padAngle={0.006}
-                    interactive
-                    showTooltip={false}
-                    showBreadcrumb
-                    breadcrumbRootLabel={topicTitle}
-                    selectedId={selectedArgumentId}
-                    onSelectedIdChange={(id) => {
-                      hideHoverCard({ immediate: true });
-                      requestSelectArgumentId(id);
-                    }}
-                    onHoverChange={handleSunburstHoverChange}
-                  />
-
-                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                    <span className="max-w-[160px] text-center font-serif text-xs font-semibold text-foreground/90">
-                      {topicTitle.length > 12 ? `${topicTitle.slice(0, 10)}…` : topicTitle}
-                    </span>
+            {/* Top: Sunburst */}
+            <div className="border-b border-border/60 bg-background">
+              <div className="flex flex-wrap items-start justify-between gap-4 px-5 py-4">
+                <div className="min-w-0">
+                  <h2 className="truncate font-serif text-xl text-foreground" title={topicTitle}>
+                    {topicTitle}
+                  </h2>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    <span>{t("stage.nodesCount", { count: argumentCount })}</span>
+                    <Link href="/" className="hover:text-foreground">
+                      {t("brand.hostedBy")}
+                    </Link>
+                    {identityFingerprint ? (
+                      <Link
+                        href="/my"
+                        className="flex items-center gap-2 hover:text-foreground"
+                        title={t("identity.myIdentity")}
+                      >
+                        {myAuthorId ? (
+                          <span className="font-medium text-foreground/90">{authorLabel(myAuthorId)}</span>
+                        ) : (
+                          <span className="font-medium text-foreground/90">{t("my.identityReady")}</span>
+                        )}
+                      </Link>
+                    ) : null}
                   </div>
+                </div>
 
-                  {hoverCard ? (
-                    <div
-                      className="pointer-events-none absolute z-10"
-                      style={cardPosition(hoverCard.x, hoverCard.y)}
-                      data-testid="sunburst-hover-card"
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 border border-border bg-background"
+                      onClick={() => setSunburstZoom((prev) => clampSunburstZoom(prev - SUNBURST_ZOOM_STEP))}
+                      disabled={sunburstZoom <= MIN_SUNBURST_ZOOM}
+                      aria-label={t("sunburstView.zoomOut")}
+                      title={t("sunburstView.zoomOut")}
                     >
-                      <div className="flex h-full flex-col rounded-lg border border-border/60 bg-background p-4 shadow-lg">
-                        <div className="mb-2">
-                          <h3 className="h-[44px] font-serif text-base font-semibold text-foreground leading-tight line-clamp-2">
-                            {toTitle(hoverCard.argument)}
-                          </h3>
-                        </div>
-
-                        <p className="flex-1 text-xs text-muted-foreground leading-relaxed line-clamp-4">
-                          {toExcerpt(hoverCard.argument.body)}
-                        </p>
-
-                        <div className="mt-3 flex items-center justify-between border-t border-border/60 pt-2 text-[10px] text-muted-foreground">
-                          <span>{authorLabel(hoverCard.argument.authorId, hoverCard.argument.authorDisplayName)}</span>
-                          <span>{t("stage.votesCount", { count: hoverCard.argument.totalVotes })}</span>
-                        </div>
-                      </div>
-                    </div>
+                      −
+                    </Button>
+                    <span
+                      className="w-12 text-center font-mono text-[11px] text-muted-foreground tabular-nums"
+                      aria-label={t("sunburstView.zoomLabel")}
+                    >
+                      {Math.round(sunburstZoom * 100)}%
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 border border-border bg-background"
+                      onClick={() => setSunburstZoom((prev) => clampSunburstZoom(prev + SUNBURST_ZOOM_STEP))}
+                      disabled={sunburstZoom >= MAX_SUNBURST_ZOOM}
+                      aria-label={t("sunburstView.zoomIn")}
+                      title={t("sunburstView.zoomIn")}
+                    >
+                      +
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2 border border-border bg-background font-mono text-xs"
+                      onClick={() => setSunburstZoom(DEFAULT_SUNBURST_ZOOM)}
+                      disabled={Math.abs(sunburstZoom - DEFAULT_SUNBURST_ZOOM) < 0.001}
+                      aria-label={t("sunburstView.zoomReset")}
+                      title={t("sunburstView.zoomReset")}
+                    >
+                      1×
+                    </Button>
+                  </div>
+                  <Badge
+                    variant={
+                      topic.status === "active" ? "electric" : topic.status === "frozen" ? "acid" : "ink"
+                    }
+                  >
+                    {t(`status.${topic.status}`)}
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-3 border border-border bg-background"
+                    onClick={() => router.push(`/topics/${topicId}/report`)}
+                  >
+                    {t("stage.openReport")}
+                  </Button>
+                  {claimInfo ? (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      className="h-8 px-3 border border-border"
+                      onClick={claimOwner}
+                      disabled={isClaiming}
+                    >
+                      {isClaiming ? t("topic.claiming") : t("topic.claimHost")}
+                    </Button>
+                  ) : null}
+                  {isOwner ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-3 border border-border bg-background"
+                      onClick={() => setIsManageOpen(true)}
+                    >
+                      {t("topic.manage")}
+                    </Button>
                   ) : null}
                 </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">{t("sunburstView.unavailable")}</p>
-              )}
-            </div>
-
-            <div className="border-t border-border/60 px-4 py-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full justify-center border border-border bg-background"
-                onClick={() => router.push(`/topics/${topicId}/report`)}
-              >
-                {t("stage.openReport")}
-              </Button>
+              </div>
 
               {claimError ? (
-                <div className="mt-3">
+                <div className="border-t border-border/60 px-5 py-4">
                   <Alert role="alert" variant="error" title={t("topic.claimHost")}>
                     {claimError}
                   </Alert>
                 </div>
               ) : null}
 
-              {claimInfo ? (
-                <div className="mt-3">
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    className="w-full justify-center border border-border"
-                    onClick={claimOwner}
-                    disabled={isClaiming}
-                  >
-                    {isClaiming ? t("topic.claiming") : t("topic.claimHost")}
-                  </Button>
-                </div>
-              ) : null}
+              <div
+                ref={sunburstViewportRef}
+                className="flex h-[240px] items-center justify-center overflow-auto border-t border-border/60 bg-[color:var(--muted)] p-4 md:h-[280px]"
+                onWheel={(event) => {
+                  if (!event.ctrlKey && !event.metaKey) return;
+                  event.preventDefault();
+                  const direction = event.deltaY < 0 ? 1 : -1;
+                  setSunburstZoom((prev) => clampSunburstZoom(prev + direction * SUNBURST_ZOOM_STEP));
+                }}
+                onClick={() => {
+                  hideHoverCard({ immediate: true });
+                  requestSelectArgumentId(null);
+                }}
+              >
+                {sunburstTree ? (
+                  <div className="relative" style={{ width: sunburstPixelSize, height: sunburstPixelSize }}>
+                    <Sunburst
+                      tree={sunburstTree}
+                      width={sunburstPixelSize}
+                      height={sunburstPixelSize}
+                      padAngle={0.006}
+                      interactive
+                      showTooltip={false}
+                      showBreadcrumb
+                      breadcrumbRootLabel={topicTitle}
+                      selectedId={selectedArgumentId}
+                      onSelectedIdChange={(id) => {
+                        hideHoverCard({ immediate: true });
+                        requestSelectArgumentId(id);
+                      }}
+                      onHoverChange={handleSunburstHoverChange}
+                    />
 
-              {isOwner ? (
-                <div className="mt-3">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full justify-center border border-border bg-background"
-                    onClick={() => setIsManageOpen(true)}
-                  >
-                    {t("topic.manage")}
-                  </Button>
-                </div>
-              ) : null}
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                      <span className="max-w-[160px] text-center font-serif text-xs font-semibold text-foreground/90">
+                        {topicTitle.length > 12 ? `${topicTitle.slice(0, 10)}…` : topicTitle}
+                      </span>
+                    </div>
 
-              <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-                <Link href="/" className="hover:text-foreground">
-                  {t("brand.hostedBy")}
-                </Link>
-                {identityFingerprint ? (
-                  <Link
-                    href="/my"
-                    className="flex items-center gap-2 hover:text-foreground"
-                    title={t("identity.myIdentity")}
-                  >
-                    {myAuthorId ? (
-                      <span className="font-medium text-foreground/90">{authorLabel(myAuthorId)}</span>
-                    ) : (
-                      <span className="font-medium text-foreground/90">{t("my.identityReady")}</span>
-                    )}
-                  </Link>
-                ) : null}
-	              </div>
-	            </div>
-	          </div>
+                    {hoverCard ? (
+                      <div
+                        className="pointer-events-none absolute z-10"
+                        style={cardPosition(hoverCard.x, hoverCard.y)}
+                        data-testid="sunburst-hover-card"
+                      >
+                        <div className="flex h-full flex-col rounded-lg border border-border/60 bg-background p-4 shadow-lg">
+                          <div className="mb-2">
+                            <h3 className="h-[44px] font-serif text-base font-semibold text-foreground leading-tight line-clamp-2">
+                              {toTitle(hoverCard.argument)}
+                            </h3>
+                          </div>
 
-	          <div
-	            role="separator"
-	            aria-orientation="vertical"
-	            aria-label="Resize panels"
-	            className={[
-	              "relative hidden w-3 shrink-0 cursor-col-resize touch-none md:block",
-	              "hover:bg-[color:var(--muted)]",
-	            ].join(" ")}
-	            onPointerDown={startResizingLeft}
-	            onDoubleClick={() => {
-	              setIsLeftPaneHoverExpanded(false);
-	              setLeftPaneWidth(clampLeftPaneWidth(DEFAULT_LEFT_PANE_WIDTH));
-	            }}
-	          >
-	            <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-border/60" />
-	          </div>
+                          <p className="flex-1 text-xs text-muted-foreground leading-relaxed line-clamp-4">
+                            {toExcerpt(hoverCard.argument.body)}
+                          </p>
+
+                          <div className="mt-3 flex items-center justify-between border-t border-border/60 pt-2 text-[10px] text-muted-foreground">
+                            <span>
+                              {authorLabel(hoverCard.argument.authorId, hoverCard.argument.authorDisplayName)}
+                            </span>
+                            <span>{t("stage.votesCount", { count: hoverCard.argument.totalVotes })}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">{t("sunburstView.unavailable")}</p>
+                )}
+              </div>
+            </div>
 
           {/* Right: Reader */}
 		          <div
 		            ref={rightColumnRef}
 		            className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background"
 		            data-testid="topic-stage-right"
-		            onMouseEnter={() => {
-		              if (resizeSessionRef.current) return;
-		              setIsLeftPaneHoverExpanded(false);
-		            }}
 		          >
 	            <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
 	              {readArgument ? (
