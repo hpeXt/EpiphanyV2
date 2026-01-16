@@ -945,6 +945,7 @@ export function TopicStage({ topicId }: Props) {
   const [isManageOpen, setIsManageOpen] = useState(false);
   const [claimError, setClaimError] = useState("");
   const [isClaiming, setIsClaiming] = useState(false);
+  const [isRegeneratingReport, setIsRegeneratingReport] = useState(false);
 
   const authorLabel = useCallback(
     (authorId: string, authorDisplayName?: string | null) => {
@@ -2211,6 +2212,27 @@ export function TopicStage({ topicId }: Props) {
         })()
       : null;
 
+  const canRegenerateReport = isOwner && topic.status === "active";
+
+  async function regenerateConsensusReport() {
+    if (!canRegenerateReport) return;
+
+    setIsRegeneratingReport(true);
+    const result = await apiClient.executeTopicCommand(topicId, {
+      type: "GENERATE_CONSENSUS_REPORT",
+      payload: {},
+    });
+    setIsRegeneratingReport(false);
+
+    if (!result.ok) {
+      toast({ variant: "error", title: t("report.consensusReport"), message: toFriendlyMessage(t, result.error) });
+      return;
+    }
+
+    toast({ variant: "success", title: t("report.consensusReport"), message: t("report.generatingReport") });
+    router.push(`/topics/${topicId}/report`);
+  }
+
   async function claimOwner() {
     if (hasIdentity !== true) return;
     if (topic.ownerPubkey !== null) return;
@@ -2362,6 +2384,17 @@ export function TopicStage({ topicId }: Props) {
                   >
                     {t(`status.${topic.status}`)}
                   </Badge>
+                  {canRegenerateReport ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-3 border border-border bg-background"
+                      onClick={regenerateConsensusReport}
+                      disabled={isRegeneratingReport}
+                    >
+                      {isRegeneratingReport ? t("report.generatingAction") : t("report.regenerateReport")}
+                    </Button>
+                  ) : null}
                   <Button
                     variant="ghost"
                     size="sm"

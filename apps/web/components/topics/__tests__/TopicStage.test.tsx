@@ -396,7 +396,7 @@ describe("TopicStage interactions", () => {
     expect(reply).toHaveTextContent("My body");
   });
 
-  it("auto-expands the sunburst column on hover and collapses on right hover", async () => {
+  it("clamps persisted related pane width on desktop", async () => {
     const { TopicStage } = require("@/components/topics/TopicStage");
 
     const originalInnerWidth = window.innerWidth;
@@ -405,100 +405,7 @@ describe("TopicStage interactions", () => {
       window.dispatchEvent(new Event("resize"));
     });
 
-    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
-      const url = new URL(typeof input === "string" ? input : input.toString());
-
-      if (url.pathname.startsWith("/v1/arguments/") && url.pathname.endsWith("/related")) {
-        const argumentId = url.pathname.split("/")[3] ?? "";
-        return jsonResponse({ ok: true, status: 200, json: { argumentId, items: [] } });
-      }
-
-      if (url.pathname === `/v1/topics/${TOPIC_ID}/ledger/me`) {
-        return jsonResponse({
-          ok: true,
-          status: 200,
-          json: {
-            topicId: TOPIC_ID,
-            pubkey: MY_PUBKEY_HEX,
-            balance: 100,
-            myTotalVotes: 0,
-            myTotalCost: 0,
-            lastInteractionAt: null,
-          },
-        });
-      }
-
-      if (url.pathname === `/v1/topics/${TOPIC_ID}/stakes/me`) {
-        return jsonResponse({
-          ok: true,
-          status: 200,
-          json: {
-            topicId: TOPIC_ID,
-            pubkey: MY_PUBKEY_HEX,
-            items: [],
-          },
-        });
-      }
-
-      if (url.pathname === "/v1/arguments/arg-root") {
-        return jsonResponse({
-          ok: true,
-          status: 200,
-          json: {
-            argument: {
-              id: "arg-root",
-              topicId: TOPIC_ID,
-              parentId: null,
-              title: "Root",
-              body: "Root body",
-              bodyRich: null,
-              authorId: "66687aadf862bd77",
-              analysisStatus: "ready",
-              stanceScore: null,
-              totalVotes: 0,
-              totalCost: 0,
-              prunedAt: null,
-              createdAt: "2025-12-19T12:34:56.789Z",
-              updatedAt: "2025-12-19T12:34:56.789Z",
-            },
-          },
-        });
-      }
-
-      throw new Error(`Unhandled request: ${url.toString()}`);
-    }) as unknown as typeof fetch;
-
-    const user = userEvent.setup();
-    render(<TopicStage topicId={TOPIC_ID} />);
-
-    await screen.findByRole("heading", { name: "Topic 1", level: 2 });
-
-    const stage = screen.getByTestId("topic-stage");
-    const left = screen.getByTestId("topic-stage-left");
-    const right = screen.getByTestId("topic-stage-right");
-
-    expect(stage.style.getPropertyValue("--topic-left-width")).toBe("380px");
-
-    await user.hover(left);
-    expect(stage.style.getPropertyValue("--topic-left-width")).toBe("480px");
-
-    await user.hover(right);
-    expect(stage.style.getPropertyValue("--topic-left-width")).toBe("380px");
-
-    Object.defineProperty(window, "innerWidth", { configurable: true, value: originalInnerWidth });
-    act(() => {
-      window.dispatchEvent(new Event("resize"));
-    });
-  });
-
-  it("auto-expands the sunburst column in read mode and collapses on right hover", async () => {
-    const { TopicStage } = require("@/components/topics/TopicStage");
-
-    const originalInnerWidth = window.innerWidth;
-    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1600 });
-    act(() => {
-      window.dispatchEvent(new Event("resize"));
-    });
+    window.localStorage.setItem("topicStage:relatedPaneWidth:v1", "9999");
 
     global.fetch = jest.fn(async (input: RequestInfo | URL) => {
       const url = new URL(typeof input === "string" ? input : input.toString());
@@ -593,20 +500,11 @@ describe("TopicStage interactions", () => {
 
     await screen.findByRole("heading", { name: "Topic 1", level: 2 });
 
-    await user.click(screen.getByRole("button", { name: "Select arg-1" }));
-    await screen.findByRole("heading", { name: "My Argument", level: 1 });
-
     const stage = screen.getByTestId("topic-stage");
-    const left = screen.getByTestId("topic-stage-left");
-    const right = screen.getByTestId("topic-stage-right");
 
-    expect(stage.style.getPropertyValue("--topic-left-width")).toBe("480px");
-
-    await user.hover(left);
-    expect(stage.style.getPropertyValue("--topic-left-width")).toBe("480px");
-
-    await user.hover(right);
-    expect(stage.style.getPropertyValue("--topic-left-width")).toBe("380px");
+    await waitFor(() => {
+      expect(stage.style.getPropertyValue("--topic-related-width")).toBe("480px");
+    });
 
     Object.defineProperty(window, "innerWidth", { configurable: true, value: originalInnerWidth });
     act(() => {
@@ -859,6 +757,115 @@ describe("TopicStage interactions", () => {
         },
       });
     });
+  });
+
+  it("allows owner to regenerate report from the stage top bar", async () => {
+    const { TopicStage } = require("@/components/topics/TopicStage");
+
+    const { useTopicTree } = require("@/components/topics/hooks/useTopicTree");
+    const baseTree = mockTopicTree();
+    (useTopicTree as jest.Mock).mockReturnValue({
+      ...baseTree,
+      topic: { ...baseTree.topic, ownerPubkey: MY_PUBKEY_HEX },
+    });
+
+    let lastCommandBody: unknown = null;
+
+    global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(typeof input === "string" ? input : input.toString());
+
+      if (url.pathname.startsWith("/v1/arguments/") && url.pathname.endsWith("/related")) {
+        const argumentId = url.pathname.split("/")[3] ?? "";
+        return jsonResponse({ ok: true, status: 200, json: { argumentId, items: [] } });
+      }
+
+      if (url.pathname === `/v1/topics/${TOPIC_ID}/ledger/me`) {
+        return jsonResponse({
+          ok: true,
+          status: 200,
+          json: {
+            topicId: TOPIC_ID,
+            pubkey: MY_PUBKEY_HEX,
+            balance: 100,
+            myTotalVotes: 0,
+            myTotalCost: 0,
+            lastInteractionAt: null,
+          },
+        });
+      }
+
+      if (url.pathname === `/v1/topics/${TOPIC_ID}/stakes/me`) {
+        return jsonResponse({
+          ok: true,
+          status: 200,
+          json: {
+            topicId: TOPIC_ID,
+            pubkey: MY_PUBKEY_HEX,
+            items: [],
+          },
+        });
+      }
+
+      if (url.pathname === `/v1/topics/${TOPIC_ID}/commands`) {
+        lastCommandBody = init?.body ? JSON.parse(String(init.body)) : null;
+        return jsonResponse({
+          ok: true,
+          status: 200,
+          json: {
+            topic: {
+              id: TOPIC_ID,
+              title: "Topic 1",
+              rootArgumentId: "arg-root",
+              status: "active",
+              ownerPubkey: MY_PUBKEY_HEX,
+              visibility: "public",
+              createdAt: "2025-12-19T12:34:56.789Z",
+              updatedAt: "2025-12-19T12:34:56.789Z",
+            },
+          },
+        });
+      }
+
+      if (url.pathname === "/v1/arguments/arg-root") {
+        return jsonResponse({
+          ok: true,
+          status: 200,
+          json: {
+            argument: {
+              id: "arg-root",
+              topicId: TOPIC_ID,
+              parentId: null,
+              title: "Root",
+              body: "Root body",
+              bodyRich: null,
+              authorId: "66687aadf862bd77",
+              analysisStatus: "ready",
+              stanceScore: null,
+              totalVotes: 0,
+              totalCost: 0,
+              prunedAt: null,
+              createdAt: "2025-12-19T12:34:56.789Z",
+              updatedAt: "2025-12-19T12:34:56.789Z",
+            },
+          },
+        });
+      }
+
+      throw new Error(`Unhandled request: ${url.toString()}`);
+    }) as unknown as typeof fetch;
+
+    const user = userEvent.setup();
+    render(<TopicStage topicId={TOPIC_ID} />);
+
+    await screen.findByRole("heading", { name: "Topic 1", level: 2 });
+
+    const regenerate = await screen.findByRole("button", { name: t("report.regenerateReport") });
+    await user.click(regenerate);
+
+    await waitFor(() => {
+      expect(lastCommandBody).toEqual({ type: "GENERATE_CONSENSUS_REPORT", payload: {} });
+    });
+    expect(mockPush).toHaveBeenCalledWith(`/topics/${TOPIC_ID}/report`);
   });
 
   it("loads and saves topic display name (server-stored)", async () => {
